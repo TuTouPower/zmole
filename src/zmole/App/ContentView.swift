@@ -34,11 +34,13 @@ struct ContentView: View {
     @StateObject private var cleanViewModel: CleanViewModel
     @StateObject private var uninstallViewModel: UninstallViewModel
     @StateObject private var optimizeViewModel: OptimizeViewModel
+    @StateObject private var purgeViewModel: PurgeViewModel
 
     init(
         cleanViewModel: CleanViewModel? = nil,
         uninstallViewModel: UninstallViewModel? = nil,
-        optimizeViewModel: OptimizeViewModel? = nil
+        optimizeViewModel: OptimizeViewModel? = nil,
+        purgeViewModel: PurgeViewModel? = nil
     ) {
         _cleanViewModel = StateObject(wrappedValue: cleanViewModel ?? CleanViewModel())
         _uninstallViewModel = StateObject(
@@ -46,6 +48,9 @@ struct ContentView: View {
         )
         _optimizeViewModel = StateObject(
             wrappedValue: optimizeViewModel ?? OptimizeViewModel()
+        )
+        _purgeViewModel = StateObject(
+            wrappedValue: purgeViewModel ?? PurgeViewModel()
         )
     }
 
@@ -83,12 +88,7 @@ struct ContentView: View {
         case .settings:
             SettingsView()
         case .purge:
-            DestructiveConfirmationView(
-                title: item.titleKey,
-                summary: "destructive.summary",
-                onConfirm: {},
-                onCancel: {}
-            )
+            PurgeView(viewModel: purgeViewModel)
         }
     }
 }

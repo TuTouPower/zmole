@@ -2,8 +2,8 @@ import Combine
 import Foundation
 
 @MainActor
-final class OptimizeViewModel: ObservableObject {
-    @Published private(set) var preview: OptimizePreviewSnapshot?
+final class PurgeViewModel: ObservableObject {
+    @Published private(set) var preview: PurgePreviewSnapshot?
     @Published private(set) var isPreviewing = false
     @Published private(set) var isExecuting = false
     @Published private(set) var isConfirmationPresented = false
@@ -30,11 +30,11 @@ final class OptimizeViewModel: ObservableObject {
             initializationErrorKey = nil
         } else {
             process = nil
-            initializationErrorKey = "optimize.error.missing_mole"
+            initializationErrorKey = "purge.error.missing_mole"
         }
     }
 
-    func previewOptimize() async {
+    func previewPurge() async {
         guard !isPreviewing, !isExecuting else { return }
         invalidatePreview()
         clearError()
@@ -57,7 +57,7 @@ final class OptimizeViewModel: ObservableObject {
 
         do {
             let result = try await process.run(
-                ["optimize", "--dry-run"],
+                ["purge", "--dry-run"],
                 stdin: nil,
                 timeout: 120
             )
@@ -65,7 +65,7 @@ final class OptimizeViewModel: ObservableObject {
             guard result.exitCode == 0 else {
                 throw MoleBridgeError.commandFailed(result)
             }
-            preview = OptimizePreviewSnapshot(
+            preview = PurgePreviewSnapshot(
                 generation: UUID(),
                 output: MaintenanceOutput.summary(stdout: result.stdout)
             )
@@ -104,7 +104,7 @@ final class OptimizeViewModel: ObservableObject {
         guard isConfirmationPresented, canConfirm else { return }
         guard let process else {
             invalidatePreview()
-            setError(OptimizeViewModelError.missingMole)
+            setError(PurgeViewModelError.missingMole)
             return
         }
 
@@ -122,7 +122,7 @@ final class OptimizeViewModel: ObservableObject {
         }
 
         do {
-            let result = try await process.run(["optimize"], stdin: nil, timeout: 600)
+            let result = try await process.run(["purge", "--yes"], stdin: nil, timeout: 600)
             guard activeOperationID == operationID else { return }
             guard result.exitCode == 0 else {
                 throw MoleBridgeError.commandFailed(result)
@@ -135,7 +135,7 @@ final class OptimizeViewModel: ObservableObject {
         } catch let error as MoleBridgeError where error == .cancelled {
             guard activeOperationID == operationID else { return }
             invalidatePreview()
-            errorMessageKey = "optimize.cancelled"
+            errorMessageKey = "purge.cancelled"
         } catch {
             guard activeOperationID == operationID else { return }
             invalidatePreview()
@@ -165,12 +165,12 @@ final class OptimizeViewModel: ObservableObject {
     }
 
     private func setError(_ error: Error) {
-        if let error = error as? OptimizeViewModelError {
+        if let error = error as? PurgeViewModelError {
             errorMessage = nil
             errorMessageKey = error.errorKey
         } else if error is MoleBridgeError {
             errorMessage = nil
-            errorMessageKey = "optimize.error.failed"
+            errorMessageKey = "purge.error.failed"
         } else {
             errorMessage = error.localizedDescription
             errorMessageKey = nil

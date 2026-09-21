@@ -10,6 +10,7 @@
 		107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E6B8699AE90081585C812D /* StatusView.swift */; };
 		1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08D637167C209F86F21A8F /* OptimizeTests.swift */; };
 		23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C082EA887412E27C88983A8 /* WhitelistView.swift */; };
+		2499447255A8C0C842FB5B8D /* PurgeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */; };
 		284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */; };
 		2DBABC5FC78A776772410FA1 /* OptimizeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */; };
 		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
@@ -22,9 +23,12 @@
 		662379FE1A1C8033515BFA0C /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */; };
 		68591EE839D8ADFDC6FBCDB9 /* AnalyzeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */; };
 		740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */; };
+		7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */; };
 		7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */; };
 		7CCC6210BD38526F1C791EF9 /* AnalyzeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */; };
 		8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */; };
+		847E40CFAE4237330B0E65D1 /* PurgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFEE226AA95D591E7CEC430F /* PurgeView.swift */; };
+		8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */; };
 		909840D164F95B7F9D96A9EF /* UninstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */; };
 		90ECB6D6763E43E6B0E6CF39 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14254B56FF84870F0CDD6FD4 /* AboutView.swift */; };
 		95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70AD53256D3AB0960670856A /* ZmoleTests.swift */; };
@@ -35,6 +39,7 @@
 		B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3926E12312D382F2895E4662 /* ContentView.swift */; };
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
+		C2ABA452E71B92CE32751D12 /* PurgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */; };
 		C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */; };
 		CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */ = {isa = PBXBuildFile; fileRef = 78C972BD31A9D530B068FFA0 /* mole */; };
 		D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD077229323936A83CC3D9E /* WhitelistDocument.swift */; };
@@ -76,6 +81,7 @@
 		0CF699D95E09A155B564D7B7 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		0FC19536CC569B11F1791854 /* CleanPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreview.swift; sourceTree = "<group>"; };
 		14254B56FF84870F0CDD6FD4 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeSnapshot.swift; sourceTree = "<group>"; };
 		19456FFB028A34FE9AA2561B /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
 		1C08D637167C209F86F21A8F /* OptimizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeTests.swift; sourceTree = "<group>"; };
 		2377F13EED7F8922B2C7B691 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -85,6 +91,7 @@
 		30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeView.swift; sourceTree = "<group>"; };
 		353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuidanceView.swift; sourceTree = "<group>"; };
 		3926E12312D382F2895E4662 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceOutput.swift; sourceTree = "<group>"; };
 		56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeSnapshot.swift; sourceTree = "<group>"; };
 		5A163D8C0D3365385123088B /* HistorySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySnapshot.swift; sourceTree = "<group>"; };
 		70AD53256D3AB0960670856A /* ZmoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleTests.swift; sourceTree = "<group>"; };
@@ -97,9 +104,11 @@
 		8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleApp.swift; sourceTree = "<group>"; };
 		8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		91E22E157DB788F260EAD579 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeViewModel.swift; sourceTree = "<group>"; };
 		9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallView.swift; sourceTree = "<group>"; };
 		9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZmoleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeViewModel.swift; sourceTree = "<group>"; };
+		A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeTests.swift; sourceTree = "<group>"; };
 		A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A76837A240FF7FE3F01BCD5F /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		AE334F91E7FFB8672701E61E /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
@@ -111,6 +120,7 @@
 		CBE28E50E7A216A66CD36F69 /* CleanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanView.swift; sourceTree = "<group>"; };
 		CDD077229323936A83CC3D9E /* WhitelistDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistDocument.swift; sourceTree = "<group>"; };
 		CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallSnapshot.swift; sourceTree = "<group>"; };
+		CFEE226AA95D591E7CEC430F /* PurgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeView.swift; sourceTree = "<group>"; };
 		D2E6B8699AE90081585C812D /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		D3909A9F9948552E8947D86D /* UninstallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallTests.swift; sourceTree = "<group>"; };
 		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
@@ -164,6 +174,16 @@
 			path = zmole;
 			sourceTree = "<group>";
 		};
+		2A7930A020AE62CE1C3CA2A2 /* Purge */ = {
+			isa = PBXGroup;
+			children = (
+				171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */,
+				CFEE226AA95D591E7CEC430F /* PurgeView.swift */,
+				96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */,
+			);
+			path = Purge;
+			sourceTree = "<group>";
+		};
 		3301AF66406501BAF299829A /* tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -188,6 +208,7 @@
 				A76837A240FF7FE3F01BCD5F /* .gitkeep */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
 				1C08D637167C209F86F21A8F /* OptimizeTests.swift */,
+				A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */,
 				D3909A9F9948552E8947D86D /* UninstallTests.swift */,
 				70AD53256D3AB0960670856A /* ZmoleTests.swift */,
 			);
@@ -216,11 +237,13 @@
 			isa = PBXGroup;
 			children = (
 				EFF06BD69D5E2DD87C328B82 /* .gitkeep */,
+				3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */,
 				379DD79E0385093B79D02719 /* Analyze */,
 				1242DAF9716461D12D7F5A06 /* Clean */,
 				4AAC7C7B51169F35FFDEE277 /* Confirmation */,
 				CF6C07086218DD0CC99D7B2B /* History */,
 				10A90F2011FC87AFE027CB6C /* Optimize */,
+				2A7930A020AE62CE1C3CA2A2 /* Purge */,
 				B271951D0AC1AB67D750D7BB /* Settings */,
 				421ED564581DEB0557B13B8D /* Status */,
 				B28AB034B71E97A6E8E5D055 /* Uninstall */,
@@ -414,6 +437,7 @@
 			files = (
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
 				1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */,
+				8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */,
 				FA1F3FD5C2AC72FCF949B235 /* UninstallTests.swift in Sources */,
 				95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */,
 			);
@@ -437,6 +461,7 @@
 				F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */,
 				47C413712EF1B93809099416 /* HistoryView.swift in Sources */,
 				740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */,
+				7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */,
 				E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */,
 				8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */,
 				5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */,
@@ -444,6 +469,9 @@
 				284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */,
 				B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */,
 				EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */,
+				2499447255A8C0C842FB5B8D /* PurgeSnapshot.swift in Sources */,
+				847E40CFAE4237330B0E65D1 /* PurgeView.swift in Sources */,
+				C2ABA452E71B92CE32751D12 /* PurgeViewModel.swift in Sources */,
 				B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */,
 				AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */,
 				107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */,
