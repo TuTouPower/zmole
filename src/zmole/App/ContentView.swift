@@ -32,9 +32,16 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @State private var selection: SidebarItem? = .status
     @StateObject private var cleanViewModel: CleanViewModel
+    @StateObject private var uninstallViewModel: UninstallViewModel
 
-    init(cleanViewModel: CleanViewModel? = nil) {
+    init(
+        cleanViewModel: CleanViewModel? = nil,
+        uninstallViewModel: UninstallViewModel? = nil
+    ) {
         _cleanViewModel = StateObject(wrappedValue: cleanViewModel ?? CleanViewModel())
+        _uninstallViewModel = StateObject(
+            wrappedValue: uninstallViewModel ?? UninstallViewModel()
+        )
     }
 
     var body: some View {
@@ -64,9 +71,11 @@ struct ContentView: View {
             WhitelistView()
         case .clean:
             CleanView(viewModel: cleanViewModel)
+        case .uninstall:
+            UninstallView(viewModel: uninstallViewModel)
         case .settings:
             SettingsView()
-        case .uninstall, .optimize, .purge:
+        case .optimize, .purge:
             DestructiveConfirmationView(
                 title: item.titleKey,
                 summary: "destructive.summary",

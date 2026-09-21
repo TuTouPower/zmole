@@ -1,0 +1,26 @@
+{
+  "tid": "t009",
+  "attempt": 1,
+  "execution_id": "323803e61d5f4838b2b3431aef0c409a",
+  "status": "done",
+  "branch": "t009_uninstall_run",
+  "base_sha": "c5264241db883bfce53fbb461ae0c276cde9f337",
+  "tests": "xcodegen generate; xcodebuild Debug test (49 tests, 49 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64, bundled mole 1.55.0, codesign --verify --deep --strict passed; bundled mole uninstall --list read-only check (63 apps, required fields present); uv run --python mise Python 3.14 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 无；真卸载本机 App 不执行；仅运行捆绑 mole uninstall --list 只读核验 JSON",
+  "review": "review_code.md + review_test.md PASS Round 2, previous findings fixed, zero new findings, reviewed_scope f4e6a4140554b220",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Uninstall/UninstallSnapshot.swift", "src/zmole/Features/Uninstall/UninstallView.swift", "tests/unit/UninstallTests.swift", "list JSON 解码并在 UI 展示 name、uninstall_name、path、bundle_id；真实只读 list 返回 63 条"],
+    "AC-002": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "预览 argv 为 uninstall --dry-run <uninstall_name>，stdin 精确为 y\\n"],
+    "AC-003": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "预览后未确认时调用记录无无 dry-run 的 uninstall"],
+    "AC-004": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "预览和执行调用均精确断言不含 --permanent"],
+    "AC-005": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "无选择调用预览不产生 dry-run 或执行调用"],
+    "AC-006": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "src/zmole/Features/Uninstall/UninstallView.swift", "tests/unit/UninstallTests.swift", "确认后刷新 list，再以 y\\n 执行 uninstall；成功与非零失败均展示摘要"],
+    "AC-007": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "同名不同 path 只显示唯一性错误，不调用 dry-run 或执行 uninstall"],
+    "AC-008": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "预览后切换选择清除 preview，重新预览才恢复确认"],
+    "AC-009": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "执行前重列并按完整身份校验；path 改变和目标消失均禁止执行"],
+    "AC-010": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "tests/unit/UninstallTests.swift", "Aborted/非零预览进入失败态，preview 与确认均失效"],
+    "AC-011": ["src/zmole/Features/Uninstall/UninstallViewModel.swift", "src/zmole/MoleBridge/MoleBridge.swift", "tests/unit/UninstallTests.swift", "执行忙碌时防重复，cancel 调用 Bridge cancel 并结束忙碌态"]
+  },
+  "pending": [],
+  "findings": []
+}
