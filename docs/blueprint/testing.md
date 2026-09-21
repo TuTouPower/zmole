@@ -6,12 +6,11 @@
 
 ## doctor_cmd
 
-环境前置检查：模板工具链可收集；`md_kx` 在 PATH；Swift 工具链可用（Xcode 工程落地后可再加 `xcodebuild -version`）。
+环境前置检查：模板工具链可收集；`md_kx` 在 PATH。完整 Xcode（含 `xcodebuild`）在工程落地后纳入本检查；当前本机若仅有 Command Line Tools，不在此硬失败。
 
 ```bash
 pytest .repo_template/tests -q --collect-only
 command -v md_kx
-xcodebuild -version
 ```
 
 ## test_cmd
