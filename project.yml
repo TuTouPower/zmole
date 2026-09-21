@@ -1,0 +1,45 @@
+name: Zmole
+
+options:
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    ARCHS: "arm64 x86_64"
+    ONLY_ACTIVE_ARCH: NO
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_ALLOWED: YES
+    CODE_SIGNING_REQUIRED: NO
+
+targets:
+  Zmole:
+    type: application
+    platform: macOS
+    sources:
+      - path: src/zmole
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tutupower.zmole
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: zmole
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+    scheme:
+      testTargets:
+        - ZmoleTests
+
+  ZmoleTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: tests/unit
+    dependencies:
+      - target: Zmole
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tutupower.zmole.tests
+        GENERATE_INFOPLIST_FILE: YES

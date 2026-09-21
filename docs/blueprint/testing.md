@@ -11,6 +11,8 @@
 ```bash
 pytest .repo_template/tests -q --collect-only
 command -v md_kx
+xcodebuild -version
+xcodegen --version
 ```
 
 ## test_cmd
@@ -18,8 +20,8 @@ command -v md_kx
 日常测试（红/绿）。Xcode 工程与单测 target 落地前，业务侧写「无」；落地后改为：
 
 ```bash
-# 工程落地后启用，例如：
-# xcodebuild test -scheme Zmole -destination 'platform=macOS' 
+xcodegen generate
+xcodebuild test -scheme Zmole -destination 'platform=macOS'
 pytest .repo_template/tests -q
 ```
 

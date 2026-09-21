@@ -1,0 +1,20 @@
+{
+  "tid": "t001",
+  "attempt": 1,
+  "execution_id": "96b3e8fbd24142d58f2f080afffb3041",
+  "status": "done",
+  "branch": "t001_xcode_app_skeleton",
+  "base_sha": "c76218b57078dadc856bcdfcd42058755adcd1bc",
+  "tests": "xcodegen generate; xcodebuild Debug build; xcodebuild test (1 XCTest); pytest .repo_template/tests -q (480 passed); lipo -archs verified x86_64 arm64",
+  "blackbox": "未定义；CUA 手工启动 Debug App，验证 Status/History/Analyze 侧栏和内容区占位文字切换",
+  "review": "review_general.md PASS, Round 1, zero findings, reviewed_scope 48a4c8d9ea0781c3",
+  "ac_evidence": {
+    "AC-001": ["project.yml", "xcodegen generate + xcodebuild Debug build passed; .scratch/DerivedData/Build/Products/Debug/Zmole.app"],
+    "AC-002": ["src/zmole/App/ContentView.swift", "CUA manual run: Status/History/Analyze sidebar selection changed corresponding Placeholder content without crash"],
+    "AC-003": ["project.yml", "xcodebuild test -scheme Zmole -destination platform=macOS passed; ZmoleTests 1/1"],
+    "AC-004": ["docs/blueprint/testing.md", "doctor_cmd and test_cmd contain xcodebuild/xcodegen and pytest commands"],
+    "AC-005": ["project.yml", "xcodebuild settings ARCHS=arm64 x86_64 and ONLY_ACTIVE_ARCH=NO; lipo -archs output x86_64 arm64"]
+  },
+  "pending": [],
+  "findings": []
+}
