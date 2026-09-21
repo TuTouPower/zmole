@@ -8,7 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E6B8699AE90081585C812D /* StatusView.swift */; };
+		1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08D637167C209F86F21A8F /* OptimizeTests.swift */; };
 		23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C082EA887412E27C88983A8 /* WhitelistView.swift */; };
+		284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */; };
+		2DBABC5FC78A776772410FA1 /* OptimizeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */; };
 		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
 		31587C8AEB4320A470AB5AB9 /* UninstallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */; };
 		3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19456FFB028A34FE9AA2561B /* WhitelistStore.swift */; };
@@ -28,6 +31,7 @@
 		97B629B50BF8325F3B49E677 /* CleanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE28E50E7A216A66CD36F69 /* CleanView.swift */; };
 		AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */; };
 		B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2377F13EED7F8922B2C7B691 /* SettingsView.swift */; };
+		B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */; };
 		B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3926E12312D382F2895E4662 /* ContentView.swift */; };
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
@@ -73,9 +77,12 @@
 		0FC19536CC569B11F1791854 /* CleanPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreview.swift; sourceTree = "<group>"; };
 		14254B56FF84870F0CDD6FD4 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		19456FFB028A34FE9AA2561B /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
+		1C08D637167C209F86F21A8F /* OptimizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeTests.swift; sourceTree = "<group>"; };
 		2377F13EED7F8922B2C7B691 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeSnapshot.swift; sourceTree = "<group>"; };
 		2C082EA887412E27C88983A8 /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
 		304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeViewModel.swift; sourceTree = "<group>"; };
+		30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeView.swift; sourceTree = "<group>"; };
 		353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuidanceView.swift; sourceTree = "<group>"; };
 		3926E12312D382F2895E4662 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeSnapshot.swift; sourceTree = "<group>"; };
@@ -92,6 +99,7 @@
 		91E22E157DB788F260EAD579 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallView.swift; sourceTree = "<group>"; };
 		9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZmoleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeViewModel.swift; sourceTree = "<group>"; };
 		A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A76837A240FF7FE3F01BCD5F /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		AE334F91E7FFB8672701E61E /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
@@ -122,6 +130,16 @@
 				8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */,
 			);
 			path = MoleBridge;
+			sourceTree = "<group>";
+		};
+		10A90F2011FC87AFE027CB6C /* Optimize */ = {
+			isa = PBXGroup;
+			children = (
+				2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */,
+				30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */,
+				9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */,
+			);
+			path = Optimize;
 			sourceTree = "<group>";
 		};
 		1242DAF9716461D12D7F5A06 /* Clean */ = {
@@ -169,6 +187,7 @@
 			children = (
 				A76837A240FF7FE3F01BCD5F /* .gitkeep */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
+				1C08D637167C209F86F21A8F /* OptimizeTests.swift */,
 				D3909A9F9948552E8947D86D /* UninstallTests.swift */,
 				70AD53256D3AB0960670856A /* ZmoleTests.swift */,
 			);
@@ -201,6 +220,7 @@
 				1242DAF9716461D12D7F5A06 /* Clean */,
 				4AAC7C7B51169F35FFDEE277 /* Confirmation */,
 				CF6C07086218DD0CC99D7B2B /* History */,
+				10A90F2011FC87AFE027CB6C /* Optimize */,
 				B271951D0AC1AB67D750D7BB /* Settings */,
 				421ED564581DEB0557B13B8D /* Status */,
 				B28AB034B71E97A6E8E5D055 /* Uninstall */,
@@ -393,6 +413,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
+				1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */,
 				FA1F3FD5C2AC72FCF949B235 /* UninstallTests.swift in Sources */,
 				95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */,
 			);
@@ -419,6 +440,9 @@
 				E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */,
 				8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */,
 				5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */,
+				2DBABC5FC78A776772410FA1 /* OptimizeSnapshot.swift in Sources */,
+				284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */,
+				B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */,
 				EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */,
 				B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */,
 				AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */,

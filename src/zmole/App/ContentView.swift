@@ -33,14 +33,19 @@ struct ContentView: View {
     @State private var selection: SidebarItem? = .status
     @StateObject private var cleanViewModel: CleanViewModel
     @StateObject private var uninstallViewModel: UninstallViewModel
+    @StateObject private var optimizeViewModel: OptimizeViewModel
 
     init(
         cleanViewModel: CleanViewModel? = nil,
-        uninstallViewModel: UninstallViewModel? = nil
+        uninstallViewModel: UninstallViewModel? = nil,
+        optimizeViewModel: OptimizeViewModel? = nil
     ) {
         _cleanViewModel = StateObject(wrappedValue: cleanViewModel ?? CleanViewModel())
         _uninstallViewModel = StateObject(
             wrappedValue: uninstallViewModel ?? UninstallViewModel()
+        )
+        _optimizeViewModel = StateObject(
+            wrappedValue: optimizeViewModel ?? OptimizeViewModel()
         )
     }
 
@@ -73,9 +78,11 @@ struct ContentView: View {
             CleanView(viewModel: cleanViewModel)
         case .uninstall:
             UninstallView(viewModel: uninstallViewModel)
+        case .optimize:
+            OptimizeView(viewModel: optimizeViewModel)
         case .settings:
             SettingsView()
-        case .optimize, .purge:
+        case .purge:
             DestructiveConfirmationView(
                 title: item.titleKey,
                 summary: "destructive.summary",

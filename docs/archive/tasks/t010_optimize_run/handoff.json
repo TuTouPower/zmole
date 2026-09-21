@@ -1,0 +1,21 @@
+{
+  "tid": "t010",
+  "attempt": 1,
+  "execution_id": "39644cf1e706407b84c85afa633c213a",
+  "status": "done",
+  "branch": "t010_optimize_run",
+  "base_sha": "77e50adba0415afd1e5ea5fa896529edc60f47b4",
+  "tests": "xcodegen generate; xcodebuild Debug test (56 tests, 56 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64, bundled mole 1.55.0, codesign --verify --deep --strict passed; uv run --python mise Python 3.14 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 无；optimize 副作用不执行，Bridge spy 与 stdout/ANSI 夹具覆盖全部行为",
+  "review": "review_code.md + review_test.md PASS Round 2, previous minor fixed, zero new findings, reviewed_scope 85e59e22dd586fd1",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "预览 argv 精确为 optimize --dry-run"],
+    "AC-002": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "非零预览清除旧 preview，确认不可用，失败 stdout/stderr 摘要保留"],
+    "AC-003": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "未确认前调用记录只有 dry-run optimize"],
+    "AC-004": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "确认执行 argv 精确为 optimize，不含 --dry-run"],
+    "AC-005": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "取消确认使 preview 过期，重新预览后才可执行"],
+    "AC-006": ["src/zmole/Features/Optimize/OptimizeViewModel.swift", "tests/unit/OptimizeTests.swift", "执行 busy 防重复；cancel 调用 Bridge cancel 并结束忙碌态"]
+  },
+  "pending": [],
+  "findings": []
+}
