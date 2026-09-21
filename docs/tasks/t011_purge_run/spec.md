@@ -2,20 +2,24 @@
 
 ## 背景
 
-s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF=未勾选）。预览要用 `purge --dry-run --yes`（不删除、打印候选）；执行用 `purge --yes`。
+非 TTY 且**非 dry-run** 时，真实 purge 必须 `--yes`（`project.sh` 约 1682 行）。dry-run 不受该门闩限制。非 TTY 下 mole 自动勾选「非近期」项目，不读 stdin。s001 把「空名单」归因于 EOF/`--yes` 是错的：当时假 HOME 里没有合格候选，或项目仍算近期。
+
+预览：`purge --dry-run`（不要为了预览强行加 `--yes`）。执行：`purge --yes`。
 
 ## 契约区
 
 ### 范围
 
-- 预览：`purge --dry-run --yes`，把 stdout 当名单/摘要
+- 预览：`purge --dry-run`，把**本次** stdout 当摘要
+- 仅本次预览成功（exit 0）后可确认
 - 确认后执行：`purge --yes`（无 `--dry-run`）
 - 未确认不 spawn 无 `--dry-run` 的 `--yes`
 - 不存在既无 `--dry-run` 又无 `--yes` 的 purge
+- 复用 t008 预览过期、忙碌、取消、失败展示
 
 ### 非范围
 
-- `purge --paths` 配置 UI；无 `--yes` 的交互选择器
+- `purge --paths` 配置 UI；交互选择器；PTY
 
 ### 验收标准
 
@@ -25,10 +29,13 @@ s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF
 
 <!-- /规范 -->
 
-- [ ] AC-001：预览 argv 含 `purge`、`--dry-run` 与 `--yes`
+- [ ] AC-001：预览 argv 含 `purge` 与 `--dry-run`，**不含** `--yes`
 - [ ] AC-002：执行 argv 含 `purge` 与 `--yes`，不含 `--dry-run`
 - [ ] AC-003：未确认时，不含 `--dry-run` 的 `--yes` 调用次数为 0
 - [ ] AC-004：代码路径中不存在「无 `--dry-run` 且无 `--yes`」的 purge
+- [ ] AC-005：预览非零时确认不可用
+- [ ] AC-006：确认取消或预览之后目标/条件变化（再次点预览）后，必须用新预览才能执行
+- [ ] AC-007：执行中重复提交不创建第二进程；取消调用 Bridge cancel
 
 ### 可测试性声明
 
@@ -42,7 +49,7 @@ s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF
 
 ## 上下文区
 
-- 来源：ADR-004；mole `lib/clean/project.sh` 非 TTY 需 `--yes`
+- 来源：审阅纠正 s001；`project.sh` 非 TTY 自动选非近期；`--yes` 只放行真实执行
 
 ### 有意不测
 
@@ -50,7 +57,7 @@ s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF
 
 ### 测试策略
 
-- spy argv；预览夹具用 s001 `samples/purge_dry_run_yes.txt`
+- spy argv 与预览世代；预览夹具用 s001 `purge_dry_run.txt` / `purge_dry_run_yes.txt` 作文本形状参考，不以「必须 --yes 才能预览」为准
 
 ### 未知契约清单
 
@@ -60,16 +67,16 @@ s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF
 
 <!-- /规范 -->
 
-- 无。s001：仅 `--dry-run` 无名单；`--dry-run --yes` 打印 `✓ [DRY RUN] path, size` 且不删文件。
+- 无。源码已说明 dry-run 不需要 `--yes`。空名单 = 无合格非近期候选，不是 EOF。
 
 ### 风险与回退
 
-- 风险：把预览的 `--yes` 和执行的 `--yes` 搞混，或漏 `--dry-run` 导致真删
-- 回退：预览 argv 必须同时含 `--dry-run` 与 `--yes`；执行禁止 `--dry-run`
+- 风险：执行漏 `--yes` 被 mole 拒绝；或误以为预览必须 `--yes`
+- 回退：预览/执行两套 argv 工厂，单测锁死
 
 ### 依赖与约束
 
-- 依赖 t008；来源 s001 / d001
+- 依赖 t008
 
 ### Finalization 时更新的 blueprint
 

@@ -17,7 +17,9 @@
     - `tests/integration/` — 对捆绑 mole 或假二进制的集成
 - **工程文件**：根目录 `project.yml`，XcodeGen 生成 `Zmole.xcodeproj`；禁止手写损坏的 pbxproj
 - **捆绑 mole**：构建时放入 Resources；运行时只 spawn 该绝对路径
-- **禁止**：Feature / View 里直接 `Process`；解析 TUI；代发按键；把 CLI 装进 PATH；调用捆绑 mole 的 `update`/`remove`
+- **禁止**：Feature / View 里直接 `Process`；解析 TUI；PTY 代发方向键；把 CLI 装进 PATH；调用捆绑 mole 的 `update`/`remove`
+- **允许的 stdin**：仅 mole 文档化的行确认。当前只有命名 `uninstall` 的 `[y/N]` → 写入 `y\n`。其它命令保持空 stdin，除非新 ADR
+- **GitHub Releases URL**：`https://github.com/TuTouPower/zmole/releases`（与 origin 一致，禁止占位符交付）
 - **文件名**：Swift 类型文件用 UpperCamelCase（生态惯例，优先于全局 snake_case 目录规则中的「普通文件」条款）；目录名仍用 snake_case 或与 Feature 名一致的 UpperCamelCase 模块文件夹
 
 ## schema 类型落点

@@ -11,8 +11,8 @@
 - 侧栏信息架构（第一版条目：Status、History、Analyze、Clean、Uninstall、Optimize、Purge、Whitelist、Settings）
 - String Catalog：`en` / `zh-Hans` / `zh-Hant`
 - 设置：跟随系统或强制一种语言（立即生效或需重启须在 UI 写明）
-- 关于：zmole 名、GPL-3.0、基于 mole 非 Mole for Mac、捆绑 mole 版本、打开 GitHub Releases 的链接（URL 可配置占位）
-- 可复用的「破坏性确认」空壳组件（标题、摘要、确认/取消；确认前不调用 Bridge）
+- 关于：zmole 名、GPL-3.0、基于 mole 非 Mole for Mac、捆绑 mole 版本、打开 GitHub Releases 的链接，URL 必须是 `https://github.com/TuTouPower/zmole/releases`（禁止占位符交付）
+- 可复用的「破坏性确认」空壳组件（标题、摘要、确认/取消；确认前不调用执行 Bridge）
 - 权限失败提示组件：说明可打开系统设置，不在首次冷启动强制弹出
 
 ### 非范围
@@ -29,7 +29,7 @@
 
 - [ ] [deploy] AC-001：系统语言为英文 / 简体 / 繁体时，未覆盖则界面为对应语言；其它系统语言回落英文
 - [ ] [deploy] AC-002：设置中强制另一种已支持语言后，界面改为该语言
-- [ ] [deploy] AC-003：关于页含 zmole、GPL、mole 来源声明、非 Mole for Mac、捆绑版本（来自 t002 API）
+- [ ] [deploy] AC-003：关于页含 zmole、GPL、mole 来源声明、非 Mole for Mac、捆绑版本（来自 t002 API），且 Releases 链接为 `https://github.com/TuTouPower/zmole/releases`
 - [ ] AC-004：侧栏无 installer / update / remove 项
 - [ ] AC-005：确认组件在取消时不调用任何 Bridge 执行方法（单测）
 

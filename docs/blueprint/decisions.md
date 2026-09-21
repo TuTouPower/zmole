@@ -41,3 +41,10 @@
 - 选项：见 grilling 记录。
 - 结论：整仓 GPL-3.0；简体/繁体/英文跟随系统且设置可覆盖；Universal；macOS 13+；无遥测；产品名 zmole，不用 Mole 商标与官方 logo。
 - 替代：无
+
+## 006 卸载 stdin 只应答 `[y/N]`，身份用 path（2026-09-21）
+
+- 背景：命名 uninstall 在 dry-run/执行前都要 `read -r` 读 `y/Y`；CLI 按名称取首个匹配。
+- 选项：空 stdin；PTY 代按键；stdin 写 `y\n`；第一版不做卸载。
+- 结论：stdin 只写 `y\n`。list 行用 `path`+`bundle_id` 校验；`uninstall_name` 不唯一则拒绝。不因此放宽 TUI 代操作。
+- 替代：无

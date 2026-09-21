@@ -1,0 +1,35 @@
+{
+  "logs": {
+    "operations": "str",
+    "deletions": "str"
+  },
+  "limit": "int",
+  "sessions": [
+    {
+      "command": "str",
+      "started_at": "str",
+      "ended_at": "str",
+      "items": "int",
+      "size": "str",
+      "operation_count": "int",
+      "failed_tasks": "int",
+      "actions": {
+        "removed": "int",
+        "trashed": "int",
+        "skipped": "int",
+        "failed": "int",
+        "rebuilt": "int",
+        "other": "int"
+      }
+    }
+  ],
+  "deletions": [
+    {
+      "timestamp": "str",
+      "mode": "str",
+      "status": "str",
+      "size_kb": "int|null",
+      "path": "str"
+    }
+  ]
+}

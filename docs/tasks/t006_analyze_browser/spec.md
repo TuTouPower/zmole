@@ -9,7 +9,8 @@
 ### 范围
 
 - overview：`analyze --json`
-- 下钻：`analyze --json <path>`
+- 下钻：点击目录 → `analyze --json <path>`，内容区换成该次结果的 entries
+- 返回上级：再请求父路径或 overview，展示对应结果
 - 加载/失败态；无删除按钮、无把选中项移到废纸篓的操作
 
 ### 非范围
@@ -24,10 +25,11 @@
 
 <!-- /规范 -->
 
-- [ ] AC-001：overview 夹具展示 entries 名称与 size
-- [ ] AC-002：下钻时 argv 中 `--json` 出现在路径之前
-- [ ] AC-003：界面无删除/移到废纸篓动作
-- [ ] [deploy] AC-004：对本机捆绑 mole 能打开 overview 且不进入 TUI（无全屏清屏占用 App）
+- [ ] AC-001：overview 夹具展示 entries 的 name 与 size
+- [ ] AC-002：点击某目录后，下钻 argv 中 `--json` 在路径之前，且路径为该目录的 `path`；界面 entries 来自下钻夹具而非仍显示 overview
+- [ ] AC-003：从下钻返回上级后，界面再次展示上级/overview 夹具条目
+- [ ] AC-004：界面无删除/移到废纸篓动作
+- [ ] [deploy] AC-005：对本机捆绑 mole 能打开 overview、点进一目录看到该路径条目、返回，且不进入 TUI
 
 ### 可测试性声明
 
@@ -37,8 +39,8 @@
 
 <!-- /规范 -->
 
-- AC-001–AC-003：自动
-- AC-004：手工
+- AC-001–AC-004：自动
+- AC-005：手工
 
 ## 上下文区
 
@@ -50,7 +52,7 @@
 
 ### 测试策略
 
-- fixture + argv 断言；UI 无删除控件
+- 两套夹具（overview / 子路径）驱动导航状态
 
 ### 未知契约清单
 
@@ -60,7 +62,7 @@
 
 <!-- /规范 -->
 
-- 无。s001：overview=`path/overview/entries/total_size`；路径扫描另有 `large_files`/`total_files`。`--json` 在路径前。
+- 无。s001：overview 与路径扫描形状已抓。
 
 ### 风险与回退
 

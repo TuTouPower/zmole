@@ -4,7 +4,7 @@
 
 ## 2026-09-21T16:00:00+08:00 grilling → owner
 
-- 当前焦点：s001 已核实 mole 机器接口（d001）；可 start t001。
+- 当前焦点：已按审阅改 backlog（卸载 `y\n`+path 身份、预览世代、Universal 必交、t013 发布验收、纠正 purge/`--yes`）。可 start t001。
 - branch：main
 - head_commit：903b633e80bf9ab81a331d073a0b075bc126eec9
 - 已完成：grilling 锁定产品；plan / architecture / domain / decisions / README

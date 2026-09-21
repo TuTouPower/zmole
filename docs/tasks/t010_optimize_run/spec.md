@@ -8,9 +8,11 @@ optimize 无 JSON，但 `--dry-run` 可跑。预览用 stdout 摘要；确认后
 
 ### 范围
 
-- `optimize --dry-run` 展示输出（可滚动文本）
+- `optimize --dry-run` 展示**本次** stdout（可滚动文本）
+- 仅本次预览成功后可确认；取消或重新预览使旧预览过期
 - 确认后 `optimize`；取消不 spawn 非 dry-run
 - 预览失败时禁用执行
+- 复用 t008 忙碌/取消/失败展示
 
 ### 非范围
 
@@ -25,9 +27,11 @@ optimize 无 JSON，但 `--dry-run` 可跑。预览用 stdout 摘要；确认后
 <!-- /规范 -->
 
 - [ ] AC-001：预览 argv 含 `optimize` 与 `--dry-run`
-- [ ] AC-002：预览非零退出时执行按钮不可用
+- [ ] AC-002：预览非零退出时执行按钮不可用，且不保留上一次成功预览文本当作当前预览
 - [ ] AC-003：未确认不 spawn 无 `--dry-run` 的 optimize
-- [ ] AC-004：确认后 argv 为 `optimize` 且无 `--dry-run`
+- [ ] AC-004：本次预览成功后确认，argv 为 `optimize` 且无 `--dry-run`
+- [ ] AC-005：确认对话框取消后须重新预览才能执行
+- [ ] AC-006：执行中重复提交不创建第二进程；取消调用 Bridge cancel
 
 ### 可测试性声明
 
@@ -49,7 +53,7 @@ optimize 无 JSON，但 `--dry-run` 可跑。预览用 stdout 摘要；确认后
 
 ### 测试策略
 
-- spy argv 与失败禁用
+- spy argv、预览世代、忙碌/取消
 
 ### 未知契约清单
 

@@ -29,6 +29,7 @@
 - [ ] AC-002：启动 App 可见侧栏占位项，点击切换内容区占位文字，不崩溃
 - [ ] AC-003：`xcodebuild test -scheme Zmole -destination 'platform=macOS'` 退出码 0（允许仅有空/样例测试）
 - [ ] [deploy] AC-004：`testing.md` 的 `doctor_cmd` 含 `xcodebuild -version` 与 `xcodegen --version`；`test_cmd` 含上述 test 命令且仍跑模板 pytest
+- [ ] AC-005：`ARCHS`/`ONLY_ACTIVE_ARCH` 配置为 Universal；对 Debug `.app` 主可执行文件 `lipo -archs` 含 `x86_64` 与 `arm64`
 
 ### 可测试性声明
 
@@ -38,7 +39,7 @@
 
 <!-- /规范 -->
 
-- AC-001、AC-003：可自动
+- AC-001、AC-003、AC-005：可自动
 - AC-002：UI 手工；无 UI 测试时 `[deploy]` 记录截图或步骤
 - AC-004：读 `testing.md` + 跑 doctor/test 命令
 

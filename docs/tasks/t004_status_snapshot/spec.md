@@ -8,9 +8,10 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 ### 范围
 
-- `mole status --json` 经 Bridge；展示健康分与 CPU/内存/磁盘摘要
+- `mole status --json` 经 Bridge；展示健康分与 CPU、内存、磁盘摘要
 - 加载中、失败、JSON 损坏态
 - 显式传 `--json`，不依赖「非 TTY 自动 JSON」
+- 刷新按钮：成功后更新上述字段
 
 ### 非范围
 
@@ -24,10 +25,10 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 <!-- /规范 -->
 
-- [ ] AC-001：对 `s001` 夹具 JSON，界面或 ViewModel 展示 `health_score`
-- [ ] AC-002：非零退出或非法 JSON 时可见错误文案，不崩溃
+- [ ] AC-001：对 `s001` 夹具 JSON，界面展示 `health_score`，以及 CPU 用量（或 `cpu.usage`）、内存 used/total（或 used_percent）、至少一块磁盘 used/total（或 used_percent）
+- [ ] AC-002：非零退出或非法 JSON 时可见错误文案，不展示过期成功数据冒充当前结果，不崩溃
 - [ ] AC-003：Bridge 参数含 `status` 与 `--json`
-- [ ] [deploy] AC-004：对捆绑 mole 点刷新能得到健康分（本机）
+- [ ] [deploy] AC-004：对捆绑 mole 点刷新后，健康分与 CPU/内存/磁盘区域均有数值（本机）
 
 ### 可测试性声明
 
@@ -42,7 +43,7 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 ## 上下文区
 
-- 来源：`docs/plan.md`；解码字段以 `s001` 为准
+- 来源：`docs/plan.md`；字段见 `samples/status_json.shape.json`
 
 ### 有意不测
 
@@ -50,7 +51,7 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 ### 测试策略
 
-- fixture 解码 + 参数断言
+- fixture 解码后断言 UI/ViewModel 字段；参数断言为辅
 
 ### 未知契约清单
 
@@ -60,7 +61,7 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 <!-- /规范 -->
 
-- 无。s001：对象含 `health_score`/`cpu`/`memory`/`disks` 等；样例 `docs/spikes/s001_mole_cli_fixtures/samples/status_json.shape.json`
+- 无。s001 已抓非空 status 对象。
 
 ### 风险与回退
 
