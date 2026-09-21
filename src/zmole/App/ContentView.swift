@@ -51,6 +51,8 @@ struct ContentView: View {
         switch item {
         case .status:
             StatusView()
+        case .history:
+            HistoryView()
         case .settings:
             SettingsView()
         case .clean, .uninstall, .optimize, .purge:
