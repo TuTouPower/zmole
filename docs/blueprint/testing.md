@@ -11,6 +11,8 @@
 ```bash
 pytest .repo_template/tests -q --collect-only
 command -v md_kx
+xcodebuild -version
+xcodegen --version
 ```
 
 ## test_cmd
@@ -18,8 +20,8 @@ command -v md_kx
 日常测试（红/绿）。Xcode 工程与单测 target 落地前，业务侧写「无」；落地后改为：
 
 ```bash
-# 工程落地后启用，例如：
-# xcodebuild test -scheme Zmole -destination 'platform=macOS' 
+xcodegen generate
+xcodebuild test -scheme Zmole -destination 'platform=macOS'
 pytest .repo_template/tests -q
 ```
 
@@ -30,6 +32,16 @@ pytest .repo_template/tests -q
 无
 
 工程可运行后应补充：启动 App → 检测 `mo` → 对只读命令（如 `mo --version` / `status --json`）跑通并断言 UI 或 Bridge 结果。破坏性命令只用 dry-run 或测试夹具。
+
+## Release zip
+
+发布脚本：
+
+```bash
+./scripts/build_release_zip.sh
+```
+
+脚本只构建 Release、验证 ad-hoc 签名并输出 `artifacts/releases/Zmole-<version>.zip`。发布验收还需解压后检查主程序与 `mole/bin/analyze-go`、`status-go` 的 Universal 架构，并对解压 App 运行 status、history、analyze 只读流程。
 
 ## Schema / codegen 验证
 

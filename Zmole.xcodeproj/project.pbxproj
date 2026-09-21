@@ -1,0 +1,736 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E6B8699AE90081585C812D /* StatusView.swift */; };
+		1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08D637167C209F86F21A8F /* OptimizeTests.swift */; };
+		23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C082EA887412E27C88983A8 /* WhitelistView.swift */; };
+		2499447255A8C0C842FB5B8D /* PurgeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */; };
+		284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */; };
+		2DBABC5FC78A776772410FA1 /* OptimizeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */; };
+		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
+		31587C8AEB4320A470AB5AB9 /* UninstallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */; };
+		3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19456FFB028A34FE9AA2561B /* WhitelistStore.swift */; };
+		45393145AAAB1D120F48878B /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 67FA972D9F6E688D5C582DC7 /* AppIcon.icns */; };
+		47C413712EF1B93809099416 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */; };
+		4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */; };
+		5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */; };
+		5391EDE51B10E5A0C3B44658 /* CleanPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC19536CC569B11F1791854 /* CleanPreview.swift */; };
+		662379FE1A1C8033515BFA0C /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */; };
+		68591EE839D8ADFDC6FBCDB9 /* AnalyzeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */; };
+		740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */; };
+		7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */; };
+		7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */; };
+		7CCC6210BD38526F1C791EF9 /* AnalyzeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */; };
+		8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */; };
+		847E40CFAE4237330B0E65D1 /* PurgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFEE226AA95D591E7CEC430F /* PurgeView.swift */; };
+		8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */; };
+		909840D164F95B7F9D96A9EF /* UninstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */; };
+		90ECB6D6763E43E6B0E6CF39 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14254B56FF84870F0CDD6FD4 /* AboutView.swift */; };
+		95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70AD53256D3AB0960670856A /* ZmoleTests.swift */; };
+		97B629B50BF8325F3B49E677 /* CleanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE28E50E7A216A66CD36F69 /* CleanView.swift */; };
+		AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */; };
+		B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2377F13EED7F8922B2C7B691 /* SettingsView.swift */; };
+		B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */; };
+		B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3926E12312D382F2895E4662 /* ContentView.swift */; };
+		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
+		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
+		C2ABA452E71B92CE32751D12 /* PurgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */; };
+		C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */; };
+		CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */ = {isa = PBXBuildFile; fileRef = 78C972BD31A9D530B068FFA0 /* mole */; };
+		D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD077229323936A83CC3D9E /* WhitelistDocument.swift */; };
+		DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE334F91E7FFB8672701E61E /* StatusViewModel.swift */; };
+		E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */; };
+		E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */; };
+		EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */; };
+		F95C19285594F0225F8BDC76 /* CleanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE94A720F89803BAB0BFED2 /* CleanViewModel.swift */; };
+		F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A163D8C0D3365385123088B /* HistorySnapshot.swift */; };
+		FA1F3FD5C2AC72FCF949B235 /* UninstallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3909A9F9948552E8947D86D /* UninstallTests.swift */; };
+		FDA4DD86FF9FF3CB8259B6C0 /* WhitelistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9A358AF90E48AB9C8CBBEB10 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DF8598AF36F14D0FD1E5C06D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 65FDDBB7069D2A8B10530076;
+			remoteInfo = Zmole;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F89513FC996F181AD37F30C1 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeTests.swift; sourceTree = "<group>"; };
+		0CF699D95E09A155B564D7B7 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		0FC19536CC569B11F1791854 /* CleanPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreview.swift; sourceTree = "<group>"; };
+		14254B56FF84870F0CDD6FD4 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeSnapshot.swift; sourceTree = "<group>"; };
+		19456FFB028A34FE9AA2561B /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
+		1C08D637167C209F86F21A8F /* OptimizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeTests.swift; sourceTree = "<group>"; };
+		2377F13EED7F8922B2C7B691 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeSnapshot.swift; sourceTree = "<group>"; };
+		2C082EA887412E27C88983A8 /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
+		304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeViewModel.swift; sourceTree = "<group>"; };
+		30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeView.swift; sourceTree = "<group>"; };
+		353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuidanceView.swift; sourceTree = "<group>"; };
+		3926E12312D382F2895E4662 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceOutput.swift; sourceTree = "<group>"; };
+		56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeSnapshot.swift; sourceTree = "<group>"; };
+		5A163D8C0D3365385123088B /* HistorySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySnapshot.swift; sourceTree = "<group>"; };
+		67FA972D9F6E688D5C582DC7 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		70AD53256D3AB0960670856A /* ZmoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleTests.swift; sourceTree = "<group>"; };
+		77F3BC43C66FFD1FFABE5573 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		78C972BD31A9D530B068FFA0 /* mole */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mole; path = src/zmole/Resources/mole; sourceTree = SOURCE_ROOT; };
+		8420B1435B244B9A28B385F9 /* AppLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLinks.swift; sourceTree = "<group>"; };
+		871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleCommandResult.swift; sourceTree = "<group>"; };
+		8AE94A720F89803BAB0BFED2 /* CleanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanViewModel.swift; sourceTree = "<group>"; };
+		8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleApp.swift; sourceTree = "<group>"; };
+		8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
+		91E22E157DB788F260EAD579 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeViewModel.swift; sourceTree = "<group>"; };
+		9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallView.swift; sourceTree = "<group>"; };
+		9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZmoleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizeViewModel.swift; sourceTree = "<group>"; };
+		A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeTests.swift; sourceTree = "<group>"; };
+		A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A76837A240FF7FE3F01BCD5F /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		AE334F91E7FFB8672701E61E /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
+		B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSnapshot.swift; sourceTree = "<group>"; };
+		C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeView.swift; sourceTree = "<group>"; };
+		C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridge.swift; sourceTree = "<group>"; };
+		CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModel.swift; sourceTree = "<group>"; };
+		CACC7DBC161EB4B26713C875 /* Zmole.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zmole.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CBE28E50E7A216A66CD36F69 /* CleanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanView.swift; sourceTree = "<group>"; };
+		CDD077229323936A83CC3D9E /* WhitelistDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistDocument.swift; sourceTree = "<group>"; };
+		CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallSnapshot.swift; sourceTree = "<group>"; };
+		CFEE226AA95D591E7CEC430F /* PurgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurgeView.swift; sourceTree = "<group>"; };
+		D2E6B8699AE90081585C812D /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
+		D3909A9F9948552E8947D86D /* UninstallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallTests.swift; sourceTree = "<group>"; };
+		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
+		EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallViewModel.swift; sourceTree = "<group>"; };
+		EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructiveConfirmation.swift; sourceTree = "<group>"; };
+		EFF06BD69D5E2DD87C328B82 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeError.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0FAE1686340F502551E31492 /* MoleBridge */ = {
+			isa = PBXGroup;
+			children = (
+				77F3BC43C66FFD1FFABE5573 /* .gitkeep */,
+				C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */,
+				F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */,
+				8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */,
+			);
+			path = MoleBridge;
+			sourceTree = "<group>";
+		};
+		10A90F2011FC87AFE027CB6C /* Optimize */ = {
+			isa = PBXGroup;
+			children = (
+				2844BA93B8D48AF13C1E5152 /* OptimizeSnapshot.swift */,
+				30811BAEBF070FB6DF6CB008 /* OptimizeView.swift */,
+				9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */,
+			);
+			path = Optimize;
+			sourceTree = "<group>";
+		};
+		1242DAF9716461D12D7F5A06 /* Clean */ = {
+			isa = PBXGroup;
+			children = (
+				0FC19536CC569B11F1791854 /* CleanPreview.swift */,
+				CBE28E50E7A216A66CD36F69 /* CleanView.swift */,
+				8AE94A720F89803BAB0BFED2 /* CleanViewModel.swift */,
+			);
+			path = Clean;
+			sourceTree = "<group>";
+		};
+		244B26EC236BC2EA928B9DC5 /* zmole */ = {
+			isa = PBXGroup;
+			children = (
+				857EDB87DC45AE0686C432AA /* App */,
+				513BB06312F92A637BFEF62D /* Features */,
+				8737220FEC347C8B5BF6DFD6 /* Models */,
+				0FAE1686340F502551E31492 /* MoleBridge */,
+				7DF70F8E14610BA5FB7C5692 /* Resources */,
+			);
+			path = zmole;
+			sourceTree = "<group>";
+		};
+		2A7930A020AE62CE1C3CA2A2 /* Purge */ = {
+			isa = PBXGroup;
+			children = (
+				171DED7E9A40CCB548A8EF42 /* PurgeSnapshot.swift */,
+				CFEE226AA95D591E7CEC430F /* PurgeView.swift */,
+				96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */,
+			);
+			path = Purge;
+			sourceTree = "<group>";
+		};
+		3301AF66406501BAF299829A /* tests */ = {
+			isa = PBXGroup;
+			children = (
+				40622549ECC2390CEF72CC58 /* unit */,
+			);
+			path = tests;
+			sourceTree = "<group>";
+		};
+		379DD79E0385093B79D02719 /* Analyze */ = {
+			isa = PBXGroup;
+			children = (
+				56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */,
+				C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */,
+				304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */,
+			);
+			path = Analyze;
+			sourceTree = "<group>";
+		};
+		40622549ECC2390CEF72CC58 /* unit */ = {
+			isa = PBXGroup;
+			children = (
+				A76837A240FF7FE3F01BCD5F /* .gitkeep */,
+				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
+				1C08D637167C209F86F21A8F /* OptimizeTests.swift */,
+				A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */,
+				D3909A9F9948552E8947D86D /* UninstallTests.swift */,
+				70AD53256D3AB0960670856A /* ZmoleTests.swift */,
+			);
+			path = unit;
+			sourceTree = "<group>";
+		};
+		421ED564581DEB0557B13B8D /* Status */ = {
+			isa = PBXGroup;
+			children = (
+				B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */,
+				D2E6B8699AE90081585C812D /* StatusView.swift */,
+				AE334F91E7FFB8672701E61E /* StatusViewModel.swift */,
+			);
+			path = Status;
+			sourceTree = "<group>";
+		};
+		4AAC7C7B51169F35FFDEE277 /* Confirmation */ = {
+			isa = PBXGroup;
+			children = (
+				EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */,
+			);
+			path = Confirmation;
+			sourceTree = "<group>";
+		};
+		513BB06312F92A637BFEF62D /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				EFF06BD69D5E2DD87C328B82 /* .gitkeep */,
+				3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */,
+				379DD79E0385093B79D02719 /* Analyze */,
+				1242DAF9716461D12D7F5A06 /* Clean */,
+				4AAC7C7B51169F35FFDEE277 /* Confirmation */,
+				CF6C07086218DD0CC99D7B2B /* History */,
+				10A90F2011FC87AFE027CB6C /* Optimize */,
+				2A7930A020AE62CE1C3CA2A2 /* Purge */,
+				B271951D0AC1AB67D750D7BB /* Settings */,
+				421ED564581DEB0557B13B8D /* Status */,
+				B28AB034B71E97A6E8E5D055 /* Uninstall */,
+				A79CA407E4ABB58266FA4931 /* Whitelist */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		758026AF734528233930F041 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				244B26EC236BC2EA928B9DC5 /* zmole */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		7DF70F8E14610BA5FB7C5692 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				67FA972D9F6E688D5C582DC7 /* AppIcon.icns */,
+				A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */,
+				78C972BD31A9D530B068FFA0 /* mole */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		7F426410E06F3F72B7A6FD4D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CACC7DBC161EB4B26713C875 /* Zmole.app */,
+				9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		857EDB87DC45AE0686C432AA /* App */ = {
+			isa = PBXGroup;
+			children = (
+				91E22E157DB788F260EAD579 /* .gitkeep */,
+				D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */,
+				8420B1435B244B9A28B385F9 /* AppLinks.swift */,
+				3926E12312D382F2895E4662 /* ContentView.swift */,
+				8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		8737220FEC347C8B5BF6DFD6 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				0CF699D95E09A155B564D7B7 /* .gitkeep */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A79CA407E4ABB58266FA4931 /* Whitelist */ = {
+			isa = PBXGroup;
+			children = (
+				CDD077229323936A83CC3D9E /* WhitelistDocument.swift */,
+				19456FFB028A34FE9AA2561B /* WhitelistStore.swift */,
+				2C082EA887412E27C88983A8 /* WhitelistView.swift */,
+				CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */,
+			);
+			path = Whitelist;
+			sourceTree = "<group>";
+		};
+		B05053D485ADDF5F194069A1 = {
+			isa = PBXGroup;
+			children = (
+				758026AF734528233930F041 /* src */,
+				3301AF66406501BAF299829A /* tests */,
+				7F426410E06F3F72B7A6FD4D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B271951D0AC1AB67D750D7BB /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				14254B56FF84870F0CDD6FD4 /* AboutView.swift */,
+				353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */,
+				2377F13EED7F8922B2C7B691 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		B28AB034B71E97A6E8E5D055 /* Uninstall */ = {
+			isa = PBXGroup;
+			children = (
+				CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */,
+				9B28A4E89A2BE93B564A3FB8 /* UninstallView.swift */,
+				EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */,
+			);
+			path = Uninstall;
+			sourceTree = "<group>";
+		};
+		CF6C07086218DD0CC99D7B2B /* History */ = {
+			isa = PBXGroup;
+			children = (
+				5A163D8C0D3365385123088B /* HistorySnapshot.swift */,
+				871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */,
+				8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		65FDDBB7069D2A8B10530076 /* Zmole */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8CD067891DE36C9E0E60C38C /* Build configuration list for PBXNativeTarget "Zmole" */;
+			buildPhases = (
+				9FF9721F08A18E6A3F086C73 /* Sources */,
+				D56C85D30FF6A75165E6B98B /* Resources */,
+				F89513FC996F181AD37F30C1 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Zmole;
+			packageProductDependencies = (
+			);
+			productName = Zmole;
+			productReference = CACC7DBC161EB4B26713C875 /* Zmole.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A2AAD937EBAF531CFD28392C /* ZmoleTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AA34F8C0920028FDA179A95 /* Build configuration list for PBXNativeTarget "ZmoleTests" */;
+			buildPhases = (
+				6B8F34FF9F746FC639EB297B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7A50A7C24CFC0CAFD090BDCB /* PBXTargetDependency */,
+			);
+			name = ZmoleTests;
+			packageProductDependencies = (
+			);
+			productName = ZmoleTests;
+			productReference = 9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DF8598AF36F14D0FD1E5C06D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 4ABD56495F1E1CF3D3311A4A /* Build configuration list for PBXProject "Zmole" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B05053D485ADDF5F194069A1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7F426410E06F3F72B7A6FD4D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				65FDDBB7069D2A8B10530076 /* Zmole */,
+				A2AAD937EBAF531CFD28392C /* ZmoleTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D56C85D30FF6A75165E6B98B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				45393145AAAB1D120F48878B /* AppIcon.icns in Resources */,
+				662379FE1A1C8033515BFA0C /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6B8F34FF9F746FC639EB297B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
+				1C5B9B159FF011EB5734409F /* OptimizeTests.swift in Sources */,
+				8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */,
+				FA1F3FD5C2AC72FCF949B235 /* UninstallTests.swift in Sources */,
+				95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9FF9721F08A18E6A3F086C73 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				90ECB6D6763E43E6B0E6CF39 /* AboutView.swift in Sources */,
+				7CCC6210BD38526F1C791EF9 /* AnalyzeSnapshot.swift in Sources */,
+				E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */,
+				68591EE839D8ADFDC6FBCDB9 /* AnalyzeViewModel.swift in Sources */,
+				2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */,
+				BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */,
+				5391EDE51B10E5A0C3B44658 /* CleanPreview.swift in Sources */,
+				97B629B50BF8325F3B49E677 /* CleanView.swift in Sources */,
+				F95C19285594F0225F8BDC76 /* CleanViewModel.swift in Sources */,
+				B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */,
+				C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */,
+				F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */,
+				47C413712EF1B93809099416 /* HistoryView.swift in Sources */,
+				740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */,
+				7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */,
+				E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */,
+				8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */,
+				5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */,
+				2DBABC5FC78A776772410FA1 /* OptimizeSnapshot.swift in Sources */,
+				284B011A47C5F57D5018E6A9 /* OptimizeView.swift in Sources */,
+				B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */,
+				EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */,
+				2499447255A8C0C842FB5B8D /* PurgeSnapshot.swift in Sources */,
+				847E40CFAE4237330B0E65D1 /* PurgeView.swift in Sources */,
+				C2ABA452E71B92CE32751D12 /* PurgeViewModel.swift in Sources */,
+				B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */,
+				AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */,
+				107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */,
+				DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */,
+				BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */,
+				909840D164F95B7F9D96A9EF /* UninstallView.swift in Sources */,
+				31587C8AEB4320A470AB5AB9 /* UninstallViewModel.swift in Sources */,
+				D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */,
+				3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */,
+				23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */,
+				FDA4DD86FF9FF3CB8259B6C0 /* WhitelistViewModel.swift in Sources */,
+				4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7A50A7C24CFC0CAFD090BDCB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 65FDDBB7069D2A8B10530076 /* Zmole */;
+			targetProxy = 9A358AF90E48AB9C8CBBEB10 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		077430F8C843847DE304FABD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tutupower.zmole.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zmole.app/Contents/MacOS/Zmole";
+			};
+			name = Release;
+		};
+		3E67AC394ACC87EEF0FB0D40 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "arm64 x86_64";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		68B6C7D79A6696EF491456C1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = src/zmole/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tutupower.zmole;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		B21A406F5113368C6F901672 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tutupower.zmole.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zmole.app/Contents/MacOS/Zmole";
+			};
+			name = Debug;
+		};
+		FAE2EEC902C840D704C6FCB8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = src/zmole/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tutupower.zmole;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		FF1BAC751BBEA0C22D63548B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "arm64 x86_64";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4ABD56495F1E1CF3D3311A4A /* Build configuration list for PBXProject "Zmole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3E67AC394ACC87EEF0FB0D40 /* Debug */,
+				FF1BAC751BBEA0C22D63548B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5AA34F8C0920028FDA179A95 /* Build configuration list for PBXNativeTarget "ZmoleTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B21A406F5113368C6F901672 /* Debug */,
+				077430F8C843847DE304FABD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8CD067891DE36C9E0E60C38C /* Build configuration list for PBXNativeTarget "Zmole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FAE2EEC902C840D704C6FCB8 /* Debug */,
+				68B6C7D79A6696EF491456C1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = DF8598AF36F14D0FD1E5C06D /* Project object */;
+}

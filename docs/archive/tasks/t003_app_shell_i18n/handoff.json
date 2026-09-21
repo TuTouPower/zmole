@@ -1,0 +1,20 @@
+{
+  "tid": "t003",
+  "attempt": 1,
+  "execution_id": "fcc11102df7141cea28d9b17aee1f010",
+  "status": "done",
+  "branch": "t003_app_shell_i18n",
+  "base_sha": "52da180a86ca19c0a41332a742b9d306d02a5879",
+  "tests": "xcodegen generate; xcodebuild Debug test (10 tests, 10 passed); xcodebuild Debug build; xcodebuild Release build; pytest .repo_template/tests -q (480 passed); md_format and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 未定义；CUA 启动 Debug App，验证九项侧栏、英文/简体/繁体即时切换、不支持系统语言回落英文、About 与 Releases 链接、破坏性确认取消",
+  "review": "review_general.md PASS, Round 2, zero findings, reviewed_scope 06aa01b375f43d7c",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Resources/Localizable.xcstrings", "src/zmole/App/AppLanguage.swift", "CUA 默认系统语言显示简体；-AppleLanguages '(fr)' 启动显示英文，验证不支持语言回落"],
+    "AC-002": ["src/zmole/App/ZmoleApp.swift", "src/zmole/Features/Settings/SettingsView.swift", "CUA 设置页 English → 简体中文 → 繁体中文，侧栏与设置内容即时切换"],
+    "AC-003": ["src/zmole/Features/Settings/AboutView.swift", "src/zmole/App/AppLinks.swift", "CUA About 显示 zmole、GPL-3.0、mole 来源、非 Mole for Mac、Mole version 1.55.0 与 GitHub Releases 链接"],
+    "AC-004": ["src/zmole/App/ContentView.swift", "tests/unit/ZmoleTests.swift", "侧栏九项与禁用 installer/update/remove 单测通过"],
+    "AC-005": ["src/zmole/Features/Confirmation/DestructiveConfirmation.swift", "tests/unit/ZmoleTests.swift", "取消流程单测通过，且 CUA 清理页取消后保持页面不执行动作"]
+  },
+  "pending": [],
+  "findings": []
+}

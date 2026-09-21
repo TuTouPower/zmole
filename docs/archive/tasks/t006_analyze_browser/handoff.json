@@ -1,0 +1,20 @@
+{
+  "tid": "t006",
+  "attempt": 1,
+  "execution_id": "0da826fc116c4cb68697cdb35162ea97",
+  "status": "done",
+  "branch": "t006_analyze_browser",
+  "base_sha": "145c21f2ee8132717638b9935fc1e9afcbd9dfc4",
+  "tests": "xcodebuild Debug test (23 tests, 23 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64 with bundled mole 1.55.0 and codesign --verify --deep --strict passed; uv run --python mise Python 3.14.7 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 未定义；CUA 启动捆绑 Debug App，验证 analyze overview 展示根目录 entries/name/size，点击 Applications 后显示 /Applications 子目录 entries，Back 返回 overview，未进入 TUI",
+  "review": "review_general.md PASS, Round 2, previous 2 findings fixed, zero new findings, reviewed_scope aa2b03bccb295206",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Analyze/AnalyzeSnapshot.swift", "src/zmole/Features/Analyze/AnalyzeView.swift", "tests/unit/ZmoleTests.swift", "overview fixture 与 AnalyzeDisplayState/AnalyzeEntryRow 测试断言 Applications name 与 size；CUA 实际显示 overview 条目"],
+    "AC-002": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift", "src/zmole/Features/Analyze/AnalyzeView.swift", "tests/unit/ZmoleTests.swift", "loader 精确生成 analyze --json path；导航测试断言 /Applications argv 与 Utilities name/size，UI 消费下钻 displayState"],
+    "AC-003": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift", "tests/unit/ZmoleTests.swift", "CUA", "goBack 移除当前路径并重新请求 overview；测试断言返回 overview argv/path，CUA 实际返回根目录条目"],
+    "AC-004": ["src/zmole/Features/Analyze/AnalyzeView.swift", "tests/unit/ZmoleTests.swift", "review_general.md", "Analyze 页面仅有目录下钻、Back、Refresh；无删除或移到废纸篓动作，review 已复核"],
+    "AC-005": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift", "src/zmole/MoleBridge/MoleBridge.swift", "CUA", "本机捆绑 Debug App 实际 overview、Applications 下钻、Back 全流程通过，未进入 TUI"]
+  },
+  "pending": [],
+  "findings": []
+}

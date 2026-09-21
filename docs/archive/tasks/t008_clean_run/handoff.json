@@ -1,0 +1,24 @@
+{
+  "tid": "t008",
+  "attempt": 1,
+  "execution_id": "0d1d1f0628ce40fd9e5ca72bcdcb0104",
+  "status": "done",
+  "branch": "t008_clean_run",
+  "base_sha": "e1bfc29e87ddc097449c5b2218997626026faca4",
+  "tests": "xcodegen project state validated; xcodebuild Debug test (38 tests, 38 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64, bundled mole 1.55.0, codesign --verify --deep --strict passed; uv run --python mise Python 3.14 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 未定义；真机 clean 不执行破坏性操作，临时 clean-list.txt 与 Bridge spy 覆盖预览、确认、取消、失败和并发生命周期",
+  "review": "review_code.md + review_test.md PASS Round 5, previous findings fixed, zero new findings, reviewed_scope b3700c2d73fcb37c",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "预览 argv 精确为 clean --dry-run"],
+    "AC-002": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "进入确认态前无无 dry-run 的 clean 调用"],
+    "AC-003": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "取消确认清除 preview 且后续不可确认"],
+    "AC-004": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "确认执行 argv 精确为 clean，不含 --dry-run"],
+    "AC-005": ["src/zmole/Features/Clean/CleanView.swift", "src/zmole/Resources/Localizable.xcstrings", "tests/unit/ZmoleTests.swift", "预览页接入 clean.execution_note，测试锁定三语重新扫描与列表变化语义"],
+    "AC-006": ["src/zmole/Features/Clean/CleanPreview.swift", "src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "旧列表先清除；未写列表、dry-run 非零和旧列表场景均不可确认且不回读旧内容"],
+    "AC-007": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/ZmoleTests.swift", "执行忙碌门禁与阻塞 spy 保证只创建一次 clean Process"],
+    "AC-008": ["src/zmole/Features/Clean/CleanViewModel.swift", "src/zmole/MoleBridge/MoleBridge.swift", "tests/unit/ZmoleTests.swift", "取消执行调用 Bridge cancel 并结束忙碌态"],
+    "AC-009": ["src/zmole/Features/Clean/CleanViewModel.swift", "src/zmole/Features/Clean/CleanView.swift", "tests/unit/ZmoleTests.swift", "非零执行清除预览、显示 stdout/stderr 摘要与失败错误，不显示成功态"]
+  },
+  "pending": [],
+  "findings": []
+}

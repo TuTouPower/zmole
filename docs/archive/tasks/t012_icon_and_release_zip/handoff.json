@@ -1,0 +1,17 @@
+{
+  "tid": "t012",
+  "attempt": 1,
+  "execution_id": "ce3601d7e546415fa234fe2de81b2b7a",
+  "status": "done",
+  "branch": "t012_icon_and_release_zip",
+  "base_sha": "c11ed2b18ef3db579c95970ea38eaa73cd55401c",
+  "tests": "xcodegen generate; xcodebuild Debug test (63 tests, 63 passed); xcodebuild Debug build; xcodebuild Release build; Release app verified universal x86_64/arm64, AppIcon.icns present, CFBundleIconFile/App bundle metadata/PkgInfo present, codesign --verify --deep --strict passed; README Gatekeeper paths checked; uv run --python mise Python 3.14 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON and git diff --check passed",
+  "blackbox": "AC-001 deploy evidence uses built Debug/Release app Info.plist, AppIcon.icns, PkgInfo and strict codesign; no Finder/Dock manual rendering; AC-002 README grep",
+  "review": "review_general.md PASS Round 3, previous findings fixed, zero new findings, reviewed_scope f184f55dd399a8b8",
+  "ac_evidence": {
+    "AC-001": ["assets/app_icon_source.png", "src/zmole/Resources/AppIcon.icns", "src/zmole/Info.plist", "project.yml", "Release app Contents/Resources/AppIcon.icns + CFBundleIconFile + PkgInfo + universal binary + strict codesign"],
+    "AC-002": ["README.md", "README:20-25", "包含右键打开、系统设置「仍要打开」与 xattr -cr"]
+  },
+  "pending": [],
+  "findings": []
+}

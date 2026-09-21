@@ -1,0 +1,22 @@
+{
+  "tid": "t011",
+  "attempt": 1,
+  "execution_id": "6b5a93673e044ae2b696c7d774908c76",
+  "status": "done",
+  "branch": "t011_purge_run",
+  "base_sha": "ff5317f1eb1a4f28cfcc2e38bcd931f5a836866c",
+  "tests": "xcodegen generate; xcodebuild Debug test (63 tests, 63 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64, bundled mole 1.55.0, codesign --verify --deep --strict passed; uv run --python mise Python 3.14 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 无；真 purge 副作用不执行，Bridge spy 与 stdout/ANSI 夹具覆盖全部行为",
+  "review": "review_code.md + review_test.md PASS Round 2, previous minor fixed, zero new findings, reviewed_scope 97a6e83192bbb17b",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "预览 argv 精确为 purge --dry-run，不含 --yes"],
+    "AC-002": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "执行 argv 精确为 purge --yes，不含 --dry-run"],
+    "AC-003": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "未确认前调用记录无 purge --yes"],
+    "AC-004": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "生产路径只有两套显式 argv：dry-run 或 --yes"],
+    "AC-005": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "非零预览清除 preview，确认不可用"],
+    "AC-006": ["src/zmole/Features/Purge/PurgeViewModel.swift", "tests/unit/PurgeTests.swift", "确认取消使旧预览失效；重预览后才能执行新调用"],
+    "AC-007": ["src/zmole/Features/Purge/PurgeViewModel.swift", "src/zmole/MoleBridge/MoleBridge.swift", "tests/unit/PurgeTests.swift", "执行 busy 防重复，cancel 调用 Bridge cancel 并结束忙碌态"]
+  },
+  "pending": [],
+  "findings": []
+}

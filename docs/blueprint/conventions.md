@@ -6,7 +6,7 @@
 
 - **语言**：Swift 5.9+（随 Xcode 工具链）
 - **UI**：SwiftUI，最低部署目标 **macOS 13+**，Universal
-- **本地化**：String Catalog；`zh-Hans` / `zh-Hant` / `en`；默认跟随系统，设置可覆盖
+- **本地化**：String Catalog；`zh-Hans` / `zh-Hant` / `en`；默认跟随系统，设置通过 `@AppStorage("languageOverride")` 与 `environment(\.locale, ...)` 即时覆盖
 - **并发**：优先 `async/await`；Bridge 内 `Process` I/O 勿堵主线程
 - **目录**（Xcode 工程落地后）：
     - `src/zmole/App/` — 入口与 App 级场景
@@ -16,6 +16,7 @@
     - `tests/unit/` — 纯逻辑单测（Bridge 解析、参数拼装等）
     - `tests/integration/` — 对捆绑 mole 或假二进制的集成
 - **工程文件**：根目录 `project.yml`，XcodeGen 生成 `Zmole.xcodeproj`；禁止手写损坏的 pbxproj
+- **工程生成**：在仓库根目录运行 `xcodegen generate`；构建前重新生成工程
 - **捆绑 mole**：构建时放入 Resources；运行时只 spawn 该绝对路径
 - **禁止**：Feature / View 里直接 `Process`；解析 TUI；PTY 代发方向键；把 CLI 装进 PATH；调用捆绑 mole 的 `update`/`remove`
 - **允许的 stdin**：仅 mole 文档化的行确认。当前只有命名 `uninstall` 的 `[y/N]` → 写入 `y\n`。其它命令保持空 stdin，除非新 ADR

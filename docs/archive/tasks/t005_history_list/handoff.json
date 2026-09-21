@@ -1,0 +1,20 @@
+{
+  "tid": "t005",
+  "attempt": 1,
+  "execution_id": "800ca50d014b4466acc6c0a97014725c",
+  "status": "done",
+  "branch": "t005_history_list",
+  "base_sha": "2c3240d7f0c24376ef615db252aa20ec26f9d958",
+  "tests": "xcodegen generate; xcodebuild Debug test (18 tests, 18 passed); xcodebuild Debug build; xcodebuild Release build; pytest .repo_template/tests -q (480 passed); md_format, JSON and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 未定义；CUA 启动 Debug App，验证真实 Sessions/Deletions 列表与 Refresh 更新",
+  "review": "review_general.md PASS, Round 2, previous 2 findings fixed, zero new findings, reviewed_scope ceccc7d9edac96fa",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/History/HistorySnapshot.swift", "src/zmole/Features/History/HistoryView.swift", "tests/unit/ZmoleTests.swift", "源码字段夹具解码并投影 command、started_at 回退时间、items/size；CUA 列表实际显示"],
+    "AC-002": ["src/zmole/Features/History/HistorySnapshot.swift", "src/zmole/Features/History/HistoryView.swift", "tests/unit/ZmoleTests.swift", "双空 sessions/deletions 投影为 empty，ViewModel 成功空响应保持空态"],
+    "AC-003": ["src/zmole/Features/History/HistoryViewModel.swift", "tests/unit/ZmoleTests.swift", "默认 argv 精确断言为 history --json --limit 20"],
+    "AC-004": ["src/zmole/Features/History/HistoryViewModel.swift", "tests/unit/ZmoleTests.swift", "limit=1 argv 精确断言，loader 将输入钳制到至少 1"],
+    "AC-005": ["src/zmole/Features/History/HistoryViewModel.swift", "tests/unit/ZmoleTests.swift", "非法 JSON 与非零退出均为失败态并有错误文案；成功空数组才进入空态"]
+  },
+  "pending": [],
+  "findings": []
+}

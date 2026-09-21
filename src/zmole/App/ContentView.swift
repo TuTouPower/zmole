@@ -1,0 +1,109 @@
+import SwiftUI
+
+enum SidebarItem: String, CaseIterable, Identifiable {
+    case status
+    case history
+    case analyze
+    case clean
+    case uninstall
+    case optimize
+    case purge
+    case whitelist
+    case settings
+
+    var id: Self { self }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .status: "sidebar.status"
+        case .history: "sidebar.history"
+        case .analyze: "sidebar.analyze"
+        case .clean: "sidebar.clean"
+        case .uninstall: "sidebar.uninstall"
+        case .optimize: "sidebar.optimize"
+        case .purge: "sidebar.purge"
+        case .whitelist: "sidebar.whitelist"
+        case .settings: "sidebar.settings"
+        }
+    }
+
+}
+
+struct ContentView: View {
+    @State private var selection: SidebarItem? = .status
+    @StateObject private var cleanViewModel: CleanViewModel
+    @StateObject private var uninstallViewModel: UninstallViewModel
+    @StateObject private var optimizeViewModel: OptimizeViewModel
+    @StateObject private var purgeViewModel: PurgeViewModel
+
+    init(
+        cleanViewModel: CleanViewModel? = nil,
+        uninstallViewModel: UninstallViewModel? = nil,
+        optimizeViewModel: OptimizeViewModel? = nil,
+        purgeViewModel: PurgeViewModel? = nil
+    ) {
+        _cleanViewModel = StateObject(wrappedValue: cleanViewModel ?? CleanViewModel())
+        _uninstallViewModel = StateObject(
+            wrappedValue: uninstallViewModel ?? UninstallViewModel()
+        )
+        _optimizeViewModel = StateObject(
+            wrappedValue: optimizeViewModel ?? OptimizeViewModel()
+        )
+        _purgeViewModel = StateObject(
+            wrappedValue: purgeViewModel ?? PurgeViewModel()
+        )
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            List(SidebarItem.allCases, selection: $selection) { item in
+                Text(item.titleKey)
+                    .tag(item)
+            }
+            .navigationTitle("app.name")
+        } detail: {
+            NavigationStack {
+                destination(for: selection ?? .status)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for item: SidebarItem) -> some View {
+        switch item {
+        case .status:
+            StatusView()
+        case .history:
+            HistoryView()
+        case .analyze:
+            AnalyzeView()
+        case .whitelist:
+            WhitelistView()
+        case .clean:
+            CleanView(viewModel: cleanViewModel)
+        case .uninstall:
+            UninstallView(viewModel: uninstallViewModel)
+        case .optimize:
+            OptimizeView(viewModel: optimizeViewModel)
+        case .settings:
+            SettingsView()
+        case .purge:
+            PurgeView(viewModel: purgeViewModel)
+        }
+    }
+}
+
+struct PlaceholderFeatureView: View {
+    let title: LocalizedStringKey
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.title)
+            Text("placeholder.summary")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle(title)
+    }
+}
