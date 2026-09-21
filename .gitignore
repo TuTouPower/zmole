@@ -1,0 +1,45 @@
+/artifacts/
+/data/
+.scratch/
+node_modules/
+*.log
+__pycache__/
+*.py[cod]
+
+# 本地密钥
+.env
+.env.*
+!.env.example
+
+# 多路 review 会话的过程文件（报告 review_*.md 本身入库）
+docs/reviews/review_*/_meta/
+docs/archive/reviews/review_*/_meta/
+
+# 并行调度账本，运行态不入库
+docs/runtime/
+
+# CommandCode local runtime state
+.commandcode/
+
+# Xcode / Swift
+DerivedData/
+build/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+Timeline.xctimeline
+playground.xcworkspace
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/
+net.auto.*.plist
+*.playground
+.DS_Store
+*.swp
+*~.nib
