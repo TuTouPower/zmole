@@ -35,4 +35,5 @@ macOS 原生桌面壳，把 [mole](https://github.com/tw93/mole) CLI 的能力�
 ## 与上游关系
 
 - 上游 CLI：<https://github.com/tw93/mole>
+- 本机研究用克隆：`~/kar/github_repo/mole`（只读参考 / 对照 CLI 行为；不在本仓内 vendor）
 - 上游商业桌面端 Mole for Mac（mole.fit）与本仓无关；功能可参考，实现不依赖、不复用其私有代码。

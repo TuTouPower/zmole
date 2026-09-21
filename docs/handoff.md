@@ -9,5 +9,5 @@
 - head_commit：d40fd76c2b97b8c5582d810f18cb72eca12b8711
 - 已完成：模板复制、软链校验、hooks、README/AGENTS/blueprint、Swift gitignore、目录占位
 - 未完成：`Zmole.xcodeproj`、MoleBridge 实现、功能页、业务测试接入 `test_cmd`
-- 陷阱：上游另有商业 Mole for Mac，勿与本仓混淆；破坏性 CLI 须 dry-run/确认；本机可能未装 `mo`
+- 陷阱：上游另有商业 Mole for Mac，勿与本仓混淆；破坏性 CLI 须 dry-run/确认；本机可能未装 `mo`；上游源码在 `~/kar/github_repo/mole`，勿当本仓子模块改
 - 下一步：`task-create` 拆「Xcode 工程骨架 + MoleBridge 探测 `mo --version`」等 task

@@ -11,6 +11,7 @@
 - **UI**：SwiftUI（macOS 原生）
 - **桥接**：通过 `Process` / 管道调用本机已安装的 `mo`
 - **依赖**：用户需先安装 mole CLI（Homebrew：`brew install mole`，或上游 install 脚本）
+- **上游源码（本机）**：已克隆至 `~/kar/github_repo/mole`，供对照 CLI 行为与接口；运行时仍调用已安装的 `mo`，不从此路径打包
 
 ## 入口
 
