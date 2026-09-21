@@ -1,0 +1,14 @@
+{
+  "path": "str",
+  "overview": "bool",
+  "entries": [
+    {
+      "name": "str",
+      "path": "str",
+      "size": "int",
+      "is_dir": "bool"
+    },
+    "... n=6"
+  ],
+  "total_size": "int"
+}

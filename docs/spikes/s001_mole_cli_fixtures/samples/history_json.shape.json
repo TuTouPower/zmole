@@ -1,0 +1,9 @@
+{
+  "logs": {
+    "operations": "str",
+    "deletions": "str"
+  },
+  "limit": "int",
+  "sessions": [],
+  "deletions": []
+}

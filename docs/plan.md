@@ -63,7 +63,7 @@ t007 whitelist_editor            ← t003
 t008 clean_run                   ← t003
 t009 uninstall_run               ← t008
 t010 optimize_run                ← t008
-t011 purge_run                   ← t008；start 还要 s001 对 purge dry-run 的结论
+t011 purge_run                   ← t008；预览 `purge --dry-run --yes`（s001/d001）
 t012 icon_and_release_zip        ← t001（可与功能并行）
 ```
 

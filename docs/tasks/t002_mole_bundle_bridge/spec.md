@@ -64,7 +64,7 @@
 
 <!-- /规范 -->
 
-- Universal 下 Go 辅助程序如何打进 bundle：`UNVERIFIED-SPIKE`，用 `s001` 或本 task 内验证 `make release-arm64`/`release-amd64` 布局；失败则先只打本机 arch 并在 handoff 记录
+- 无。s001：Release `V1.55.0` 提供 `analyze-darwin-arm64`/`amd64` 与 `status-darwin-*`（亦有 `binaries-darwin-*.tar.gz`）。装入 mole 树的 `bin/analyze-go` 与 `bin/status-go`（Universal 可 lipo 或按 arch 分发两套 helper）
 
 ### 风险与回退
 

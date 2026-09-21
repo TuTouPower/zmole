@@ -1,0 +1,19 @@
+{
+  "path": "/",
+  "overview": true,
+  "entries": [
+    {
+      "name": "Applications",
+      "path": "/Applications",
+      "size": 34400550912,
+      "is_dir": true
+    },
+    {
+      "name": "System Library",
+      "path": "/Library",
+      "size": 6788452352,
+      "is_dir": true
+    }
+  ],
+  "total_size": 41304723772
+}

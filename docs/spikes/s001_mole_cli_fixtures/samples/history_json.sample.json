@@ -1,0 +1,9 @@
+{
+  "logs": {
+    "operations": "/Users/karson/kar/code/zmole/.scratch/s001/home/Library/Logs/mole/operations.log",
+    "deletions": "/Users/karson/kar/code/zmole/.scratch/s001/home/Library/Logs/mole/deletions.log"
+  },
+  "limit": 5,
+  "sessions": [],
+  "deletions": []
+}

@@ -1,0 +1,7 @@
+→ DRY RUN MODE, No project artifacts will be removed
+
+Purge Project Artifacts
+
+✓ Great! No old project artifacts to clean
+
+

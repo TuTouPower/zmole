@@ -2,15 +2,16 @@
 
 ## 背景
 
-非 TTY 下真实 purge 必须 `--yes`。无 TTY 的 dry-run 是否卡住由 s001 决定；若卡住则本 task 不得 start，应 park。
+s001 已核实：无 TTY 下 `purge --dry-run` 立即返回但名单为空（EOF=未勾选）。预览要用 `purge --dry-run --yes`（不删除、打印候选）；执行用 `purge --yes`。
 
 ## 契约区
 
 ### 范围
 
-- 若 s001 表明 dry-run 可返回：展示预览 → 确认 → `purge --yes`
-- 执行路径必须带 `--yes`；不存在无 `--yes` 的非 dry-run 调用
-- 未确认不 spawn `--yes`
+- 预览：`purge --dry-run --yes`，把 stdout 当名单/摘要
+- 确认后执行：`purge --yes`（无 `--dry-run`）
+- 未确认不 spawn 无 `--dry-run` 的 `--yes`
+- 不存在既无 `--dry-run` 又无 `--yes` 的 purge
 
 ### 非范围
 
@@ -24,9 +25,9 @@
 
 <!-- /规范 -->
 
-- [ ] AC-001：预览 argv 含 `purge` 与 `--dry-run`，不含 `--yes`
-- [ ] AC-002：执行 argv 含 `purge` 与 `--yes`
-- [ ] AC-003：未确认时 `--yes` 调用次数为 0
+- [ ] AC-001：预览 argv 含 `purge`、`--dry-run` 与 `--yes`
+- [ ] AC-002：执行 argv 含 `purge` 与 `--yes`，不含 `--dry-run`
+- [ ] AC-003：未确认时，不含 `--dry-run` 的 `--yes` 调用次数为 0
 - [ ] AC-004：代码路径中不存在「无 `--dry-run` 且无 `--yes`」的 purge
 
 ### 可测试性声明
@@ -49,7 +50,7 @@
 
 ### 测试策略
 
-- spy argv；s001 未通过则本 task 保持 backlog 并 park
+- spy argv；预览夹具用 s001 `samples/purge_dry_run_yes.txt`
 
 ### 未知契约清单
 
@@ -59,16 +60,16 @@
 
 <!-- /规范 -->
 
-- 无 TTY 下 `purge --dry-run` 是否返回：`UNVERIFIED-SPIKE`，`s001`；**阻塞 start**
+- 无。s001：仅 `--dry-run` 无名单；`--dry-run --yes` 打印 `✓ [DRY RUN] path, size` 且不删文件。
 
 ### 风险与回退
 
-- 风险：`--yes` 在预览阶段被带上
-- 回退：预览/执行两套 argv 工厂，单测锁死
+- 风险：把预览的 `--yes` 和执行的 `--yes` 搞混，或漏 `--dry-run` 导致真删
+- 回退：预览 argv 必须同时含 `--dry-run` 与 `--yes`；执行禁止 `--dry-run`
 
 ### 依赖与约束
 
-- 依赖 t008；s001 对 purge 的结论为 start 前提
+- 依赖 t008；来源 s001 / d001
 
 ### Finalization 时更新的 blueprint
 

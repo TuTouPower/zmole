@@ -1,0 +1,151 @@
+{
+  "collected_at": "str",
+  "host": "str",
+  "platform": "str",
+  "uptime": "str",
+  "uptime_seconds": "int",
+  "procs": "int",
+  "hardware": {
+    "model": "str",
+    "cpu_model": "str",
+    "total_ram": "str",
+    "disk_size": "str",
+    "os_version": "str",
+    "refresh_rate": "str"
+  },
+  "health_score": "int",
+  "health_score_msg": "str",
+  "cpu": {
+    "usage": "float",
+    "per_core": [
+      "float",
+      "... n=10"
+    ],
+    "per_core_estimated": "bool",
+    "load1": "float",
+    "load5": "float",
+    "load15": "float",
+    "core_count": "int",
+    "logical_cpu": "int",
+    "p_core_count": "int",
+    "e_core_count": "int"
+  },
+  "gpu": [
+    {
+      "name": "str",
+      "usage": "int",
+      "memory_used": "int",
+      "memory_total": "int",
+      "core_count": "int",
+      "note": "str"
+    },
+    "... n=1"
+  ],
+  "memory": {
+    "used": "int",
+    "total": "int",
+    "available": "int",
+    "used_percent": "float",
+    "swap_used": "int",
+    "swap_total": "int",
+    "cached": "int",
+    "pressure": "str"
+  },
+  "disks": [
+    {
+      "mount": "str",
+      "device": "str",
+      "used": "int",
+      "total": "int",
+      "used_percent": "float",
+      "fstype": "str",
+      "external": "bool",
+      "smart_status": "str",
+      "purgeable": "int"
+    },
+    "... n=3"
+  ],
+  "trash_size": "int",
+  "trash_approx": "bool",
+  "disk_io": {
+    "read_rate": "int",
+    "write_rate": "int"
+  },
+  "network": [
+    {
+      "name": "str",
+      "rx_rate_mbs": "float",
+      "tx_rate_mbs": "float",
+      "ip": "str"
+    },
+    "... n=3"
+  ],
+  "network_history": {
+    "rx_history": [
+      "float",
+      "... n=1"
+    ],
+    "tx_history": [
+      "float",
+      "... n=1"
+    ]
+  },
+  "proxy": {
+    "enabled": "bool",
+    "type": "str",
+    "host": "str"
+  },
+  "batteries": [
+    {
+      "percent": "int",
+      "status": "str",
+      "time_left": "str",
+      "health": "str",
+      "cycle_count": "int",
+      "capacity": "int"
+    },
+    "... n=1"
+  ],
+  "thermal": {
+    "cpu_temp": "int",
+    "gpu_temp": "int",
+    "battery_temp": "float",
+    "fan_speed": "int",
+    "fan_count": "int",
+    "system_power": "float",
+    "adapter_power": "int",
+    "battery_power": "int"
+  },
+  "sensors": "NoneType",
+  "bluetooth": [
+    {
+      "name": "str",
+      "connected": "bool",
+      "battery": "str"
+    },
+    "... n=2"
+  ],
+  "top_processes": [
+    {
+      "pid": "int",
+      "ppid": "int",
+      "name": "str",
+      "command": "str",
+      "cpu": "int",
+      "memory": "float",
+      "memory_bytes": "int"
+    },
+    "... n=5"
+  ],
+  "process_collected_at": "str",
+  "process_stale": "bool",
+  "zombie_count": "int",
+  "zombie_parents": [],
+  "zombie_parents_complete": "bool",
+  "process_watch": {
+    "enabled": "bool",
+    "cpu_threshold": "int",
+    "window": "str"
+  },
+  "process_alerts": []
+}

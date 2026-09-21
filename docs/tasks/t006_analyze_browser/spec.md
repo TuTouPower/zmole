@@ -60,7 +60,7 @@
 
 <!-- /规范 -->
 
-- analyze JSON 形状：`UNVERIFIED-SPIKE`，`s001`
+- 无。s001：overview=`path/overview/entries/total_size`；路径扫描另有 `large_files`/`total_files`。`--json` 在路径前。
 
 ### 风险与回退
 

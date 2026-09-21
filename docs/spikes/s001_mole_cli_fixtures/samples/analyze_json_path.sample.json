@@ -1,0 +1,32 @@
+{
+  "path": "/Users/karson/kar/code/zmole",
+  "overview": false,
+  "entries": [
+    {
+      "name": ".opencode",
+      "path": "/Users/karson/kar/code/zmole/.opencode",
+      "size": 64244484,
+      "is_dir": true
+    },
+    {
+      "name": ".scratch",
+      "path": "/Users/karson/kar/code/zmole/.scratch",
+      "size": 49738713,
+      "is_dir": true
+    }
+  ],
+  "large_files": [
+    {
+      "name": "status-darwin-arm64",
+      "path": "/Users/karson/kar/code/zmole/.scratch/s001/bin/status-darwin-arm64",
+      "size": 4200882
+    },
+    {
+      "name": "analyze-darwin-arm64",
+      "path": "/Users/karson/kar/code/zmole/.scratch/s001/bin/analyze-darwin-arm64",
+      "size": 3810914
+    }
+  ],
+  "total_size": 116771339,
+  "total_files": 195
+}

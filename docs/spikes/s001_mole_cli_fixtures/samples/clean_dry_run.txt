@@ -1,0 +1,81 @@
+
+Clean Your Mac
+
+Dry Run Mode, Preview only, no deletions
+
+◎ System caches need sudo, run sudo -v && mo clean --dry-run for full preview
+
+⚙ Apple Silicon | Free space: 318.20GB
+✓ Whitelist: 19 core patterns active
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/ms-playwright*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.gradle/caches/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.gradle/daemon/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.ollama/models/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.nssurge.surge-mac/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Application Support/com.nssurge.surge-mac/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/org.R-project.R/R/renv/*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/JetBrains*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.jetbrains.toolbox*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/tealdeer/tldr-pages
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Application Support/JetBrains*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.finder
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Mobile Documents*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.FontRegistry*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.spotlight*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.Spotlight*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/CloudKit*
+  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/pypoetry/virtualenvs*
+
+➤ User essentials
+  → User app cache · 38.6MB dry
+
+➤ App caches
+  ✓ Nothing to clean
+
+➤ Browsers
+  ✓ Nothing to clean
+
+➤ Cloud & Office
+  ✓ Nothing to clean
+
+➤ Developer tools
+  → npm cache · would clean
+  → npm logs · 2KB dry
+  → pnpm cache · would clean
+  → Corepack cache · would clean
+  → pip cache · would clean
+  → uv cache · would clean
+  → mise cache · would clean
+  ⊙ Docker unused data · review with docker system df
+  ⊙ OrbStack container data · 0B · review with docker system df
+  → Xcode Simulator system cache · would remove 1 entries (3.26GB)
+  → Clang module cache · 283.9MB dry
+  → Homebrew · would cleanup
+  ◎ Homebrew autoremove would remove:
+    ==> Would autoremove 2 unneeded formulae:
+    p7zip
+    ripgrep
+
+➤ Apps & utilities
+  ✓ Nothing to clean
+
+➤ Virtualization
+  ✓ Nothing to clean
+
+➤ Application Support
+  ◎ Skipped: No permission to access Application Support
+
+➤ App leftovers
+  ✓ Nothing to clean
+
+➤ Apple Silicon updates
+  ✓ Nothing to clean
+
+➤ Device backups & firmware
+  ✓ Nothing to clean
+
+➤ Time Machine
+  ✓ Nothing to clean
+
+➤ Large files
+  ⊙ Docker storage · Images 893.4MB (221.2MB (24%) reclaimable) · Containers 475.1kB (0B (0%) reclaimable) · Local Volumes 1.165GB (0B (0%) reclaimable) · Build Cache 217.1MB (135.2kB reclaima

@@ -1,0 +1,11 @@
+[
+  {
+    "name": "str",
+    "bundle_id": "str",
+    "source": "str",
+    "uninstall_name": "str",
+    "path": "str",
+    "size": "str"
+  },
+  "... n=61"
+]

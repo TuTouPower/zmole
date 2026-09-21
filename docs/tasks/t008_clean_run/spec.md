@@ -62,7 +62,7 @@ clean 会永久删除。必须预览后确认。非 TTY 下 mole 会自动跑用
 
 <!-- /规范 -->
 
-- dry-run 是否总写出 `clean-list.txt`：`UNVERIFIED-SPIKE`，`s001`；若无文件则改用 stdout 摘要并更新本 AC
+- 无。s001：`clean --dry-run` 写出 `$HOME/.config/mole/clean-list.txt`（分段标题 + `path  # size`）
 
 ### 风险与回退
 

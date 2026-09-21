@@ -60,7 +60,7 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 <!-- /规范 -->
 
-- `status --json` 字段集：`UNVERIFIED-SPIKE`，`s001`；start 前须有 findings 或本 task 内先抓样例再解码
+- 无。s001：对象含 `health_score`/`cpu`/`memory`/`disks` 等；样例 `docs/spikes/s001_mole_cli_fixtures/samples/status_json.shape.json`
 
 ### 风险与回退
 
@@ -69,7 +69,7 @@ status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
 ### 依赖与约束
 
-- 依赖 t003；建议先完成 s001
+- 依赖 t003；夹具 s001 status_json
 
 ### Finalization 时更新的 blueprint
 

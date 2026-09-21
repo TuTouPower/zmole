@@ -61,7 +61,7 @@
 
 <!-- /规范 -->
 
-- `--list` JSON 在捆绑 mole 上的实际输出：`UNVERIFIED-SPIKE`，`s001`
+- 无。s001：stdout 非 TTY 时为 JSON 数组，字段 `name`/`bundle_id`/`source`/`uninstall_name`/`path`/`size`（`size` 为人类可读字符串，非字节整数）
 
 ### 风险与回退
 

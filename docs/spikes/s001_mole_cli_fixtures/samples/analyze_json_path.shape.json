@@ -1,0 +1,23 @@
+{
+  "path": "str",
+  "overview": "bool",
+  "entries": [
+    {
+      "name": "str",
+      "path": "str",
+      "size": "int",
+      "is_dir": "bool"
+    },
+    "... n=18"
+  ],
+  "large_files": [
+    {
+      "name": "str",
+      "path": "str",
+      "size": "int"
+    },
+    "... n=3"
+  ],
+  "total_size": "int",
+  "total_files": "int"
+}

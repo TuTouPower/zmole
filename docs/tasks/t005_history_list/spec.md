@@ -57,7 +57,7 @@
 
 <!-- /规范 -->
 
-- history JSON 形状：`UNVERIFIED-SPIKE`，`s001`
+- 无。s001：`{logs, limit, sessions[], deletions[]}`
 
 ### 风险与回退
 

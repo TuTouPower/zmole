@@ -59,7 +59,7 @@ optimize 无 JSON，但 `--dry-run` 可跑。预览用 stdout 摘要；确认后
 
 <!-- /规范 -->
 
-- 无 TTY 时 optimize dry-run 是否非零：`UNVERIFIED-SPIKE`，`s001`
+- 无。s001：`optimize --dry-run` exit 0，stdout 为分段文本，无 JSON
 
 ### 风险与回退
 

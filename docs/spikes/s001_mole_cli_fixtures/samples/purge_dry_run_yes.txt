@@ -1,0 +1,12 @@
+→ DRY RUN MODE, No project artifacts will be removed
+
+Purge Project Artifacts
+
+✓ [DRY RUN] ~/Projects/demo_app/node_modules, 430KB
+
+
+======================================================================
+Dry run complete - no changes made
+Would free approximately: 430KB | Items: 1 | Free: 318.20GB
+======================================================================
+

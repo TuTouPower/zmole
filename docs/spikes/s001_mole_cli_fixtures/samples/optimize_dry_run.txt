@@ -1,0 +1,85 @@
+
+Optimize
+→ DRY RUN MODE, No files will be modified
+
+⚙ System  33/64 GB RAM | 607/926 GB Disk | Uptime 0d
+
+Performance diagnosis
+  ◎ Likely bottleneck: WindowServer (~33.4% CPU sustained)
+  ⊙ Desktop composition is busy. When another family is higher, treat this as a likely symptom rather than the root cause.
+
+➤ DNS & Spotlight Check
+  → DNS cache flushed
+  → Spotlight index verified
+
+➤ Finder Cache Refresh
+  → QuickLook thumbnails refreshed
+  → Icon services cache rebuilt
+
+➤ App State Cleanup
+  → App saved states optimized
+
+➤ Broken Config Repair
+  → All preference files valid
+
+➤ Network Cache Refresh
+  → DNS cache already refreshed
+  → mDNSResponder already restarted
+
+➤ Database Optimization
+  ◎ Close these apps before database optimization: Mail
+
+➤ LaunchServices Repair
+  → LaunchServices repaired
+  → File associations refreshed
+
+➤ Prevent Finder .DS_Store
+  → .DS_Store prevention enabled on network & USB volumes
+
+➤ Legacy Overrides
+  → No legacy App Nap or disk-image overrides found
+
+➤ Network Stack Refresh
+  → Network stack already optimal
+
+➤ Permission Repair
+  → User directory permissions already optimal
+
+➤ Spotlight Optimization
+  → Spotlight index already optimal
+
+➤ Spotlight Orphan Rules
+  → Spotlight search rules already clean
+
+➤ Periodic Maintenance
+  → Periodic maintenance skipped (not available on this macOS version)
+
+➤ Shared File Lists
+  → Shared file lists directory not found
+
+➤ Disk Health
+  → Disk verify skipped (set MOLE_ENABLE_DISK_VERIFY=1 to enable)
+
+➤ Login Items
+  → Login items audit · skipped in test mode
+
+➤ Quarantine Database Cleanup
+  → Quarantine database already clean
+
+➤ Launch Agents Cleanup
+  → Launch Agents all healthy
+
+➤ Notifications
+  - Notification Center database unavailable (no supported path)
+
+➤ Usage Data
+  → Knowledge database not found
+
+======================================================================
+Dry Run Complete, No Changes Made
+Would apply 4 optimizations
+12 unchanged | 3 skipped | 2 unavailable
+Run without --dry-run to apply these changes
+======================================================================
+
+

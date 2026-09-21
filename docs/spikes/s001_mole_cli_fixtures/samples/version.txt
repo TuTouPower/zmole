@@ -1,0 +1,11 @@
+
+Mole version 1.55.0
+macOS: 26.5.2
+Architecture: arm64
+Kernel: 25.5.0
+SIP: Enabled
+Disk Free: 318.25GB
+Install: Manual
+Shell: /bin/zsh
+
+
