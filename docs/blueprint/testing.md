@@ -9,7 +9,7 @@
 环境前置检查：模板工具链可收集；`md_kx` 在 PATH。完整 Xcode（含 `xcodebuild`）在工程落地后纳入本检查；当前本机若仅有 Command Line Tools，不在此硬失败。
 
 ```bash
-pytest .repo_template/tests -q --collect-only
+pytest .repo_template/tests -q --collect-only -m contract
 command -v md_kx
 xcodebuild -version
 xcodegen --version
@@ -22,7 +22,7 @@ xcodegen --version
 ```bash
 xcodegen generate
 xcodebuild test -scheme Zmole -destination 'platform=macOS'
-pytest .repo_template/tests -q
+pytest .repo_template/tests -q -m contract
 ```
 
 当前阶段以模板工具链测试为主；业务 Swift 测试随首个实现 task 接入本命令。填本命令时按「门禁类别清单」逐类覆盖；项目不适用某类写「无」并说明理由。
