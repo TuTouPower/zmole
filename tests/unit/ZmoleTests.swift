@@ -190,6 +190,140 @@ final class ZmoleTests: XCTestCase {
         XCTAssertEqual(snapshot.entries.first?.size, 34_400_550_912)
     }
 
+    func testWhitelistStoreListsPatternsAndPreservesComments() throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-store")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        try "# header\n\n/Users/example/Library/Caches/*\n# inline note\n~/keep\n"
+            .write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let store = WhitelistStore(fileURL: fileURL)
+        let document = try store.load()
+
+        XCTAssertEqual(
+            document.patterns,
+            ["/Users/example/Library/Caches/*", "~/keep"]
+        )
+        XCTAssertEqual(document.comments, ["# header", "# inline note"])
+
+        try store.save(document.replacingPatterns(["~/keep", "~/new"]))
+        let savedContents = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertTrue(savedContents.contains("# header"))
+        XCTAssertTrue(savedContents.contains("# inline note"))
+        XCTAssertTrue(savedContents.contains("~/new"))
+        XCTAssertFalse(savedContents.contains("/Users/example/Library/Caches/*"))
+    }
+
+    @MainActor
+    func testWhitelistViewModelAddsDeletesAndSavesPatterns() throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-view-model")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        try "# Mole header\n\n~/existing\n".write(
+            to: fileURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        viewModel.load()
+        XCTAssertEqual(viewModel.patterns.map(\.value), ["~/existing"])
+
+        viewModel.newPattern = " ~/added "
+        viewModel.addPattern()
+        viewModel.save()
+
+        var savedContents = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertTrue(savedContents.contains("~/existing"))
+        XCTAssertTrue(savedContents.contains("~/added"))
+        XCTAssertTrue(viewModel.didSave)
+
+        let existingID = try XCTUnwrap(viewModel.patterns.first?.id)
+        viewModel.removePattern(id: existingID)
+        viewModel.save()
+
+        savedContents = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertFalse(savedContents.contains("~/existing"))
+        XCTAssertTrue(savedContents.contains("~/added"))
+        XCTAssertTrue(savedContents.contains("# Mole header"))
+    }
+
+    @MainActor
+    func testWhitelistViewModelRemovesOneDuplicatePattern() throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-duplicate")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        try "# header\n~/duplicate\n~/duplicate\n".write(
+            to: fileURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        viewModel.load()
+        let firstID = try XCTUnwrap(viewModel.patterns.first?.id)
+        viewModel.removePattern(id: firstID)
+        viewModel.save()
+
+        let savedLines = try String(contentsOf: fileURL, encoding: .utf8)
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+        XCTAssertEqual(savedLines.filter { $0 == "~/duplicate" }.count, 1)
+    }
+
+    @MainActor
+    func testWhitelistViewModelCannotOverwriteAfterLoadFailure() throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-load-failure")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        let originalData = Data([0xFF, 0xFE, 0xFD])
+        try originalData.write(to: fileURL)
+
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        viewModel.load()
+        viewModel.newPattern = "~/must-not-overwrite"
+        viewModel.addPattern()
+        viewModel.save()
+
+        XCTAssertEqual(try Data(contentsOf: fileURL), originalData)
+    }
+
+    @MainActor
+    func testWhitelistEditorUsesOnlyInjectedFilePath() throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-no-mole")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+
+        viewModel.load()
+        viewModel.newPattern = "~/safe"
+        viewModel.addPattern()
+        viewModel.save()
+
+        XCTAssertEqual(viewModel.filePath, fileURL.path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @MainActor
+    func testWhitelistEditorDoesNotRunMoleProcess() async throws {
+        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-no-process")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("whitelist")
+        let spy = WhitelistMoleProcessSpy()
+        let viewModel = WhitelistViewModel(
+            store: WhitelistStore(fileURL: fileURL),
+            moleProcess: spy
+        )
+
+        viewModel.load()
+        viewModel.newPattern = "~/safe"
+        viewModel.addPattern()
+        viewModel.save()
+
+        let invocationCount = await spy.invocations
+        XCTAssertEqual(invocationCount, 0)
+    }
+
     func testAnalyzeDisplayStateProjectsOverviewAndDirectoryEntries() throws {
         let decoder = JSONDecoder()
         let overview = try decoder.decode(
@@ -264,8 +398,8 @@ final class ZmoleTests: XCTestCase {
             await viewModel.openDirectory(directory)
         }
 
-        for _ in 0..<10 where !viewModel.isLoading {
-            await Task.yield()
+        for _ in 0..<1_000 where !viewModel.isLoading {
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
         XCTAssertTrue(viewModel.isLoading)
         XCTAssertTrue(viewModel.canGoBack)
@@ -355,6 +489,16 @@ final class ZmoleTests: XCTestCase {
       "total_files": 1
     }
     """
+
+    private func makeTemporaryDirectory(prefix: String) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory
+    }
 }
 
 private actor CommandRecorder {
@@ -416,5 +560,18 @@ private actor BlockingAnalyzeCommand {
             )
         )
         directoryContinuation = nil
+    }
+}
+
+private actor WhitelistMoleProcessSpy: MoleCommandRunning {
+    private(set) var invocations = 0
+
+    func run(
+        _ arguments: [String],
+        stdin: Data?,
+        timeout: TimeInterval
+    ) async throws -> MoleCommandResult {
+        invocations += 1
+        return MoleCommandResult(stdout: "", stderr: "", exitCode: 0)
     }
 }

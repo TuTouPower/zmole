@@ -55,6 +55,8 @@ struct ContentView: View {
             HistoryView()
         case .analyze:
             AnalyzeView()
+        case .whitelist:
+            WhitelistView()
         case .settings:
             SettingsView()
         case .clean, .uninstall, .optimize, .purge:

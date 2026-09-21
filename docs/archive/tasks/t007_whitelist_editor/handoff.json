@@ -1,0 +1,19 @@
+{
+  "tid": "t007",
+  "attempt": 1,
+  "execution_id": "998fac9b511a4cf8902812ac1807465d",
+  "status": "done",
+  "branch": "t007_whitelist_editor",
+  "base_sha": "b36a005650b6ad5d99226d85f896e3991f0573c6",
+  "tests": "xcodebuild Debug test (29 tests, 29 passed); xcodebuild Debug build; xcodebuild Release build; signed Release universal x86_64/arm64 with bundled mole 1.55.0 and codesign --verify --deep --strict passed; uv run --python mise Python 3.14.7 --with pytest pytest .repo_template/tests -q (480 passed); md_format --check, JSON validation and git diff --check passed",
+  "blackbox": "testing.md blackbox_verify 未定义；CUA 启动捆绑 Debug App，确认页面显示 Clean whitelist、clean 文件路径、optimize 暂不支持、注释只读；未执行添加或保存，未修改用户配置",
+  "review": "review_general.md PASS, Round 2, previous 3 findings fixed, zero new findings, reviewed_scope 4e587c80a5d40a06",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Whitelist/WhitelistDocument.swift", "src/zmole/Features/Whitelist/WhitelistStore.swift", "src/zmole/Features/Whitelist/WhitelistView.swift", "tests/unit/ZmoleTests.swift", "临时 whitelist 夹具解析并列出非注释模式；UI 展示 patterns section"],
+    "AC-002": ["src/zmole/Features/Whitelist/WhitelistViewModel.swift", "tests/unit/ZmoleTests.swift", "添加 ~/added 后保存，独立读取临时文件确认该行存在，注释仍保留"],
+    "AC-003": ["src/zmole/Features/Whitelist/WhitelistViewModel.swift", "tests/unit/ZmoleTests.swift", "按 UUID 行 ID 删除并保存；重复模式夹具确认只删除目标一行"],
+    "AC-004": ["src/zmole/Features/Whitelist/WhitelistViewModel.swift", "src/zmole/MoleBridge/MoleBridge.swift", "tests/unit/ZmoleTests.swift", "注入 WhitelistMoleProcessSpy，完成 load/add/save 后 invocation count 为 0；白名单 feature 不直接引用 MoleBridge 或 Process"]
+  },
+  "pending": [],
+  "findings": []
+}

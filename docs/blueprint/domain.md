@@ -8,7 +8,7 @@
 |捆绑 mole|bundled mole|打进 `.app` 的钉死版本 CLI 树；唯一运行时|
 |桥接层|MoleBridge|spawn 捆绑 mole 并解析输出|
 |干跑|dry-run|只预览，不落盘修改|
-|白名单|whitelist|`~/.config/mole/whitelist` 中受保护路径；GUI 编辑此文件|
+|白名单|whitelist|`~/.config/mole/whitelist` 中受保护路径；GUI 编辑 clean 文件，optimize 白名单暂不支持|
 |清理|clean|清缓存、日志、已卸 App 残留；默认永久删，不进废纸篓|
 |卸载|uninstall|移除 App 及关联文件；默认进废纸篓|
 |优化|optimize|有限维护（DNS、Spotlight 等）|

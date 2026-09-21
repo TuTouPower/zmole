@@ -17,6 +17,14 @@ enum MoleBundleLocator {
     }
 }
 
+protocol MoleCommandRunning {
+    func run(
+        _ arguments: [String],
+        stdin: Data?,
+        timeout: TimeInterval
+    ) async throws -> MoleCommandResult
+}
+
 public actor MoleBridge {
     private let executableURL: URL
     private var activeRunner: MoleProcessRunner?
@@ -69,6 +77,8 @@ public actor MoleBridge {
         activeRunner?.cancel()
     }
 }
+
+extension MoleBridge: MoleCommandRunning {}
 
 private final class MoleProcessRunner: @unchecked Sendable {
     private let process: Process

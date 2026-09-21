@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E6B8699AE90081585C812D /* StatusView.swift */; };
+		23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C082EA887412E27C88983A8 /* WhitelistView.swift */; };
 		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
+		3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19456FFB028A34FE9AA2561B /* WhitelistStore.swift */; };
 		47C413712EF1B93809099416 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */; };
 		4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */; };
 		5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */; };
@@ -26,11 +28,13 @@
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */; };
 		CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */ = {isa = PBXBuildFile; fileRef = 78C972BD31A9D530B068FFA0 /* mole */; };
+		D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD077229323936A83CC3D9E /* WhitelistDocument.swift */; };
 		DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE334F91E7FFB8672701E61E /* StatusViewModel.swift */; };
 		E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */; };
 		E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */; };
 		EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */; };
 		F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A163D8C0D3365385123088B /* HistorySnapshot.swift */; };
+		FDA4DD86FF9FF3CB8259B6C0 /* WhitelistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,7 +64,9 @@
 		0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeTests.swift; sourceTree = "<group>"; };
 		0CF699D95E09A155B564D7B7 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		14254B56FF84870F0CDD6FD4 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		19456FFB028A34FE9AA2561B /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
 		2377F13EED7F8922B2C7B691 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2C082EA887412E27C88983A8 /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
 		304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeViewModel.swift; sourceTree = "<group>"; };
 		353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuidanceView.swift; sourceTree = "<group>"; };
 		3926E12312D382F2895E4662 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -82,7 +88,9 @@
 		B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSnapshot.swift; sourceTree = "<group>"; };
 		C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeView.swift; sourceTree = "<group>"; };
 		C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridge.swift; sourceTree = "<group>"; };
+		CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModel.swift; sourceTree = "<group>"; };
 		CACC7DBC161EB4B26713C875 /* Zmole.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zmole.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDD077229323936A83CC3D9E /* WhitelistDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistDocument.swift; sourceTree = "<group>"; };
 		D2E6B8699AE90081585C812D /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
 		EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructiveConfirmation.swift; sourceTree = "<group>"; };
@@ -169,6 +177,7 @@
 				CF6C07086218DD0CC99D7B2B /* History */,
 				B271951D0AC1AB67D750D7BB /* Settings */,
 				421ED564581DEB0557B13B8D /* Status */,
+				A79CA407E4ABB58266FA4931 /* Whitelist */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -217,6 +226,17 @@
 				0CF699D95E09A155B564D7B7 /* .gitkeep */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		A79CA407E4ABB58266FA4931 /* Whitelist */ = {
+			isa = PBXGroup;
+			children = (
+				CDD077229323936A83CC3D9E /* WhitelistDocument.swift */,
+				19456FFB028A34FE9AA2561B /* WhitelistStore.swift */,
+				2C082EA887412E27C88983A8 /* WhitelistView.swift */,
+				CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */,
+			);
+			path = Whitelist;
 			sourceTree = "<group>";
 		};
 		B05053D485ADDF5F194069A1 = {
@@ -363,6 +383,10 @@
 				AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */,
 				107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */,
 				DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */,
+				D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */,
+				3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */,
+				23E0F3967772F0F9B8FDA8F6 /* WhitelistView.swift in Sources */,
+				FDA4DD86FF9FF3CB8259B6C0 /* WhitelistViewModel.swift in Sources */,
 				4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
