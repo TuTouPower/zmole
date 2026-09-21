@@ -8,8 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */; };
+		5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */; };
+		7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */; };
+		8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */; };
 		95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70AD53256D3AB0960670856A /* ZmoleTests.swift */; };
 		B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3926E12312D382F2895E4662 /* ContentView.swift */; };
+		CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */ = {isa = PBXBuildFile; fileRef = 78C972BD31A9D530B068FFA0 /* mole */; };
+		E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -22,17 +27,35 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		F89513FC996F181AD37F30C1 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				CBD7C8386AEFA7166CE06492 /* mole in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeTests.swift; sourceTree = "<group>"; };
 		0CF699D95E09A155B564D7B7 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		3926E12312D382F2895E4662 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		70AD53256D3AB0960670856A /* ZmoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleTests.swift; sourceTree = "<group>"; };
 		77F3BC43C66FFD1FFABE5573 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		78C972BD31A9D530B068FFA0 /* mole */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mole; path = src/zmole/Resources/mole; sourceTree = SOURCE_ROOT; };
+		8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleCommandResult.swift; sourceTree = "<group>"; };
 		8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleApp.swift; sourceTree = "<group>"; };
 		91E22E157DB788F260EAD579 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		9C69A9A34495F39E6330DB5B /* ZmoleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZmoleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A76837A240FF7FE3F01BCD5F /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridge.swift; sourceTree = "<group>"; };
 		CACC7DBC161EB4B26713C875 /* Zmole.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zmole.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EFF06BD69D5E2DD87C328B82 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeError.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -40,6 +63,9 @@
 			isa = PBXGroup;
 			children = (
 				77F3BC43C66FFD1FFABE5573 /* .gitkeep */,
+				C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */,
+				F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */,
+				8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */,
 			);
 			path = MoleBridge;
 			sourceTree = "<group>";
@@ -51,6 +77,7 @@
 				513BB06312F92A637BFEF62D /* Features */,
 				8737220FEC347C8B5BF6DFD6 /* Models */,
 				0FAE1686340F502551E31492 /* MoleBridge */,
+				7DF70F8E14610BA5FB7C5692 /* Resources */,
 			);
 			path = zmole;
 			sourceTree = "<group>";
@@ -67,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				A76837A240FF7FE3F01BCD5F /* .gitkeep */,
+				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
 				70AD53256D3AB0960670856A /* ZmoleTests.swift */,
 			);
 			path = unit;
@@ -86,6 +114,14 @@
 				244B26EC236BC2EA928B9DC5 /* zmole */,
 			);
 			path = src;
+			sourceTree = "<group>";
+		};
+		7DF70F8E14610BA5FB7C5692 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				78C972BD31A9D530B068FFA0 /* mole */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		7F426410E06F3F72B7A6FD4D /* Products */ = {
@@ -132,6 +168,7 @@
 			buildConfigurationList = 8CD067891DE36C9E0E60C38C /* Build configuration list for PBXNativeTarget "Zmole" */;
 			buildPhases = (
 				9FF9721F08A18E6A3F086C73 /* Sources */,
+				F89513FC996F181AD37F30C1 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -198,6 +235,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
 				95B4FC8609A2E7F0272B9CA1 /* ZmoleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -207,6 +245,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				B607B5B326A08EDE2D1A137D /* ContentView.swift in Sources */,
+				E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */,
+				8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */,
+				5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */,
 				4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

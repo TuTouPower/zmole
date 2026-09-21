@@ -10,6 +10,7 @@
 
 - 不要求用户先 `brew install mole`
 - App 内捆绑钉死版本的 mole，不把 `mo`/`zmo` 装进 PATH
+- 捆绑上游固定为 mole `V1.55.0`（commit `69ab325d4f05af0ea21aeeeae544046c9f04a76b`），包含同 tag 的 Bash 树与 Universal Go helper
 - 系统语言为简体、繁体或英文时跟随；可在设置里覆盖
 
 ## 从 GitHub 下载后打不开
