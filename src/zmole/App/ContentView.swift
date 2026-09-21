@@ -31,6 +31,11 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @State private var selection: SidebarItem? = .status
+    @StateObject private var cleanViewModel: CleanViewModel
+
+    init(cleanViewModel: CleanViewModel? = nil) {
+        _cleanViewModel = StateObject(wrappedValue: cleanViewModel ?? CleanViewModel())
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -57,17 +62,17 @@ struct ContentView: View {
             AnalyzeView()
         case .whitelist:
             WhitelistView()
+        case .clean:
+            CleanView(viewModel: cleanViewModel)
         case .settings:
             SettingsView()
-        case .clean, .uninstall, .optimize, .purge:
+        case .uninstall, .optimize, .purge:
             DestructiveConfirmationView(
                 title: item.titleKey,
                 summary: "destructive.summary",
                 onConfirm: {},
                 onCancel: {}
             )
-        default:
-            PlaceholderFeatureView(title: item.titleKey)
         }
     }
 }

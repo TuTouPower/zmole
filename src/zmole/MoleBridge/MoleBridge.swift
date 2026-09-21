@@ -25,6 +25,10 @@ protocol MoleCommandRunning {
     ) async throws -> MoleCommandResult
 }
 
+protocol MoleProcessControlling: MoleCommandRunning {
+    func cancel() async
+}
+
 public actor MoleBridge {
     private let executableURL: URL
     private var activeRunner: MoleProcessRunner?
@@ -73,12 +77,12 @@ public actor MoleBridge {
         return version
     }
 
-    public func cancel() {
+    public func cancel() async {
         activeRunner?.cancel()
     }
 }
 
-extension MoleBridge: MoleCommandRunning {}
+extension MoleBridge: MoleProcessControlling {}
 
 private final class MoleProcessRunner: @unchecked Sendable {
     private let process: Process
