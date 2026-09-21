@@ -6,7 +6,7 @@
 
 - 当前焦点：需求已确认并落盘 backlog；下一步 s001 抓 mole 无 TTY 输出。
 - branch：main
-- head_commit：提交后回填
+- head_commit：903b633e80bf9ab81a331d073a0b075bc126eec9
 - 已完成：grilling 锁定产品；plan / architecture / domain / decisions / README
 - 未完成：Xcode 工程、捆绑 mole、各功能页、图标与 zip
 - 陷阱：不公证；空 stdin 可能误确认删除；不要 spawn 系统 `mo`；installer 等已 park
