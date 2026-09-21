@@ -49,6 +49,8 @@ struct ContentView: View {
     @ViewBuilder
     private func destination(for item: SidebarItem) -> some View {
         switch item {
+        case .status:
+            StatusView()
         case .settings:
             SettingsView()
         case .clean, .uninstall, .optimize, .purge:
