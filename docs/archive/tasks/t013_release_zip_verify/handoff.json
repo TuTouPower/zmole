@@ -1,0 +1,32 @@
+{
+  "tid": "t013",
+  "attempt": 1,
+  "execution_id": "b393b7f40ec240e494978c2b5641e204",
+  "status": "done",
+  "branch": "t013_release_zip_verify",
+  "base_sha": "8f12cf619ce86e7dd458013a3f27f05220bc6daf",
+  "tests": "scripts/build_release_zip.sh (default and caller-relative output directory); zip/unzip; lipo main/analyze-go/status-go x86_64 arm64; codesign -dv ad-hoc and strict verify; URL and targeted placeholder scan; Finder/CUA status/history/analyze; XCTest 63/63; template pytest 480; md_format/JSON/git diff",
+  "blackbox": "[deploy] Finder selected and launched .scratch/release_unpacked/Zmole.app; CUA verified Status Refresh health 100, History sessions/deletions rows, Analyze overview entries; no destructive commands",
+  "review": "review_general.md PASS Round 2, Round 1 two minor findings fixed, reviewed_scope 575d3222a6ec32f1",
+  "ac_evidence": {
+    "AC-001": [
+      "scripts/build_release_zip.sh",
+      "artifacts/releases/Zmole-1.0.zip",
+      "unzip -l shows Zmole.app/Contents/MacOS/Zmole and Resources/mole/mole"
+    ],
+    "AC-002": [
+      "lipo checks main/analyze-go/status-go all x86_64 arm64"
+    ],
+    "AC-003": [
+      "codesign -dv Signature=adhoc, TeamIdentifier=not set"
+    ],
+    "AC-004": [
+      "main binary exact release URL; targeted app-specific placeholder scan clean; upstream mole source has legitimate example.com check"
+    ],
+    "AC-005": [
+      "Finder/CUA sequence and observed health 100/history/analyze entries"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}
