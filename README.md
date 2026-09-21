@@ -1,39 +1,44 @@
 # zmole
 
-把开源 CLI [mole](https://github.com/tw93/mole)（命令 `mo`）包装成 macOS 桌面应用。目标用户：不想记 CLI、又需要清理 / 卸载 / 优化 / 磁盘分析 / 状态监控的 Mac 用户。
+把开源 CLI [mole](https://github.com/tw93/mole) 包装成 macOS 窗口应用。清理、卸载、优化等仍由捆绑的 mole 执行；本仓做界面与确认。
 
-从仓库模板复制而来。工具链在 `.repo_template/`，业务文件在仓根其它目录。
+许可：GPL-3.0。与商业产品 [Mole for Mac](https://mole.fit/) 无关，也不使用其商标与 logo。
 
-> 说明：上游 mole 仓库另有独立商业桌面端 [Mole for Mac](https://mole.fit/)。本仓是社区向的 CLI 包装，不绑定、不依赖该商业 App。
+从仓库模板复制而来。工具链在 `.repo_template/`。实现计划：[`docs/plan.md`](docs/plan.md)。
 
-## 技术栈
+## 运行时
 
-- **UI**：SwiftUI（macOS 原生）
-- **桥接**：通过 `Process` / 管道调用本机已安装的 `mo`
-- **依赖**：用户需先安装 mole CLI（Homebrew：`brew install mole`，或上游 install 脚本）
-- **上游源码（本机）**：已克隆至 `~/kar/github_repo/mole`，供对照 CLI 行为与接口；运行时仍调用已安装的 `mo`，不从此路径打包
+- 不要求用户先 `brew install mole`
+- App 内捆绑钉死版本的 mole，不把 `mo`/`zmo` 装进 PATH
+- 系统语言为简体、繁体或英文时跟随；可在设置里覆盖
+
+## 从 GitHub 下载后打不开
+
+未公证。浏览器下载会带隔离属性。按顺序试：
+
+1. 右键 `Zmole.app` → 打开 → 仍要打开
+2. 系统设置 → 隐私与安全性 → 仍要打开
+3. 仍失败时在终端执行（把路径换成实际位置）：
+
+```bash
+xattr -cr /Applications/Zmole.app
+```
 
 ## 入口
 
 - Agent 规则：[`AGENTS.md`](AGENTS.md)
-- 模板用法（消费仓 agent）：[`.repo_template/docs/usage.md`](.repo_template/docs/usage.md)
-- 项目约定：[`docs/blueprint/conventions.md`](docs/blueprint/conventions.md)
-- 测试方法：[`docs/blueprint/testing.md`](docs/blueprint/testing.md)
-- 架构 / 领域：[`docs/blueprint/architecture.md`](docs/blueprint/architecture.md)、[`docs/blueprint/domain.md`](docs/blueprint/domain.md)
+- 模板用法：[`.repo_template/docs/usage.md`](.repo_template/docs/usage.md)
+- 约定 / 测试 / 架构：[`docs/blueprint/`](docs/blueprint/)
+
+## 开发
+
+需要完整 Xcode（不只 Command Line Tools）：
 
 ```bash
-python3 .repo_template/scripts/task.py --help
-python3 .repo_template/scripts/pending.py --help
-python3 .repo_template/scripts/findings.py --help
-python3 .repo_template/scripts/spikes.py --help
+sudo xcode-select -s /Applications/Xcode.app
+# 工程由 XcodeGen 生成（落地后）：
+# xcodegen
+# xcodebuild -scheme Zmole -configuration Debug build
 ```
 
-## 开发（待 Xcode 工程落地后）
-
-```bash
-# 打开工程（路径以实际 .xcodeproj 为准）
-open Zmole.xcodeproj
-
-# 或命令行构建
-xcodebuild -scheme Zmole -configuration Debug build
-```
+上游对照克隆（只读，不打进包）：`~/kar/github_repo/mole`

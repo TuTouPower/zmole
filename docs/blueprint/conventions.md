@@ -5,7 +5,8 @@
 ## 语言与框架
 
 - **语言**：Swift 5.9+（随 Xcode 工具链）
-- **UI**：SwiftUI，最低部署目标 macOS 13+（若需对齐 mole 的 macOS 12，首个工程 task 再定，并记入 `decisions.md`）
+- **UI**：SwiftUI，最低部署目标 **macOS 13+**，Universal
+- **本地化**：String Catalog；`zh-Hans` / `zh-Hant` / `en`；默认跟随系统，设置可覆盖
 - **并发**：优先 `async/await`；Bridge 内 `Process` I/O 勿堵主线程
 - **目录**（Xcode 工程落地后）：
     - `src/zmole/App/` — 入口与 App 级场景
@@ -13,9 +14,10 @@
     - `src/zmole/MoleBridge/` — CLI 桥接
     - `src/zmole/Models/` — 共享模型
     - `tests/unit/` — 纯逻辑单测（Bridge 解析、参数拼装等）
-    - `tests/integration/` — 对真实或 fixture `mo` 的集成（可选、可跳过无 CLI 环境）
-- **工程文件**：根目录 `Zmole.xcodeproj`（尚未创建；首个实现 task 生成，禁止手写损坏的 pbxproj 凑数）
-- **禁止**：在 Feature / View 里直接 `Process`；一律经 `MoleBridge`
+    - `tests/integration/` — 对捆绑 mole 或假二进制的集成
+- **工程文件**：根目录 `project.yml`，XcodeGen 生成 `Zmole.xcodeproj`；禁止手写损坏的 pbxproj
+- **捆绑 mole**：构建时放入 Resources；运行时只 spawn 该绝对路径
+- **禁止**：Feature / View 里直接 `Process`；解析 TUI；代发按键；把 CLI 装进 PATH；调用捆绑 mole 的 `update`/`remove`
 - **文件名**：Swift 类型文件用 UpperCamelCase（生态惯例，优先于全局 snake_case 目录规则中的「普通文件」条款）；目录名仍用 snake_case 或与 Feature 名一致的 UpperCamelCase 模块文件夹
 
 ## schema 类型落点

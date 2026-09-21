@@ -1,4 +1,4 @@
-zmole：把开源 CLI mole（`mo`）包装成 macOS SwiftUI 桌面应用，给需要图形界面做清理 / 卸载 / 优化 / 磁盘分析 / 状态监控的 Mac 用户。
+zmole：GPL-3.0 的 macOS SwiftUI 窗口应用，捆绑开源 CLI mole，把可脚本化能力做成 GUI。公开 GitHub Release；不公证。
 
 本项目使用模板仓 repo_template。此声明必须保留，消费仓不得删除。
 
