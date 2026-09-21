@@ -10,6 +10,8 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0"
     ARCHS: "arm64 x86_64"
     ONLY_ACTIVE_ARCH: NO
     CODE_SIGN_IDENTITY: "-"
@@ -24,19 +26,21 @@ targets:
       - path: src/zmole
         excludes:
           - Resources/**
+          - Info.plist
       - path: src/zmole/Resources/mole
         type: folder
         buildPhase:
           copyFiles:
             destination: resources
+      - path: src/zmole/Resources/AppIcon.icns
+        buildPhase: resources
       - path: src/zmole/Resources/Localizable.xcstrings
         buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tutupower.zmole
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: zmole
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: src/zmole/Info.plist
     scheme:
       testTargets:
         - ZmoleTests

@@ -16,6 +16,7 @@
 		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
 		31587C8AEB4320A470AB5AB9 /* UninstallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */; };
 		3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19456FFB028A34FE9AA2561B /* WhitelistStore.swift */; };
+		45393145AAAB1D120F48878B /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 67FA972D9F6E688D5C582DC7 /* AppIcon.icns */; };
 		47C413712EF1B93809099416 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */; };
 		4E0583A00AC046F4DCEB046C /* ZmoleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4E70E58D3B96D2D72D88C4 /* ZmoleApp.swift */; };
 		5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */; };
@@ -94,6 +95,7 @@
 		3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceOutput.swift; sourceTree = "<group>"; };
 		56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeSnapshot.swift; sourceTree = "<group>"; };
 		5A163D8C0D3365385123088B /* HistorySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySnapshot.swift; sourceTree = "<group>"; };
+		67FA972D9F6E688D5C582DC7 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		70AD53256D3AB0960670856A /* ZmoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleTests.swift; sourceTree = "<group>"; };
 		77F3BC43C66FFD1FFABE5573 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		78C972BD31A9D530B068FFA0 /* mole */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mole; path = src/zmole/Resources/mole; sourceTree = SOURCE_ROOT; };
@@ -263,6 +265,7 @@
 		7DF70F8E14610BA5FB7C5692 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				67FA972D9F6E688D5C582DC7 /* AppIcon.icns */,
 				A470F8D9991A60DFE98BADD2 /* Localizable.xcstrings */,
 				78C972BD31A9D530B068FFA0 /* mole */,
 			);
@@ -424,6 +427,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				45393145AAAB1D120F48878B /* AppIcon.icns in Resources */,
 				662379FE1A1C8033515BFA0C /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -553,6 +557,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "-";
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -571,6 +576,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -587,9 +593,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = zmole;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = src/zmole/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -621,9 +626,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = zmole;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = src/zmole/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -671,6 +675,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "-";
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -683,6 +688,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
