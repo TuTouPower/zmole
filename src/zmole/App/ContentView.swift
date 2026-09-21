@@ -4,12 +4,29 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case status
     case history
     case analyze
+    case clean
+    case uninstall
+    case optimize
+    case purge
+    case whitelist
+    case settings
 
     var id: Self { self }
 
-    var title: String {
-        rawValue.capitalized
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .status: "sidebar.status"
+        case .history: "sidebar.history"
+        case .analyze: "sidebar.analyze"
+        case .clean: "sidebar.clean"
+        case .uninstall: "sidebar.uninstall"
+        case .optimize: "sidebar.optimize"
+        case .purge: "sidebar.purge"
+        case .whitelist: "sidebar.whitelist"
+        case .settings: "sidebar.settings"
+        }
     }
+
 }
 
 struct ContentView: View {
@@ -18,18 +35,46 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(SidebarItem.allCases, selection: $selection) { item in
-                Text(item.title)
+                Text(item.titleKey)
                     .tag(item)
             }
-            .navigationTitle("zmole")
+            .navigationTitle("app.name")
         } detail: {
-            VStack(spacing: 8) {
-                Text(selection?.title ?? "zmole")
-                    .font(.title)
-                Text("Placeholder")
-                    .foregroundStyle(.secondary)
+            NavigationStack {
+                destination(for: selection ?? .status)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    @ViewBuilder
+    private func destination(for item: SidebarItem) -> some View {
+        switch item {
+        case .settings:
+            SettingsView()
+        case .clean, .uninstall, .optimize, .purge:
+            DestructiveConfirmationView(
+                title: item.titleKey,
+                summary: "destructive.summary",
+                onConfirm: {},
+                onCancel: {}
+            )
+        default:
+            PlaceholderFeatureView(title: item.titleKey)
+        }
+    }
+}
+
+struct PlaceholderFeatureView: View {
+    let title: LocalizedStringKey
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.title)
+            Text("placeholder.summary")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle(title)
     }
 }

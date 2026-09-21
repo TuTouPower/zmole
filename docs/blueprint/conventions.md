@@ -6,7 +6,7 @@
 
 - **语言**：Swift 5.9+（随 Xcode 工具链）
 - **UI**：SwiftUI，最低部署目标 **macOS 13+**，Universal
-- **本地化**：String Catalog；`zh-Hans` / `zh-Hant` / `en`；默认跟随系统，设置可覆盖
+- **本地化**：String Catalog；`zh-Hans` / `zh-Hant` / `en`；默认跟随系统，设置通过 `@AppStorage("languageOverride")` 与 `environment(\.locale, ...)` 即时覆盖
 - **并发**：优先 `async/await`；Bridge 内 `Process` I/O 勿堵主线程
 - **目录**（Xcode 工程落地后）：
     - `src/zmole/App/` — 入口与 App 级场景

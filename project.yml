@@ -29,6 +29,8 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
+      - path: src/zmole/Resources/Localizable.xcstrings
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tutupower.zmole
