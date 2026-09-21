@@ -53,6 +53,8 @@ struct ContentView: View {
             StatusView()
         case .history:
             HistoryView()
+        case .analyze:
+            AnalyzeView()
         case .settings:
             SettingsView()
         case .clean, .uninstall, .optimize, .purge:

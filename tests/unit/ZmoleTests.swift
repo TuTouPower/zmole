@@ -175,6 +175,132 @@ final class ZmoleTests: XCTestCase {
         XCTAssertEqual(failedViewModel.errorMessage, "mole 命令失败（9）：history failed")
     }
 
+    func testAnalyzeLoaderUsesJSONBeforeOverviewPathAndDecodesEntries() async throws {
+        let recorder = CommandRecorder()
+        let loader = AnalyzeSnapshotLoader { arguments in
+            await recorder.record(arguments)
+            return MoleCommandResult(stdout: Self.analyzeOverviewFixture, stderr: "", exitCode: 0)
+        }
+
+        let snapshot = try await loader.load()
+
+        let arguments = await recorder.arguments
+        XCTAssertEqual(arguments, ["analyze", "--json"])
+        XCTAssertEqual(snapshot.entries.first?.name, "Applications")
+        XCTAssertEqual(snapshot.entries.first?.size, 34_400_550_912)
+    }
+
+    func testAnalyzeDisplayStateProjectsOverviewAndDirectoryEntries() throws {
+        let decoder = JSONDecoder()
+        let overview = try decoder.decode(
+            AnalyzeSnapshot.self,
+            from: Data(Self.analyzeOverviewFixture.utf8)
+        )
+        let directory = try decoder.decode(
+            AnalyzeSnapshot.self,
+            from: Data(Self.analyzePathFixture.utf8)
+        )
+
+        XCTAssertEqual(overview.displayState.path, "/")
+        XCTAssertEqual(overview.displayState.entries.first?.name, "Applications")
+        XCTAssertEqual(overview.displayState.entries.first?.size, 34_400_550_912)
+        XCTAssertEqual(directory.displayState.path, "/Applications")
+        XCTAssertEqual(directory.displayState.entries.first?.name, "Utilities")
+        XCTAssertEqual(directory.displayState.entries.first?.size, 1024)
+    }
+
+    @MainActor
+    func testAnalyzeViewModelNavigatesToDirectoryAndBack() async {
+        let sequence = AnalyzeCommandSequence(results: [
+            (Self.analyzeOverviewFixture, ["analyze", "--json"]),
+            (Self.analyzePathFixture, ["analyze", "--json", "/Applications"]),
+            (Self.analyzeOverviewFixture, ["analyze", "--json"])
+        ])
+        let loader = AnalyzeSnapshotLoader { arguments in
+            await sequence.next(arguments)
+        }
+        let viewModel = AnalyzeViewModel(loader: loader)
+
+        await viewModel.loadOverview()
+        XCTAssertEqual(viewModel.snapshot?.path, "/")
+
+        let directory = AnalyzeEntry(
+            name: "Applications", path: "/Applications", size: 1, isDirectory: true
+        )
+        await viewModel.openDirectory(directory)
+        XCTAssertEqual(viewModel.snapshot?.path, "/Applications")
+        XCTAssertEqual(viewModel.snapshot?.entries.first?.name, "Utilities")
+        XCTAssertEqual(viewModel.snapshot?.entries.first?.size, 1024)
+        XCTAssertTrue(viewModel.canGoBack)
+
+        await viewModel.goBack()
+        XCTAssertEqual(viewModel.snapshot?.path, "/")
+        XCTAssertFalse(viewModel.canGoBack)
+
+        let arguments = await sequence.recordedArguments
+        XCTAssertEqual(
+            arguments,
+            [
+                ["analyze", "--json"],
+                ["analyze", "--json", "/Applications"],
+                ["analyze", "--json"]
+            ]
+        )
+    }
+
+    @MainActor
+    func testAnalyzeViewModelIgnoresBackWhileDirectoryLoads() async {
+        let command = BlockingAnalyzeCommand()
+        let loader = AnalyzeSnapshotLoader { arguments in
+            await command.run(arguments)
+        }
+        let viewModel = AnalyzeViewModel(loader: loader)
+
+        await viewModel.loadOverview()
+        let directory = AnalyzeEntry(
+            name: "Applications", path: "/Applications", size: 1, isDirectory: true
+        )
+        let loadTask = Task { @MainActor in
+            await viewModel.openDirectory(directory)
+        }
+
+        for _ in 0..<10 where !viewModel.isLoading {
+            await Task.yield()
+        }
+        XCTAssertTrue(viewModel.isLoading)
+        XCTAssertTrue(viewModel.canGoBack)
+
+        await viewModel.goBack()
+
+        let arguments = await command.recordedArguments
+        XCTAssertEqual(
+            arguments,
+            [
+                ["analyze", "--json"],
+                ["analyze", "--json", "/Applications"]
+            ]
+        )
+
+        await command.finishDirectoryLoad()
+        await loadTask.value
+        XCTAssertEqual(viewModel.snapshot?.path, "/Applications")
+    }
+
+    @MainActor
+    func testAnalyzeViewModelShowsFailureWithoutDeleteAction() async {
+        let loader = AnalyzeSnapshotLoader { _ in
+            throw MoleBridgeError.commandFailed(
+                MoleCommandResult(stdout: "", stderr: "analyze failed", exitCode: 8)
+            )
+        }
+        let viewModel = AnalyzeViewModel(loader: loader)
+
+        await viewModel.loadOverview()
+
+        XCTAssertNil(viewModel.snapshot)
+        XCTAssertEqual(viewModel.errorMessage, "mole 命令失败（8）：analyze failed")
+    }
+
     private static let statusFixture = """
     {
       "health_score": 100,
@@ -210,6 +336,25 @@ final class ZmoleTests: XCTestCase {
       "deletions": []
     }
     """
+
+    fileprivate static let analyzeOverviewFixture = """
+    {
+      "path": "/",
+      "overview": true,
+      "entries": [{"name": "Applications", "path": "/Applications", "size": 34400550912, "is_dir": true}],
+      "total_size": 41304723772
+    }
+    """
+
+    fileprivate static let analyzePathFixture = """
+    {
+      "path": "/Applications",
+      "overview": false,
+      "entries": [{"name": "Utilities", "path": "/Applications/Utilities", "size": 1024, "is_dir": true}],
+      "total_size": 1024,
+      "total_files": 1
+    }
+    """
 }
 
 private actor CommandRecorder {
@@ -229,5 +374,47 @@ private actor CommandSequence {
 
     func next() -> MoleCommandResult {
         MoleCommandResult(stdout: outputs.removeFirst(), stderr: "", exitCode: 0)
+    }
+}
+
+private actor AnalyzeCommandSequence {
+    private var results: [(String, [String])]
+    private(set) var recordedArguments: [[String]] = []
+
+    init(results: [(String, [String])]) {
+        self.results = results
+    }
+
+    func next(_ arguments: [String]) -> MoleCommandResult {
+        let result = results.removeFirst()
+        recordedArguments.append(arguments)
+        return MoleCommandResult(stdout: result.0, stderr: "", exitCode: 0)
+    }
+}
+
+private actor BlockingAnalyzeCommand {
+    private(set) var recordedArguments: [[String]] = []
+    private var directoryContinuation: CheckedContinuation<MoleCommandResult, Never>?
+
+    func run(_ arguments: [String]) async -> MoleCommandResult {
+        recordedArguments.append(arguments)
+        guard arguments.last == "/Applications" else {
+            return MoleCommandResult(stdout: ZmoleTests.analyzeOverviewFixture, stderr: "", exitCode: 0)
+        }
+
+        return await withCheckedContinuation { continuation in
+            directoryContinuation = continuation
+        }
+    }
+
+    func finishDirectoryLoad() {
+        directoryContinuation?.resume(
+            returning: MoleCommandResult(
+                stdout: ZmoleTests.analyzePathFixture,
+                stderr: "",
+                exitCode: 0
+            )
+        )
+        directoryContinuation = nil
     }
 }
