@@ -8,12 +8,18 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 |模块|职责|边界|
 |---|---|---|
-|`App`|窗口、侧栏导航、本地化、设置、权限失败引导|不直接 `Process`|
+|`App`|窗口、五模式导航、本地化、设置、依赖装配|不直接 `Process`|
 |`Features/*`|Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Whitelist|用户意图 → Bridge API + UI 状态|
 |`MoleBridge`|定位 bundle 内 mole、拼参数、跑 `Process`、读 stdout/stderr、解析退出码与 JSON|唯一允许 spawn mole 的层|
 |`Models`|命令结果、预览条目、白名单行等值类型|与 UI 解耦|
 
-侧栏第一版不出现：installer、analyze 删除、update、remove。
+顶部主导航固定五模式：Clean、Software、Optimize、Analyze、Status。Software 内含 Uninstall/Protection rules；Optimize 内含 Maintenance/Purge；Status 内含 Live/History。第一版不出现：installer、analyze 删除、update、remove。
+
+## App 装配与共享协调
+
+`AppDependencies` 是 App 生命周期所有者，统一创建共享 `MoleBridge`、`OperationCoordinator`、四类写入 ViewModel、白名单编辑器与只读查询/状态 ViewModel。页面只接收已装配依赖，不在 View 内创建生产 Bridge。
+
+`OperationCoordinator` 为 clean、uninstall、optimize、purge、protectionRules 提供跨页面/窗口的单写入 lease；保存保护规则成功后递增 preview generation，使受影响 clean 预览失效。ViewModel 释放 lease 后才允许下一项写入。
 
 ## 数据流
 
@@ -49,6 +55,14 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 - 无 TTY 时 mole 的 sudo 走 `osascript`（标题可能仍是 Mole）。本仓不自造 sudo。
 - 首版非沙盒；ad-hoc 签名便于本机 TCC。不公证。
 - 与商业版 Mole for Mac（mole.fit）无关。
+
+## 状态流
+
+`StatusWatchService` 以单个 `mole status --watch --interval 1s` 流为源，按订阅者 fan-out `StatusWatchUpdate`，维护有界趋势序列。StatusViewModel 负责 start/pause/stop/retry 与页面生命周期；离页或无订阅者时停止流。首帧慢字段缺失、磁盘 I/O 首次基线和陈旧进程数据均以显式状态展示，不把初始化零值伪装成真实速率。
+
+## Demo 装配边界
+
+`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态；`--demo-data-root` 将 clean-list 与 whitelist 写入指定 scratch 目录，不触碰 `~/.config/mole/`。
 
 ## 与上游关系
 

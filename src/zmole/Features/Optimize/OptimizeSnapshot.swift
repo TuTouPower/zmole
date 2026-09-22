@@ -1,9 +1,6 @@
 import Foundation
 
-struct OptimizePreviewSnapshot: Equatable, Sendable {
-    let generation: UUID
-    let output: String
-}
+typealias OptimizePreviewSnapshot = MaintenancePreviewSnapshot
 
 enum OptimizeViewModelError: Error, Equatable, Sendable {
     case missingMole

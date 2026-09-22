@@ -67,6 +67,22 @@ final class MoleBridgeTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("stdin-bytes"))
     }
 
+    func testRunDrainsLargeStdoutAndStderrConcurrently() async throws {
+        let executable = try makeExecutable(
+            """
+            #!/bin/sh
+            head -c 1048576 /dev/zero | tr '\\0' o
+            head -c 1048576 /dev/zero | tr '\\0' e >&2
+            """
+        )
+        let bridge = try MoleBridge(executableURL: executable)
+
+        let result = try await bridge.run(timeout: 10)
+
+        XCTAssertEqual(result.stdout.utf8.count, 1_048_576)
+        XCTAssertEqual(result.stderr.utf8.count, 1_048_576)
+    }
+
     func testNonZeroExitReturnsDisplayableError() async throws {
         let executable = try makeExecutable(
             """
@@ -104,7 +120,7 @@ final class MoleBridgeTests: XCTestCase {
         let bridge = try MoleBridge(executableURL: executable)
         let firstRun = Task { try await bridge.run(timeout: 5) }
 
-        try await waitForFile(countFile)
+        try await waitForContent(countFile, equals: "1")
         do {
             _ = try await bridge.run(timeout: 5)
             XCTFail("expected busy")
@@ -129,7 +145,7 @@ final class MoleBridgeTests: XCTestCase {
         let bridge = try MoleBridge(executableURL: executable)
 
         let run = Task { try await bridge.run(timeout: 2) }
-        try await waitForFile(pidFile)
+        _ = try await waitForPID(pidFile)
 
         do {
             _ = try await run.value
@@ -138,7 +154,7 @@ final class MoleBridgeTests: XCTestCase {
             XCTAssertEqual(error, .timedOut)
         }
 
-        let pid = try XCTUnwrap(Int32(String(contentsOf: pidFile)))
+        let pid = try await waitForPID(pidFile)
         XCTAssertNotEqual(kill(pid, 0), 0)
     }
 
@@ -154,7 +170,7 @@ final class MoleBridgeTests: XCTestCase {
         let bridge = try MoleBridge(executableURL: executable)
         let run = Task { try await bridge.run(timeout: 10) }
 
-        try await waitForFile(pidFile)
+        _ = try await waitForPID(pidFile)
         await bridge.cancel()
 
         do {
@@ -164,8 +180,37 @@ final class MoleBridgeTests: XCTestCase {
             XCTAssertEqual(error, .cancelled)
         }
 
-        let pid = try XCTUnwrap(Int32(String(contentsOf: pidFile)))
+        let pid = try await waitForPID(pidFile)
         XCTAssertNotEqual(kill(pid, 0), 0)
+    }
+
+    func testCancelStopsChildInProcessGroup() async throws {
+        let pidFile = temporaryDirectory.appendingPathComponent("child-pids")
+        let executable = try makeExecutable(
+            """
+            #!/bin/sh
+            (sleep 30) &
+            child=$!
+            printf '%s,%s' "$$" "$child" > "\(pidFile.path)"
+            wait
+            """
+        )
+        let bridge = try MoleBridge(executableURL: executable)
+        let run = Task { try await bridge.run(timeout: 10) }
+
+        _ = try await waitForChildPIDs(pidFile)
+        await bridge.cancel()
+
+        do {
+            _ = try await run.value
+            XCTFail("expected cancellation")
+        } catch let error as MoleBridgeError {
+            XCTAssertEqual(error, .cancelled)
+        }
+
+        let (parentPID, childPID) = try await waitForChildPIDs(pidFile)
+        XCTAssertNotEqual(kill(parentPID, 0), 0)
+        XCTAssertNotEqual(kill(childPID, 0), 0)
     }
 
     private func makeExecutable(_ source: String) throws -> URL {
@@ -183,5 +228,52 @@ final class MoleBridgeTests: XCTestCase {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTFail("timed out waiting for \(url.path)")
+    }
+
+    private func waitForPID(_ url: URL) async throws -> Int32 {
+        for _ in 0..<100 {
+            if let value = try? String(contentsOf: url),
+               let pid = Int32(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+               pid > 0 {
+                return pid
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for PID in \(url.path)")
+        return 0
+    }
+
+    private func waitForContent(_ url: URL, equals expected: String) async throws {
+        for _ in 0..<100 {
+            if let value = try? String(contentsOf: url), value == expected {
+                return
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for \(url.path) to contain expected content")
+    }
+
+    private func waitForChildPIDs(_ url: URL) async throws -> (Int32, Int32) {
+        for _ in 0..<100 {
+            if let contents = try? String(contentsOf: url),
+               let values = parseChildPIDs(contents) {
+                return values
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for parent and child PIDs in \(url.path)")
+        return (0, 0)
+    }
+
+    private func parseChildPIDs(_ contents: String) -> (Int32, Int32)? {
+        let values = contents.split(separator: ",")
+        guard values.count == 2,
+              let parentPID = Int32(values[0]),
+              let childPID = Int32(values[1]),
+              parentPID > 0,
+              childPID > 0 else {
+            return nil
+        }
+        return (parentPID, childPID)
     }
 }

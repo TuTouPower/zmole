@@ -11,7 +11,7 @@ final class OptimizeTests: XCTestCase {
                 exitCode: 0
             )
         ])
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
 
@@ -36,7 +36,7 @@ final class OptimizeTests: XCTestCase {
             MoleCommandResult(stdout: "old plan", stderr: "", exitCode: 0),
             MoleCommandResult(stdout: "new plan", stderr: "optimize failed", exitCode: 7)
         ])
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
         XCTAssertEqual(viewModel.preview?.output, "old plan")
@@ -54,7 +54,7 @@ final class OptimizeTests: XCTestCase {
         let spy = OptimizeProcessSpy(previewResults: [
             MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)
         ])
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
 
@@ -73,7 +73,7 @@ final class OptimizeTests: XCTestCase {
                 exitCode: 0
             )
         )
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
         viewModel.requestConfirmation()
@@ -94,7 +94,7 @@ final class OptimizeTests: XCTestCase {
             MoleCommandResult(stdout: "first plan", stderr: "", exitCode: 0),
             MoleCommandResult(stdout: "second plan", stderr: "", exitCode: 0)
         ])
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
         viewModel.requestConfirmation()
@@ -124,7 +124,7 @@ final class OptimizeTests: XCTestCase {
                 exitCode: 9
             )
         )
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
         viewModel.requestConfirmation()
@@ -141,7 +141,7 @@ final class OptimizeTests: XCTestCase {
             previewResults: [MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)]
         )
         await spy.setExecutionBlocked(true)
-        let viewModel = OptimizeViewModel(process: spy)
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewOptimize()
         viewModel.requestConfirmation()

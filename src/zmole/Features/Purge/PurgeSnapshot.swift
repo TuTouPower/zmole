@@ -1,9 +1,6 @@
 import Foundation
 
-struct PurgePreviewSnapshot: Equatable, Sendable {
-    let generation: UUID
-    let output: String
-}
+typealias PurgePreviewSnapshot = MaintenancePreviewSnapshot
 
 enum PurgeViewModelError: Error, Equatable, Sendable {
     case missingMole

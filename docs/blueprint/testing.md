@@ -13,6 +13,7 @@ pytest .repo_template/tests -q --collect-only -m contract
 command -v md_kx
 xcodebuild -version
 xcodegen --version
+xcodegen generate
 ```
 
 ## test_cmd
@@ -29,9 +30,27 @@ pytest .repo_template/tests -q -m contract
 
 ## blackbox_verify
 
-无
+演示 UI smoke（不启动真实 mole）：
 
-工程可运行后应补充：启动 App → 检测 `mo` → 对只读命令（如 `mo --version` / `status --json`）跑通并断言 UI 或 Bridge 结果。破坏性命令只用 dry-run 或测试夹具。
+```bash
+DEMO_ROOT="$PWD/.scratch/ui_rebuild/demo_data"
+mkdir -p "$DEMO_ROOT"
+open -a Zmole --args --demo --demo-page analyze --demo-state populated \
+  --demo-language zh-Hans --demo-appearance light --demo-data-root "$DEMO_ROOT"
+```
+
+打开后检查 Analyze 生产页面显示 fixture；进入 Software → Protection rules 并保存、或执行 Clean preview 后，再检查对应文件只出现在 `DEMO_ROOT`。截图验收覆盖 1200×760 与 880×620、浅/深色和三语。
+
+Status read-only watch 验证：
+
+```bash
+xcodebuild test -scheme Zmole -destination 'platform=macOS' \
+  -only-testing:ZmoleTests/StatusStreamTests
+```
+
+该测试仅使用 streaming fixture，验证首帧渐进字段、暂停/恢复、离页停止、断流和磁盘 I/O warming；不调用真实 mole。真实只读黑盒路径由 Bridge 层以 `status --json` / `status --watch` 夹具验证，禁止将破坏性命令纳入 blackbox smoke。
+
+真实只读黑盒仅允许检测捆绑入口并运行 `--version`、`status --json` 等命令；破坏性命令只用 dry-run 或测试夹具。Demo smoke 不得检测或启动 PATH 中的 `mo`。
 
 ## Release zip
 
