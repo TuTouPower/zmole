@@ -5,7 +5,9 @@ struct WhitelistView: View {
     @StateObject private var viewModel: WhitelistViewModel
 
     init(viewModel: WhitelistViewModel? = nil) {
-        _viewModel = StateObject(wrappedValue: viewModel ?? WhitelistViewModel())
+        _viewModel = StateObject(
+            wrappedValue: viewModel ?? WhitelistViewModel(coordinator: OperationCoordinator())
+        )
     }
 
     var body: some View {

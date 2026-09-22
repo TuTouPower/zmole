@@ -5,46 +5,46 @@ import Foundation
 final class UninstallViewModel: ObservableObject {
     @Published private(set) var apps: [UninstallApp] = []
     @Published private(set) var selectedIDs: Set<String> = []
-    @Published private(set) var preview: UninstallPreviewSnapshot?
-    @Published private(set) var isListing = false
-    @Published private(set) var isPreviewing = false
-    @Published private(set) var isExecuting = false
-    @Published private(set) var isConfirmationPresented = false
     @Published private(set) var hasLoaded = false
-    @Published private(set) var errorMessage: String?
-    @Published private(set) var errorMessageKey: String?
-    @Published private(set) var executionSummary: String?
 
-    private let process: (any MoleProcessControlling)?
-    private let initializationErrorKey: String?
+    private let process: any MoleProcessControlling
+    private let coordinator: OperationCoordinator
+    private let session = OperationSession<UninstallPreviewSnapshot>()
+    private let listSession = OperationSession<UninstallListSnapshot>()
+    private var lease: OperationLease?
+    private var previewCoordinatorGeneration: UInt64?
     private var listGeneration = UUID()
-    private var activeOperationID: UUID?
+    private var transientErrorKey: String?
+    private var coordinatorSubscription: AnyCancellable?
 
-    var canPreview: Bool {
-        selectedIDs.count == 1 && !isListing && !isPreviewing && !isExecuting
-    }
-
-    var canConfirm: Bool {
-        guard let preview else { return false }
-        return selectedIDs == preview.selectedIDs
-            && !isListing
-            && !isPreviewing
-            && !isExecuting
-    }
-
-    init(process: any MoleProcessControlling) {
+    init(process: any MoleProcessControlling, coordinator: OperationCoordinator) {
         self.process = process
-        initializationErrorKey = nil
+        self.coordinator = coordinator
+        session.onChange = { [weak self] in self?.objectWillChange.send() }
+        listSession.onChange = { [weak self] in self?.objectWillChange.send() }
+        coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
+            self?.expirePreviewIfNeeded(generation: generation)
+        }
     }
 
-    init() {
-        if let bridge = try? MoleBridge() {
-            process = bridge
-            initializationErrorKey = nil
-        } else {
-            process = nil
-            initializationErrorKey = "uninstall.error.missing_mole"
+    var operationState: OperationState<UninstallPreviewSnapshot> { session.state }
+    var result: OperationResult? { session.result }
+    var preview: UninstallPreviewSnapshot? { session.preview }
+    var isListing: Bool { listSession.isPreviewing }
+    var isPreviewing: Bool { session.isPreviewing }
+    var isExecuting: Bool { session.isExecuting }
+    var isConfirmationPresented: Bool { session.isConfirmationPresented }
+    var canPreview: Bool {
+        !selectedIDs.isEmpty && !isListing && !session.isBusy && selectedIDs.allSatisfy { id in
+            apps.contains { $0.id == id }
         }
+    }
+    var canConfirm: Bool { session.canConfirm && isCurrentPreview }
+    var executionSummary: String? { session.result?.summary }
+    var errorMessageKey: String? { transientErrorKey ?? session.result?.errorKey }
+    var errorMessage: String? {
+        if transientErrorKey != nil { return nil }
+        return session.result?.summary
     }
 
     func loadListIfNeeded() async {
@@ -53,238 +53,295 @@ final class UninstallViewModel: ObservableObject {
     }
 
     func loadList() async {
-        guard !isListing, !isPreviewing, !isExecuting else { return }
-        invalidatePreview()
+        guard !isListing, !session.isBusy else { return }
+        releaseLease()
+        session.invalidate()
         selectedIDs.removeAll()
-        clearError()
-        executionSummary = nil
+        clearTransientError()
 
-        let operationID = UUID()
-        activeOperationID = operationID
-        isListing = true
-        defer {
-            if activeOperationID == operationID {
-                activeOperationID = nil
-                isListing = false
-            }
-        }
-
+        guard let operationID = listSession.beginPreview() else { return }
         do {
             let snapshot = try await fetchList()
-            guard activeOperationID == operationID else { return }
+            guard listSession.accepts(operationID), !listSession.isCancelling(operationID) else { return }
             apps = snapshot.apps
             listGeneration = snapshot.generation
             hasLoaded = true
+            listSession.invalidate()
+        } catch let error as MoleBridgeError where error == .cancelled {
+            listSession.finishCancelled(
+                OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+                id: operationID
+            )
         } catch {
-            guard activeOperationID == operationID else { return }
+            guard listSession.accepts(operationID), !listSession.isCancelling(operationID) else { return }
             apps = []
             hasLoaded = false
-            setError(error)
+            listSession.fail(
+                OperationResult(status: .failed, summary: error.localizedDescription, errorKey: nil),
+                id: operationID
+            )
         }
     }
 
     func cancelList() async {
-        guard isListing else { return }
-        activeOperationID = nil
-        isListing = false
-        await process?.cancel()
+        guard let operationID = listSession.beginPreviewCancellation() else { return }
+        await process.cancel()
+        listSession.finishCancelled(
+            OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+            id: operationID
+        )
     }
 
     func cancelPreview() async {
-        guard isPreviewing else { return }
-        activeOperationID = nil
-        isPreviewing = false
-        invalidatePreview()
-        await process?.cancel()
+        guard let operationID = session.beginPreviewCancellation() else { return }
+        await process.cancel()
+        session.finishCancelled(
+            OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+            id: operationID
+        )
+        releaseLease()
     }
 
     func toggleSelection(_ app: UninstallApp) {
-        guard !isListing, !isPreviewing, !isExecuting else { return }
+        guard !isListing, !session.isBusy else { return }
         if selectedIDs.contains(app.id) {
             selectedIDs.remove(app.id)
         } else {
-            selectedIDs = [app.id]
+            selectedIDs.insert(app.id)
         }
-        invalidatePreview()
-        clearError()
-        executionSummary = nil
+        releaseLease()
+        session.invalidate()
+        clearTransientError()
+    }
+
+    func selectAll(_ ids: Set<String>) {
+        guard !isListing, !session.isBusy else { return }
+        selectedIDs = Set(apps.map(\.id)).intersection(ids.isEmpty ? Set(apps.map(\.id)) : ids)
+        releaseLease()
+        session.invalidate()
+        clearTransientError()
+    }
+
+    func clearSelection() {
+        guard !isListing, !session.isBusy else { return }
+        selectedIDs.removeAll()
+        releaseLease()
+        session.invalidate()
+        clearTransientError()
     }
 
     func previewUninstall() async {
-        guard !isListing, !isPreviewing, !isExecuting else { return }
-        invalidatePreview()
-        clearError()
-        executionSummary = nil
-
-        let target: UninstallApp
+        guard !isListing, !session.isBusy else { return }
+        releaseLease()
+        session.invalidate()
+        clearTransientError()
+        let batch: [UninstallApp]
         do {
-            target = try selectedTarget(in: apps)
+            batch = try UninstallSelectionValidator.batch(selectedIDs: selectedIDs, apps: apps)
         } catch {
-            setError(error)
+            setTransientError(error)
             return
         }
-        guard process != nil else {
-            setError(UninstallViewModelError.missingMole)
+        guard let operationID = session.beginPreview() else { return }
+        guard let newLease = coordinator.acquire(.uninstall) else {
+            session.fail(
+                OperationResult(status: .failed, errorKey: "operation.error.busy"),
+                id: operationID
+            )
             return
         }
-
-        let operationID = UUID()
-        activeOperationID = operationID
-        isPreviewing = true
-        defer {
-            if activeOperationID == operationID {
-                activeOperationID = nil
-                isPreviewing = false
-            }
-        }
+        lease = newLease
+        previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
-            guard let process else { throw UninstallViewModelError.missingMole }
             let result = try await process.run(
-                ["uninstall", "--dry-run", target.uninstallName],
+                ["uninstall", "--dry-run"] + batch.map(\.uninstallName),
                 stdin: Self.confirmationInput,
                 timeout: 120
             )
-            guard activeOperationID == operationID else { return }
+            guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
+            guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
+                session.fail(
+                    OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
+                    id: operationID
+                )
+                releaseLease()
+                return
+            }
             guard result.exitCode == 0 else {
                 throw MoleBridgeError.commandFailed(result)
             }
-            preview = UninstallPreviewSnapshot(
-                generation: listGeneration,
-                target: target,
-                selectedIDs: selectedIDs,
-                output: outputSummary(result)
+            session.acceptPreview(
+                UninstallPreviewSnapshot(
+                    generation: operationID,
+                    apps: batch,
+                    selectedIDs: selectedIDs,
+                    output: outputSummary(result)
+                ),
+                id: operationID
             )
+            releaseLease(clearPreviewGeneration: false)
+        } catch let error as MoleBridgeError where error == .cancelled {
+            session.finishCancelled(
+                OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+                id: operationID
+            )
+            releaseLease()
         } catch {
-            guard activeOperationID == operationID else { return }
-            invalidatePreview()
-            setError(error)
+            guard session.accepts(operationID) else { return }
+            let summary = (error as? MoleBridgeError).flatMap { commandError -> String? in
+                if case let .commandFailed(result) = commandError { return outputSummary(result) }
+                return commandError.localizedDescription
+            }
+            session.fail(
+                OperationResult(status: .failed, summary: summary, errorKey: "uninstall.error.failed"),
+                id: operationID
+            )
+            releaseLease()
         }
     }
 
     func requestConfirmation() {
         guard canConfirm else { return }
-        isConfirmationPresented = true
+        _ = session.beginConfirmation()
     }
 
     func cancelConfirmation() {
-        guard isConfirmationPresented else { return }
-        isConfirmationPresented = false
-        invalidatePreview()
+        guard session.isConfirmationPresented else { return }
+        session.cancelConfirmation()
+        releaseLease()
     }
 
     func confirmExecution() async {
-        guard isConfirmationPresented, let preview, canConfirm else { return }
-        guard process != nil else {
-            invalidatePreview()
-            setError(UninstallViewModelError.missingMole)
+        guard session.isConfirmationPresented, canConfirm,
+              let currentPreview = session.preview,
+              let previewID = operationID(for: session.state) else { return }
+        guard let newLease = coordinator.acquire(.uninstall) else {
+            session.fail(
+                OperationResult(status: .failed, errorKey: "operation.error.busy"),
+                id: previewID
+            )
             return
         }
-
-        isConfirmationPresented = false
-        clearError()
-        executionSummary = nil
-        isExecuting = true
-        let operationID = UUID()
-        activeOperationID = operationID
-        defer {
-            if activeOperationID == operationID {
-                activeOperationID = nil
-                isExecuting = false
-            }
+        lease = newLease
+        guard let execution = session.beginExecution() else {
+            releaseLease()
+            return
         }
+        coordinator.invalidatePreviews()
+        previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
             let current = try await fetchList()
-            guard activeOperationID == operationID else { return }
-            guard selectedIDs == preview.selectedIDs else {
+            guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
+            guard selectedIDs == currentPreview.selectedIDs else {
                 throw UninstallViewModelError.changedTarget
             }
-
-            guard let target = current.apps.first(where: { $0.id == preview.target.id }),
-                  current.apps.filter({ $0.uninstallName == preview.target.uninstallName }).count == 1 else {
+            let currentBatch = try UninstallSelectionValidator.batch(
+                selectedIDs: currentPreview.selectedIDs,
+                apps: current.apps
+            )
+            guard Set(currentBatch.map(\.identity)) == currentPreview.identities else {
                 throw UninstallViewModelError.changedTarget
             }
-
             apps = current.apps
             listGeneration = current.generation
-            guard let process else { throw UninstallViewModelError.missingMole }
             let result = try await process.run(
-                ["uninstall", target.uninstallName],
+                ["uninstall"] + currentBatch.map(\.uninstallName),
                 stdin: Self.confirmationInput,
                 timeout: 600
             )
-            guard activeOperationID == operationID else { return }
-            guard result.exitCode == 0 else {
-                throw MoleBridgeError.commandFailed(result)
-            }
-            executionSummary = outputSummary(result)
-            invalidatePreview()
+            guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
+            let operationResult = UninstallBatchResultParser.result(
+                result,
+                expectedCount: currentBatch.count
+            )
+            session.finish(operationResult, id: execution.id)
+            coordinator.invalidatePreviews()
+            releaseLease()
         } catch let error as MoleBridgeError where error == .cancelled {
-            guard activeOperationID == operationID else { return }
-            invalidatePreview()
-            errorMessageKey = "uninstall.cancelled"
+            session.finishCancelled(
+                OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+                id: execution.id
+            )
+            coordinator.invalidatePreviews()
+            releaseLease()
         } catch {
-            guard activeOperationID == operationID else { return }
-            invalidatePreview()
-            if case let MoleBridgeError.commandFailed(result) = error {
-                executionSummary = outputSummary(result)
+            guard session.accepts(execution.id) else { return }
+            let result: OperationResult
+            if let commandError = error as? MoleBridgeError,
+               case let .commandFailed(commandResult) = commandError {
+                result = UninstallBatchResultParser.result(
+                    commandResult,
+                    expectedCount: currentPreview.apps.count
+                )
+            } else if let domainError = error as? UninstallViewModelError {
+                result = OperationResult(status: .failed, errorKey: domainError.errorKey)
+            } else {
+                result = OperationResult(status: .failed, summary: error.localizedDescription, errorKey: "uninstall.error.failed")
             }
-            setError(error)
+            session.fail(result, id: execution.id)
+            releaseLease()
         }
     }
 
     func cancelExecution() async {
-        guard isExecuting else { return }
-        await process?.cancel()
+        guard let operationID = session.beginExecutionCancellation() else { return }
+        await process.cancel()
+        session.finishCancelled(
+            OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
+            id: operationID
+        )
+        coordinator.invalidatePreviews()
+        releaseLease()
     }
 
     private func fetchList() async throws -> UninstallListSnapshot {
-        guard let process else { throw UninstallViewModelError.missingMole }
-        let result = try await process.run(
-            ["uninstall", "--list"],
-            stdin: nil,
-            timeout: 120
-        )
-        guard result.exitCode == 0 else {
-            throw MoleBridgeError.commandFailed(result)
-        }
+        let result = try await process.run(["uninstall", "--list"], stdin: nil, timeout: 120)
+        guard result.exitCode == 0 else { throw MoleBridgeError.commandFailed(result) }
         return UninstallListSnapshot(
             generation: UUID(),
             apps: try UninstallListDecoder.decode(result.stdout)
         )
     }
 
-    private func selectedTarget(in apps: [UninstallApp]) throws -> UninstallApp {
-        guard let selectedID = selectedIDs.first,
-              selectedIDs.count == 1,
-              let target = apps.first(where: { $0.id == selectedID }) else {
-            throw UninstallViewModelError.noSelection
+    private func operationID(for state: OperationState<UninstallPreviewSnapshot>) -> UUID? {
+        switch state {
+        case let .ready(id, _), let .confirming(id, _), let .executing(id, _): return id
+        default: return nil
         }
-        guard apps.filter({ $0.uninstallName == target.uninstallName }).count == 1 else {
-            throw UninstallViewModelError.ambiguousName
-        }
-        return target
     }
 
-    private func invalidatePreview() {
-        preview = nil
-        isConfirmationPresented = false
+    private var isCurrentPreview: Bool {
+        guard let generation = previewCoordinatorGeneration else { return false }
+        return coordinator.isCurrent(generation)
     }
 
-    private func clearError() {
-        errorMessage = nil
-        errorMessageKey = nil
+    private func expirePreviewIfNeeded(generation: UInt64) {
+        guard let previewGeneration = previewCoordinatorGeneration,
+              previewGeneration != generation,
+              session.preview != nil else { return }
+        session.expirePreview(errorKey: "operation.error.stale_preview")
+        previewCoordinatorGeneration = nil
     }
 
-    private func setError(_ error: Error) {
-        if let error = error as? UninstallViewModelError {
-            errorMessage = nil
-            errorMessageKey = error.errorKey
-        } else {
-            errorMessage = error.localizedDescription
-            errorMessageKey = nil
+    private func releaseLease(clearPreviewGeneration: Bool = true) {
+        lease?.release()
+        lease = nil
+        if clearPreviewGeneration {
+            previewCoordinatorGeneration = nil
         }
+    }
+
+    private func clearTransientError() {
+        transientErrorKey = nil
+        objectWillChange.send()
+    }
+
+    private func setTransientError(_ error: Error) {
+        transientErrorKey = (error as? UninstallViewModelError)?.errorKey
+            ?? "uninstall.error.failed"
+        objectWillChange.send()
     }
 
     private func outputSummary(_ result: MoleCommandResult) -> String {

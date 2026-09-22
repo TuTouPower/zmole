@@ -10,24 +10,29 @@ final class WhitelistViewModel: ObservableObject {
     @Published private(set) var isSaving = false
     @Published private(set) var isDirty = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessageKey: String?
     @Published private(set) var didSave = false
 
     let filePath: String
     private let store: WhitelistStore
     private let moleProcess: (any MoleCommandRunning)?
+    private let coordinator: OperationCoordinator
 
     init(
         store: WhitelistStore = .live,
-        moleProcess: (any MoleCommandRunning)? = nil
+        moleProcess: (any MoleCommandRunning)? = nil,
+        coordinator: OperationCoordinator
     ) {
         self.store = store
         self.moleProcess = moleProcess
+        self.coordinator = coordinator
         filePath = store.fileURL.path
     }
 
     func load() {
         isLoading = true
         errorMessage = nil
+        errorMessageKey = nil
         didSave = false
         defer { isLoading = false }
 
@@ -41,6 +46,7 @@ final class WhitelistViewModel: ObservableObject {
             patterns = []
             isDirty = false
             errorMessage = error.localizedDescription
+            errorMessageKey = nil
         }
     }
 
@@ -74,13 +80,25 @@ final class WhitelistViewModel: ObservableObject {
     func save() {
         guard let document else {
             errorMessage = "白名单尚未加载"
+            errorMessageKey = nil
             return
         }
 
+        guard let lease = coordinator.acquire(.protectionRules) else {
+            errorMessage = nil
+            errorMessageKey = "operation.error.busy"
+            didSave = false
+            return
+        }
         isSaving = true
         errorMessage = nil
+        errorMessageKey = nil
         didSave = false
-        defer { isSaving = false }
+        defer {
+            lease.release()
+            isSaving = false
+            coordinator.invalidatePreviews()
+        }
 
         do {
             let updatedDocument = document.replacingPatterns(patterns.map(\.value))
@@ -90,6 +108,7 @@ final class WhitelistViewModel: ObservableObject {
             didSave = true
         } catch {
             errorMessage = error.localizedDescription
+            errorMessageKey = nil
         }
     }
 
@@ -98,6 +117,7 @@ final class WhitelistViewModel: ObservableObject {
         self.document = document.replacingPatterns(patterns.map(\.value))
         isDirty = true
         errorMessage = nil
+        errorMessageKey = nil
         didSave = false
     }
 }

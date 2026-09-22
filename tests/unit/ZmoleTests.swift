@@ -2,21 +2,124 @@ import XCTest
 @testable import Zmole
 
 final class ZmoleTests: XCTestCase {
-    func testSidebarContainsTheFirstVersionNavigation() {
+    func testTopModeContainsFivePrimaryWorkModes() {
         XCTAssertEqual(
-            SidebarItem.allCases.map(\.rawValue),
-            [
-                "status", "history", "analyze", "clean", "uninstall", "optimize",
-                "purge", "whitelist", "settings"
-            ]
+            AppMode.allCases.map(\.rawValue),
+            ["clean", "software", "optimize", "analyze", "status"]
         )
     }
 
-    func testSidebarDoesNotExposeInstallerUpdateOrRemove() {
-        let forbidden = ["installer", "update", "remove"]
+    func testTopModeDoesNotExposeSecondaryOrUnsupportedCommands() {
+        let forbidden = ["history", "whitelist", "purge", "installer", "update", "remove"]
         XCTAssertTrue(
-            Set(SidebarItem.allCases.map(\.rawValue)).isDisjoint(with: forbidden)
+            Set(AppMode.allCases.map(\.rawValue)).isDisjoint(with: forbidden)
         )
+    }
+
+    func testDemoConfigurationSelectsPageLanguageAndAppearance() {
+        let configuration = DemoConfiguration(arguments: [
+            "zmole", "--demo", "--demo-page", "analyze",
+            "--demo-state", "partial", "--demo-language", "zh-Hans", "--demo-appearance", "light",
+            "--demo-data-root", "/tmp/zmole-demo-data"
+        ])
+
+        XCTAssertTrue(configuration.isEnabled)
+        XCTAssertEqual(configuration.page, .analyze)
+        XCTAssertEqual(configuration.state, .partial)
+        XCTAssertEqual(configuration.language, .simplifiedChinese)
+        XCTAssertEqual(configuration.appearance, .light)
+        XCTAssertEqual(configuration.dataRoot?.path, "/tmp/zmole-demo-data")
+    }
+
+    @MainActor
+    func testDemoDependenciesInjectCleanAndWhitelistPathsWithoutMoleConfig() async throws {
+        let root = try makeTemporaryDirectory(prefix: "zmole-demo-data-root")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let configuration = DemoConfiguration(arguments: [
+            "zmole", "--demo", "--demo-data-root", root.path
+        ])
+
+        let dependencies = AppDependencies(configuration: configuration)
+
+        XCTAssertEqual(dependencies.demoDataRoot?.standardizedFileURL, root.standardizedFileURL)
+        XCTAssertEqual(
+            dependencies.demoCleanPreviewURL?.standardizedFileURL,
+            root.appendingPathComponent("clean-list.txt").standardizedFileURL
+        )
+        XCTAssertEqual(
+            URL(fileURLWithPath: dependencies.whitelistViewModel.filePath).standardizedFileURL,
+            root.appendingPathComponent("whitelist").standardizedFileURL
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+        XCTAssertFalse(dependencies.whitelistViewModel.filePath.contains("/.config/mole/"))
+
+        await dependencies.analyzeViewModel.loadOverview()
+        XCTAssertEqual(dependencies.analyzeViewModel.snapshot?.path, "/Users/demo")
+    }
+
+    @MainActor
+    func testDemoUninstallPreviewContainsOnlySelectedApplications() async throws {
+        let root = try makeTemporaryDirectory(prefix: "zmole-demo-uninstall-preview")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dependencies = AppDependencies(configuration: DemoConfiguration(arguments: [
+            "zmole", "--demo", "--demo-page", "software", "--demo-data-root", root.path
+        ]))
+        let viewModel = dependencies.uninstallViewModel
+
+        await viewModel.loadList()
+        let selected = viewModel.apps.filter { ["Brew Tool", "Data Tools"].contains($0.name) }
+        XCTAssertEqual(selected.count, 2)
+        selected.forEach(viewModel.toggleSelection)
+        await viewModel.previewUninstall()
+
+        XCTAssertEqual(viewModel.preview?.apps.map(\.name), ["Brew Tool", "Data Tools"])
+        XCTAssertTrue(viewModel.preview?.output.contains("Brew Tool") == true)
+        XCTAssertTrue(viewModel.preview?.output.contains("Data Tools") == true)
+        XCTAssertFalse(viewModel.preview?.output.contains("Demo Editor") == true)
+        XCTAssertFalse(viewModel.preview?.output.hasPrefix("[") == true)
+    }
+
+    @MainActor
+    func testPopulatedDemoStatusKeepsSamplingUntilPaused() async throws {
+        let root = try makeTemporaryDirectory(prefix: "zmole-demo-status-stream")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dependencies = AppDependencies(configuration: DemoConfiguration(arguments: [
+            "zmole", "--demo", "--demo-page", "status", "--demo-state", "populated",
+            "--demo-data-root", root.path
+        ]))
+        let viewModel = dependencies.statusViewModel
+
+        viewModel.start()
+        try await Task.sleep(nanoseconds: 2_700_000_000)
+
+        XCTAssertNotNil(viewModel.snapshot)
+        XCTAssertTrue(viewModel.isSampling)
+
+        await viewModel.pause()
+        XCTAssertFalse(viewModel.isSampling)
+        XCTAssertTrue(viewModel.isPaused)
+    }
+
+    func testStatusMetricDetailKeysHaveLocalizedValues() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("src/zmole/Resources/Localizable.xcstrings")
+        let data = try Data(contentsOf: sourceURL)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        for key in ["status.health_detail", "status.cpu.detail", "status.memory.detail"] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any])
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+            for locale in ["en", "zh-Hans", "zh-Hant"] {
+                let localization = try XCTUnwrap(localizations[locale] as? [String: Any])
+                let unit = try XCTUnwrap(localization["stringUnit"] as? [String: Any])
+                let value = try XCTUnwrap(unit["value"] as? String)
+                XCTAssertFalse(value.isEmpty)
+                XCTAssertNotEqual(value, key)
+            }
+        }
     }
 
     func testReleasesURLIsTheProjectReleasePage() {
@@ -225,7 +328,7 @@ final class ZmoleTests: XCTestCase {
             encoding: .utf8
         )
 
-        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL), coordinator: OperationCoordinator())
         viewModel.load()
         XCTAssertEqual(viewModel.patterns.map(\.value), ["~/existing"])
 
@@ -259,7 +362,7 @@ final class ZmoleTests: XCTestCase {
             encoding: .utf8
         )
 
-        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL), coordinator: OperationCoordinator())
         viewModel.load()
         let firstID = try XCTUnwrap(viewModel.patterns.first?.id)
         viewModel.removePattern(id: firstID)
@@ -279,7 +382,7 @@ final class ZmoleTests: XCTestCase {
         let originalData = Data([0xFF, 0xFE, 0xFD])
         try originalData.write(to: fileURL)
 
-        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL), coordinator: OperationCoordinator())
         viewModel.load()
         viewModel.newPattern = "~/must-not-overwrite"
         viewModel.addPattern()
@@ -293,7 +396,7 @@ final class ZmoleTests: XCTestCase {
         let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-no-mole")
         defer { try? FileManager.default.removeItem(at: directory) }
         let fileURL = directory.appendingPathComponent("whitelist")
-        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL))
+        let viewModel = WhitelistViewModel(store: WhitelistStore(fileURL: fileURL), coordinator: OperationCoordinator())
 
         viewModel.load()
         viewModel.newPattern = "~/safe"
@@ -312,7 +415,8 @@ final class ZmoleTests: XCTestCase {
         let spy = WhitelistMoleProcessSpy()
         let viewModel = WhitelistViewModel(
             store: WhitelistStore(fileURL: fileURL),
-            moleProcess: spy
+            moleProcess: spy,
+            coordinator: OperationCoordinator()
         )
 
         viewModel.load()
@@ -522,7 +626,10 @@ final class ZmoleTests: XCTestCase {
     }
 
     @MainActor
-    func testCleanExecutionFailureShowsSummaryError() async throws {
+    // Replaces the pre-operation-session assertion that expected the raw command
+    // summary in errorMessage. The current contract keeps the localized error
+    // state and persistent command summary as separate fields.
+    func testCleanExecutionFailurePersistsErrorStateAndSummary() async throws {
         let directory = try makeTemporaryDirectory(prefix: "zmole-clean-execution-failure")
         defer { try? FileManager.default.removeItem(at: directory) }
         let listURL = directory.appendingPathComponent("clean-list.txt")
@@ -544,7 +651,7 @@ final class ZmoleTests: XCTestCase {
         await viewModel.confirmExecution()
 
         XCTAssertNil(viewModel.preview)
-        XCTAssertTrue(viewModel.errorMessage?.contains("9") == true)
+        XCTAssertEqual(viewModel.errorMessageKey, "clean.error.failed")
         XCTAssertEqual(viewModel.executionSummary, "partial output\nclean failed")
     }
 

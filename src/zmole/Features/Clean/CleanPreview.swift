@@ -70,7 +70,12 @@ struct CleanPreviewStore: Sendable {
             throw CleanPreviewStoreError.missingFile
         }
 
-        let data = try Data(contentsOf: fileURL)
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL)
+        } catch {
+            throw CleanPreviewStoreError.missingFile
+        }
         guard let contents = String(data: data, encoding: .utf8) else {
             throw CleanPreviewStoreError.invalidUTF8
         }
@@ -85,6 +90,9 @@ struct CleanPreviewStore: Sendable {
             .filter { line in
                 !line.isEmpty && !line.hasPrefix("#") && !line.hasPrefix("===")
             }
+        guard !entries.isEmpty else {
+            throw CleanPreviewStoreError.emptyFile
+        }
 
         return CleanPreviewSnapshot(
             generation: generation,
@@ -94,7 +102,18 @@ struct CleanPreviewStore: Sendable {
     }
 
     func verifyUnchanged(_ snapshot: CleanPreviewSnapshot) throws {
-        let data = try Data(contentsOf: fileURL)
+        guard snapshot.generation.fileURL == fileURL else {
+            throw CleanPreviewStoreError.changedSincePreview
+        }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw CleanPreviewStoreError.missingFile
+        }
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL)
+        } catch {
+            throw CleanPreviewStoreError.changedSincePreview
+        }
         guard let contents = String(data: data, encoding: .utf8) else {
             throw CleanPreviewStoreError.invalidUTF8
         }

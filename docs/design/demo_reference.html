@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>zmole · macOS Desktop Demo v2</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --desktop:#dfe3e8;
+  --window:rgba(248,248,250,.96);
+  --chrome:rgba(244,244,246,.86);
+  --surface:#ffffff;
+  --surface-2:#f5f5f7;
+  --surface-3:#ececef;
+  --text:#1d1d1f;
+  --muted:#6e6e73;
+  --faint:#8e8e93;
+  --line:rgba(60,60,67,.16);
+  --line-soft:rgba(60,60,67,.09);
+  --hover:rgba(0,0,0,.045);
+  --selected:rgba(0,122,255,.11);
+  --accent:#0a7f68;
+  --accent-2:#006edc;
+  --accent-soft:rgba(10,127,104,.12);
+  --green:#16864c;
+  --amber:#b26800;
+  --red:#c9182b;
+  --purple:#7655d9;
+  --blue:#2b74c8;
+  --teal:#0a8f8c;
+  --shadow:0 28px 80px rgba(0,0,0,.22),0 2px 12px rgba(0,0,0,.10);
+  --focus:0 0 0 3px rgba(0,122,255,.28);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --desktop:#17181b;
+    --window:rgba(29,29,31,.96);
+    --chrome:rgba(34,34,36,.88);
+    --surface:#232326;
+    --surface-2:#2b2b2f;
+    --surface-3:#343438;
+    --text:#f5f5f7;
+    --muted:#a1a1a6;
+    --faint:#77777c;
+    --line:rgba(255,255,255,.14);
+    --line-soft:rgba(255,255,255,.075);
+    --hover:rgba(255,255,255,.055);
+    --selected:rgba(10,132,255,.20);
+    --accent:#55d6b2;
+    --accent-2:#5aa9ff;
+    --accent-soft:rgba(85,214,178,.12);
+    --green:#58d68d;
+    --amber:#f2b55b;
+    --red:#ff6961;
+    --purple:#a58cff;
+    --blue:#62a8f4;
+    --teal:#51d6d0;
+    --shadow:0 30px 95px rgba(0,0,0,.52),0 2px 12px rgba(0,0,0,.30);
+    --focus:0 0 0 3px rgba(10,132,255,.34);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;min-width:760px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
+  font-size:13px;line-height:1.35;color:var(--text);
+  background:
+    radial-gradient(circle at 18% 12%,rgba(0,122,255,.10),transparent 28%),
+    radial-gradient(circle at 82% 80%,rgba(10,127,104,.10),transparent 32%),
+    var(--desktop);
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:var(--focus)}
+svg{display:block}
+.desktop{height:100%;padding:24px;display:grid;place-items:center}
+.window{
+  width:min(1400px,calc(100vw - 48px));height:min(880px,calc(100vh - 48px));min-height:650px;
+  border:1px solid rgba(128,128,128,.34);border-radius:14px;overflow:hidden;
+  background:var(--window);box-shadow:var(--shadow);backdrop-filter:blur(26px) saturate(135%);
+  display:grid;grid-template-rows:62px minmax(0,1fr);
+}
+.titlebar{
+  display:grid;grid-template-columns:240px minmax(420px,1fr) 240px;align-items:center;
+  padding:0 16px;border-bottom:1px solid var(--line-soft);background:var(--chrome);user-select:none;
+}
+.title-left{display:flex;align-items:center;gap:13px;min-width:0}
+.traffic{display:flex;gap:8px;flex:none}
+.traffic i{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.18)}
+.traffic i:nth-child(1){background:#ff5f57}.traffic i:nth-child(2){background:#febc2e}.traffic i:nth-child(3){background:#28c840}
+.brand{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:-.01em}
+.brand-mark{width:24px;height:24px;border-radius:7px;background:var(--text);color:var(--surface);display:grid;place-items:center;font-size:11px;font-weight:800;letter-spacing:-.04em}
+.brand small{font-weight:500;color:var(--muted);font-size:11px}
+.mode-switch{justify-self:center;display:flex;align-items:center;padding:3px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--surface-2) 82%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.mode-btn{height:32px;min-width:72px;padding:0 13px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-weight:580;display:flex;align-items:center;justify-content:center;gap:6px}
+.mode-btn:hover{background:var(--hover);color:var(--text)}
+.mode-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14),inset 0 0 0 1px var(--line-soft)}
+.title-right{justify-self:end;display:flex;align-items:center;gap:7px}
+.icon-btn,.ghost-btn,.tool-btn,.primary-btn,.danger-btn,.scope-btn{height:30px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--surface);padding:0 10px}
+.icon-btn{width:30px;padding:0}.ghost-btn{background:transparent;border-color:transparent;color:var(--muted)}
+.icon-btn:hover,.ghost-btn:hover,.tool-btn:hover,.scope-btn:hover{background:var(--hover)}
+.primary-btn{background:var(--text);color:var(--surface);border-color:transparent;font-weight:650}
+.primary-btn.accent{background:var(--accent);color:#fff}
+.danger-btn{background:transparent;color:var(--red);border-color:color-mix(in srgb,var(--red) 32%,var(--line));font-weight:650}
+.tool-btn[disabled],.primary-btn[disabled]{opacity:.42;pointer-events:none}
+.i{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.i.fill{fill:currentColor;stroke:none}
+.app-body{position:relative;overflow:hidden;background:var(--surface)}
+.page{height:100%;display:none;overflow:hidden}.page.active{display:grid}
+.viewbar{height:54px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:10px;padding:0 18px;background:color-mix(in srgb,var(--surface) 94%,transparent)}
+.view-title{font-size:14px;font-weight:650;letter-spacing:-.01em}.view-sub{color:var(--muted);font-size:11px}.spacer{flex:1}
+.scope{display:inline-flex;padding:2px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line-soft)}
+.scope-btn{height:26px;border:0;background:transparent;color:var(--muted);padding:0 10px}.scope-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.10)}
+.search{position:relative;width:220px}.search input{width:100%;height:30px;border:1px solid var(--line);background:var(--surface-2);border-radius:7px;padding:0 28px 0 29px;outline:none}.search .i{position:absolute;left:9px;top:7px;color:var(--muted)}.search .clear{position:absolute;right:6px;top:5px;width:20px;height:20px;border:0;background:transparent;color:var(--faint);display:none}.search.has-value .clear{display:grid;place-items:center}
+.content-scroll{overflow:auto;min-height:0}.content-pad{padding:22px 24px 32px;max-width:1180px;margin:0 auto}
+.eyebrow{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.06em;text-transform:uppercase}.headline{font-size:25px;line-height:31px;font-weight:720;letter-spacing:-.028em;margin:2px 0 5px}.lede{color:var(--muted);max-width:660px}
+.panel{border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}.panel.soft{background:var(--surface-2)}
+.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:24px 0 9px}.section-head h2{font-size:14px;margin:0;font-weight:650}.section-head .meta{font-size:11px;color:var(--muted)}
+.row{min-height:48px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:11px;padding:8px 12px}.row:last-child{border-bottom:0}.row:hover{background:var(--hover)}
+.row-main{min-width:0;flex:1}.row-title{font-weight:570;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.row-meta{font-size:11px;color:var(--muted);white-space:nowrap;text-align:right}
+.check{width:16px;height:16px;border:1px solid var(--line);border-radius:4px;background:var(--surface);display:grid;place-items:center;flex:none}.check.on{background:var(--accent);border-color:var(--accent);color:white}.check .i{width:11px;height:11px;stroke-width:2.4}
+.disclosure{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--muted);display:grid;place-items:center}.disclosure:hover{background:var(--hover)}
+.badge{height:20px;border-radius:6px;padding:0 7px;display:inline-flex;align-items:center;font-size:10px;font-weight:650;background:var(--surface-3);color:var(--muted)}.badge.good{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}.badge.warn{background:color-mix(in srgb,var(--amber) 17%,transparent);color:var(--amber)}.badge.blue{background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)}
+.mono{font-family:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+.selection-shelf{min-height:42px;border-bottom:1px solid var(--line-soft);display:none;align-items:center;gap:10px;padding:6px 18px;background:color-mix(in srgb,var(--accent-soft) 46%,var(--surface));box-shadow:0 5px 14px rgba(0,0,0,.05)}.selection-shelf.show{display:flex}.selection-shelf strong{font-size:12px}.selection-icons{display:flex;margin-right:2px}.mini-app{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:9px;font-weight:800;border:2px solid var(--surface);margin-left:-5px}.mini-app:first-child{margin-left:0}
+
+/* CLEAN */
+#page-clean{grid-template-rows:54px minmax(0,1fr)}
+.clean-hero{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:stretch;margin-top:20px}
+.reclaim-card{border:1px solid var(--line);border-radius:13px;padding:20px;background:linear-gradient(150deg,color-mix(in srgb,var(--accent-soft) 74%,var(--surface)) 0%,var(--surface) 65%);position:relative;overflow:hidden}.reclaim-card:after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;border:28px solid color-mix(in srgb,var(--accent) 10%,transparent);right:-56px;bottom:-70px}.reclaim-card .num{font-size:38px;letter-spacing:-.045em;font-weight:750;margin-top:12px}.reclaim-card .unit{font-size:15px;color:var(--muted);margin-left:4px}.reclaim-card .small{font-size:11px;color:var(--muted);margin-top:8px}.reclaim-card .primary-btn{margin-top:18px}
+.storage-card{border:1px solid var(--line);border-radius:13px;padding:18px 18px 16px;background:var(--surface)}.storage-top{display:flex;justify-content:space-between;align-items:start}.storage-total{font-size:12px;color:var(--muted)}.storage-total b{color:var(--text);font-size:16px}.storage-rail{height:18px;border-radius:6px;overflow:hidden;background:var(--surface-2);display:flex;margin:17px 0 11px;border:1px solid var(--line-soft)}.storage-rail span{height:100%}.r-apps{width:24%;background:var(--purple)}.r-user{width:33%;background:var(--blue)}.r-system{width:21%;background:var(--faint)}.r-reclaim{width:6%;background:var(--accent)}.r-free{flex:1;background:transparent}.legend{display:flex;flex-wrap:wrap;gap:8px 15px;color:var(--muted);font-size:11px}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:7px;height:7px;border-radius:2px}
+.clean-category .row{min-height:54px}.cat-icon{width:30px;height:30px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line-soft);display:grid;place-items:center;color:var(--muted)}.clean-detail{display:none;margin:0 12px 11px 55px;border:1px solid var(--line-soft);border-radius:8px;overflow:hidden;background:var(--surface-2)}.clean-category.open .clean-detail{display:block}.clean-detail .row{min-height:36px;padding:6px 9px}.clean-category.open>.row{background:var(--hover)}
+
+/* SOFTWARE */
+#page-software{grid-template-rows:54px auto minmax(0,1fr)}
+.software-layout{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:0;height:100%}.filter-rail{border-right:1px solid var(--line-soft);background:var(--surface-2);padding:12px 10px;overflow:auto}.filter-title{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:10px 9px 5px}.filter-item{height:30px;padding:0 9px;border-radius:6px;display:flex;align-items:center;gap:8px;color:var(--muted)}.filter-item:hover{background:var(--hover);color:var(--text)}.filter-item.active{background:var(--selected);color:var(--text)}.filter-item b{margin-left:auto;font-size:10px;color:var(--faint);font-weight:600}.software-main{min-width:0;overflow:auto}.app-list{padding:10px 14px 24px}.app-row-wrap{border-bottom:1px solid var(--line-soft)}.app-row{min-height:62px;display:grid;grid-template-columns:24px 36px minmax(180px,1fr) 120px 130px 28px;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}.app-row:hover{background:var(--hover)}.app-row.selected{background:color-mix(in srgb,var(--accent-soft) 72%,transparent)}.app-icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:white;font-weight:800;font-size:11px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}.app-name{font-weight:620}.app-meta{font-size:11px;color:var(--muted);margin-top:2px}.app-stat{font-size:11px;color:var(--muted)}.app-stat strong{display:block;color:var(--text);font-size:12px;font-weight:580}.app-detail{display:none;margin:0 10px 10px 78px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface-2)}.app-row-wrap.open .app-detail{display:block}.app-detail-head{padding:10px 12px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center}.app-detail .row{min-height:37px;padding:6px 10px}.path-type{width:110px;font-size:11px;font-weight:580}.detail-total{margin-left:auto;color:var(--muted);font-size:11px}
+
+/* OPTIMIZE */
+#page-optimize{grid-template-rows:54px minmax(0,1fr)}
+.optimize-grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;margin-top:20px}.task-card{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}.task-row{min-height:58px;display:grid;grid-template-columns:24px 34px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line-soft)}.task-row:last-child{border-bottom:0}.task-row:hover{background:var(--hover)}.task-glyph{width:31px;height:31px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted)}.preview-box{border:1px solid var(--line);border-radius:11px;padding:16px;background:var(--surface-2);position:sticky;top:16px}.preview-box h3{font-size:13px;margin:0 0 7px}.preview-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:11px}.preview-line:last-of-type{border-bottom:0}.preview-box .primary-btn{margin-top:14px;width:100%}
+
+/* ANALYZE */
+#page-analyze{grid-template-rows:54px minmax(0,1fr)}
+.analyze-layout{display:grid;grid-template-columns:330px minmax(0,1fr);height:100%;min-height:0}.dir-pane{border-right:1px solid var(--line-soft);display:grid;grid-template-rows:44px minmax(0,1fr) 48px;min-height:0;background:var(--surface-2)}.breadcrumb{display:flex;align-items:center;gap:5px;padding:0 11px;border-bottom:1px solid var(--line-soft);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}.breadcrumb b{color:var(--text)}.dir-list{overflow:auto;padding:7px}.dir-row{height:46px;display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 8px;border-radius:7px}.dir-row:hover{background:var(--hover)}.dir-row.active{background:var(--selected)}.folder{width:24px;height:20px;border-radius:4px;background:linear-gradient(#78bce9,#4e9fd5);position:relative;border:1px solid rgba(0,0,0,.08)}.folder:before{content:"";position:absolute;left:2px;top:-4px;width:10px;height:5px;border-radius:3px 3px 0 0;background:#68afdF}.dir-name{font-weight:570;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dir-note{font-size:10px;color:var(--muted);margin-top:1px}.dir-size{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.disk-footer{border-top:1px solid var(--line-soft);padding:9px 11px}.disk-meter{height:5px;background:var(--surface-3);border-radius:999px;overflow:hidden;margin-top:6px}.disk-meter i{display:block;height:100%;width:47%;background:var(--accent-2)}
+.space-pane{display:grid;grid-template-rows:44px minmax(0,1fr);min-width:0;min-height:0}.space-toolbar{border-bottom:1px solid var(--line-soft);display:flex;align-items:center;padding:0 12px;gap:8px}.space-toolbar .hint{font-size:11px;color:var(--muted)}
+.treemap{padding:12px;display:grid;grid-template-columns:1.9fr 1.15fr .9fr;grid-template-rows:1.4fr .85fr .8fr;gap:6px;min-height:0;background:var(--surface-2)}.tile{position:relative;border-radius:7px;overflow:hidden;padding:10px;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;border:1px solid rgba(255,255,255,.12);color:white;transition:transform .12s ease,filter .12s ease;cursor:default}.tile:hover{transform:translateY(-1px);filter:brightness(1.06)}.tile strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile span{font-size:10px;opacity:.78;margin-top:2px}.tile:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(0,0,0,.08));pointer-events:none}.tile.users{grid-row:1/3;background:#2f7d7c}.tile.apps{background:#525f9d}.tile.system{background:#66737e}.tile.library{grid-row:2/4;grid-column:2;background:#956a4b}.tile.private{background:#6f5d91}.tile.opt{background:#4d879c}.tile.cache{background:#8b5d68}.tile .bubble{position:absolute;width:86px;height:86px;border-radius:50%;right:-18px;top:-18px;border:18px solid rgba(255,255,255,.08)}.space-inspector{position:absolute;right:24px;bottom:24px;width:260px;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:12px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(18px);box-shadow:0 10px 30px rgba(0,0,0,.18)}.space-inspector .ins-title{font-weight:650}.space-inspector .ins-path{font-size:10px;color:var(--muted);margin:2px 0 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.space-inspector .ins-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.space-inspector .ins-cell{padding:8px;background:var(--surface-2);border-radius:7px}.space-inspector .ins-cell span{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.space-inspector .ins-cell b{display:block;margin-top:2px;font-size:12px}
+
+/* STATUS */
+#page-status{grid-template-rows:54px minmax(0,1fr)}
+.status-top{display:grid;grid-template-columns:1.2fr repeat(4,1fr);gap:10px;margin-top:18px}.metric{border:1px solid var(--line);border-radius:10px;padding:13px 14px;background:var(--surface);min-height:122px;position:relative;overflow:hidden}.metric .label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}.metric .big{font-size:25px;font-weight:720;letter-spacing:-.03em;margin-top:8px}.metric .unit{font-size:11px;color:var(--muted);margin-left:2px}.metric .metric-foot{position:absolute;left:14px;right:14px;bottom:12px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between}.health{background:linear-gradient(145deg,color-mix(in srgb,var(--accent-soft) 58%,var(--surface)),var(--surface))}.health .score{display:flex;align-items:end;gap:8px}.health .score .big{font-size:31px}.health-ring{position:absolute;right:14px;top:26px;width:58px;height:58px;border-radius:50%;border:7px solid color-mix(in srgb,var(--accent) 23%,var(--surface));border-top-color:var(--accent);transform:rotate(25deg)}.spark{position:absolute;left:12px;right:12px;bottom:30px;height:32px}.spark svg{width:100%;height:100%;overflow:visible}.spark path{stroke:var(--accent);stroke-width:1.6;fill:none}.spark.blue path{stroke:var(--blue)}.spark.amber path{stroke:var(--amber)}.mem-bar{position:absolute;left:14px;right:14px;bottom:36px;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}.mem-bar i{display:block;width:56%;height:100%;background:var(--purple)}
+.process-panel{margin-top:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden}.process-head,.process-row{display:grid;grid-template-columns:minmax(230px,1.6fr) 100px 150px 120px 70px;align-items:center;column-gap:12px;padding:0 12px}.process-head{height:34px;background:var(--surface-2);color:var(--muted);font-size:10px;border-bottom:1px solid var(--line)}.process-row{min-height:39px;border-bottom:1px solid var(--line-soft);font-size:11px}.process-row:last-child{border-bottom:0}.process-row:hover{background:var(--hover)}.proc-name{display:flex;align-items:center;gap:9px;font-weight:570}.proc-icon{width:20px;height:20px;border-radius:5px;background:var(--surface-3);display:grid;place-items:center;font-size:8px;color:var(--muted)}.cpu-cell{display:flex;align-items:center;gap:8px}.cpu-bar{width:72px;height:5px;background:var(--surface-3);border-radius:99px;overflow:hidden}.cpu-bar i{display:block;height:100%;background:var(--accent)}.hot .cpu-bar i{background:var(--red)}.hot .cpu-value{color:var(--red)}
+.history-panel{display:none}.status-history .live-panel{display:none}.status-history .history-panel{display:block}.history-list .row{min-height:52px}
+
+/* whitelist */
+.whitelist-view{display:none;padding:14px 16px 28px}.software-whitelist .software-layout{display:none}.software-whitelist .selection-shelf{display:none!important}.software-whitelist .whitelist-view{display:block}.whitelist-entry{display:grid;grid-template-columns:minmax(0,1fr) 110px 80px;gap:8px;margin-top:10px}.text-input{height:30px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);padding:0 9px;outline:none}
+
+/* MODAL + TOAST */
+.backdrop{position:absolute;inset:0;background:rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;z-index:20;backdrop-filter:blur(2px)}.backdrop.show{display:flex}.dialog{width:390px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 24px 70px rgba(0,0,0,.32);padding:18px}.dialog h3{font-size:15px;margin:0 0 7px}.dialog p{color:var(--muted);margin:0;font-size:12px}.dialog-list{margin:12px 0;border:1px solid var(--line-soft);border-radius:8px;overflow:hidden;background:var(--surface-2)}.dialog-list div{padding:7px 9px;border-bottom:1px solid var(--line-soft);font-size:11px;display:flex;justify-content:space-between;gap:10px}.dialog-list div:last-child{border-bottom:0}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.toast{position:absolute;left:50%;bottom:18px;transform:translate(-50%,14px);opacity:0;pointer-events:none;z-index:30;background:color-mix(in srgb,var(--text) 90%,transparent);color:var(--surface);border-radius:8px;padding:8px 11px;font-size:11px;box-shadow:0 8px 24px rgba(0,0,0,.24);transition:.18s ease}.toast.show{opacity:1;transform:translate(-50%,0)}
+.settings-grid{display:grid;grid-template-columns:120px 1fr;gap:12px 14px;align-items:center;margin:14px 0}.settings-grid label{font-size:11px;color:var(--muted)}.settings-grid select{height:30px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);padding:0 8px}
+
+@media(max-width:1060px){
+  .titlebar{grid-template-columns:190px minmax(380px,1fr) 150px}.brand small{display:none}.mode-btn{min-width:62px;padding:0 9px}.status-top{grid-template-columns:1.15fr repeat(2,1fr)}.status-top .metric:nth-child(4),.status-top .metric:nth-child(5){display:none}.optimize-grid{grid-template-columns:1fr}.preview-box{position:static}.software-layout{grid-template-columns:180px 1fr}.app-row{grid-template-columns:24px 34px minmax(170px,1fr) 105px 28px}.app-row .last-used{display:none}.analyze-layout{grid-template-columns:285px 1fr}}
+@media(max-width:860px){
+  .titlebar{grid-template-columns:150px 1fr 80px}.brand{display:none}.mode-btn span{display:none}.mode-btn{min-width:45px}.clean-hero{grid-template-columns:1fr}.reclaim-card{display:grid;grid-template-columns:1fr auto;align-items:center}.reclaim-card .primary-btn{margin-top:0}.software-layout{grid-template-columns:1fr}.filter-rail{display:none}.analyze-layout{grid-template-columns:1fr}.dir-pane{display:none}.status-top{grid-template-columns:1fr 1fr}.status-top .metric:nth-child(n+4){display:none}.process-head,.process-row{grid-template-columns:minmax(190px,1.5fr) 90px 130px}.process-head>:nth-child(4),.process-head>:nth-child(5),.process-row>:nth-child(4),.process-row>:nth-child(5){display:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="ic-broom" viewBox="0 0 24 24"><path d="M14 4l6 6M12.5 5.5l6 6M14.5 12.5L8 19H4v-4l6.5-6.5M5 18l2 2"/></symbol>
+  <symbol id="ic-box" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 9h8M8 13h5"/></symbol>
+  <symbol id="ic-bolt" viewBox="0 0 24 24"><path d="M13 2L5 13h6l-1 9 8-12h-6l1-8z"/></symbol>
+  <symbol id="ic-chart" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M7 16l4-5 3 3 3-5"/></symbol>
+  <symbol id="ic-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></symbol>
+  <symbol id="ic-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.4-2-3.4-2.3 1a8 8 0 0 0-1.7-1L14.6 3h-4L10 6.2a8 8 0 0 0-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 0 0 0 2l-2 1.4 2 3.4 2.3-1a8 8 0 0 0 1.7 1l.6 3.2h4l.6-3.2a8 8 0 0 0 1.7-1l2.3 1 2-3.4L19 13a7 7 0 0 0 0-1z"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.2 9A7 7 0 0 0 6.4 6.5L4 9m2 6a7 7 0 0 0 11.6 2.5L20 15"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></symbol>
+  <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="ic-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="ic-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+  <symbol id="ic-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></symbol>
+</svg>
+<div class="desktop">
+  <main class="window" id="window">
+    <header class="titlebar">
+      <div class="title-left">
+        <div class="traffic"><i></i><i></i><i></i></div>
+        <div class="brand"><div class="brand-mark">z</div><span>zmole</span><small>本机</small></div>
+      </div>
+      <nav class="mode-switch" aria-label="主要功能">
+        <button class="mode-btn active" data-page="clean"><svg class="i"><use href="#ic-broom"/></svg><span>清理</span></button>
+        <button class="mode-btn" data-page="software"><svg class="i"><use href="#ic-box"/></svg><span>软件</span></button>
+        <button class="mode-btn" data-page="optimize"><svg class="i"><use href="#ic-bolt"/></svg><span>优化</span></button>
+        <button class="mode-btn" data-page="analyze"><svg class="i"><use href="#ic-chart"/></svg><span>分析</span></button>
+        <button class="mode-btn" data-page="status"><svg class="i"><use href="#ic-pulse"/></svg><span>状态</span></button>
+      </nav>
+      <div class="title-right">
+        <button class="ghost-btn" id="historyQuick" title="历史记录"><svg class="i"><use href="#ic-clock"/></svg></button>
+        <button class="icon-btn" id="settingsBtn" title="设置 ⌘,"><svg class="i"><use href="#ic-settings"/></svg></button>
+      </div>
+    </header>
+
+    <section class="app-body">
+      <!-- CLEAN -->
+      <section class="page active" id="page-clean">
+        <div class="viewbar">
+          <div><div class="view-title">智能清理</div><div class="view-sub">只展示本次 dry-run 的结果</div></div>
+          <div class="spacer"></div>
+          <button class="tool-btn" id="rescanBtn"><svg class="i"><use href="#ic-refresh"/></svg>重新扫描</button>
+        </div>
+        <div class="content-scroll"><div class="content-pad">
+          <div class="eyebrow">本次扫描 · 2 分钟前</div>
+          <div class="headline">可以安全释放 6.48 GB</div>
+          <div class="lede">先预览、再执行。你可以逐项取消选择；执行前 zmole 会再次确认本次对象。</div>
+          <div class="clean-hero">
+            <div class="reclaim-card">
+              <div>
+                <div class="eyebrow">已选择</div>
+                <div><span class="num" id="cleanTotal">6.48</span><span class="unit">GB</span></div>
+                <div class="small">11,283 个文件 · 4 类项目</div>
+              </div>
+              <button class="primary-btn accent" id="cleanAction">清理所选项目</button>
+            </div>
+            <div class="storage-card">
+              <div class="storage-top"><div><div class="view-title">Macintosh HD</div><div class="storage-total"><b>474 GB</b> 已使用 / 995 GB</div></div><span class="badge good">空间充足</span></div>
+              <div class="storage-rail"><span class="r-apps"></span><span class="r-user"></span><span class="r-system"></span><span class="r-reclaim"></span><span class="r-free"></span></div>
+              <div class="legend"><span><i style="background:var(--purple)"></i>应用 112 GB</span><span><i style="background:var(--blue)"></i>用户文件 154 GB</span><span><i style="background:var(--faint)"></i>系统 98 GB</span><span><i style="background:var(--accent)"></i>可清理 6.48 GB</span><span><i style="background:var(--surface-3)"></i>可用 521 GB</span></div>
+            </div>
+          </div>
+          <div class="section-head"><h2>清理项目</h2><div class="meta">点击分类展开具体路径</div></div>
+          <div class="panel" id="cleanCategories">
+            <div class="clean-category open" data-size="3.24">
+              <div class="row">
+                <div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="cat-icon"><svg class="i"><use href="#ic-file"/></svg></div>
+                <div class="row-main"><div class="row-title">开发缓存</div><div class="row-sub">Xcode、Homebrew、包管理器与构建产物</div></div><div class="row-meta"><b>3.24 GB</b><br>6,321 项</div>
+                <button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button>
+              </div>
+              <div class="clean-detail">
+                <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/Library/Developer/Xcode/DerivedData</div></div><div class="row-meta">2.31 GB</div></div>
+                <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/Library/Caches/Homebrew</div></div><div class="row-meta">641 MB</div></div>
+                <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/.npm/_cacache</div></div><div class="row-meta">291 MB</div></div>
+              </div>
+            </div>
+            <div class="clean-category" data-size="1.86">
+              <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="cat-icon"><svg class="i"><use href="#ic-box"/></svg></div><div class="row-main"><div class="row-title">应用缓存</div><div class="row-sub">可由应用重新生成的缓存与临时数据</div></div><div class="row-meta"><b>1.86 GB</b><br>4,210 项</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div>
+              <div class="clean-detail"><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/Library/Caches/com.google.Chrome</div></div><div class="row-meta">944 MB</div></div><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/Library/Caches/com.tinyspeck.slackmacgap</div></div><div class="row-meta">511 MB</div></div></div>
+            </div>
+            <div class="clean-category" data-size="0.93">
+              <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="cat-icon"><svg class="i"><use href="#ic-clock"/></svg></div><div class="row-main"><div class="row-title">日志与诊断</div><div class="row-sub">旧日志、崩溃记录与系统诊断缓存</div></div><div class="row-meta"><b>930 MB</b><br>620 项</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div>
+              <div class="clean-detail"><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">~/Library/Logs</div></div><div class="row-meta">621 MB</div></div></div>
+            </div>
+            <div class="clean-category" data-size="0.45">
+              <div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="cat-icon"><svg class="i"><use href="#ic-trash"/></svg></div><div class="row-main"><div class="row-title">其他临时文件</div><div class="row-sub">已知安全的临时目录与过期下载片段</div></div><div class="row-meta"><b>450 MB</b><br>132 项</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div>
+              <div class="clean-detail"><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="row-main"><div class="row-title mono">/private/var/folders/…</div></div><div class="row-meta">450 MB</div></div></div>
+            </div>
+          </div>
+        </div></div>
+      </section>
+
+      <!-- SOFTWARE -->
+      <section class="page" id="page-software">
+        <div class="viewbar">
+          <div class="scope" id="softwareScope"><button class="scope-btn on" data-scope="uninstall">卸载</button><button class="scope-btn" data-scope="whitelist">白名单</button></div>
+          <div class="spacer"></div>
+          <div class="search" id="appSearch"><svg class="i"><use href="#ic-search"/></svg><input id="appSearchInput" placeholder="搜索应用程序"/><button class="clear" aria-label="清除">×</button></div>
+          <button class="tool-btn"><span>最近使用</span><span style="color:var(--faint)">⌄</span></button>
+        </div>
+        <div class="selection-shelf" id="softwareShelf"><div class="selection-icons" id="selectedIcons"></div><strong id="selectedCount">0 个 App</strong><span class="view-sub" id="selectedSize">0 GB</span><button class="ghost-btn" id="clearSelection">取消选择</button><div class="spacer"></div><span class="view-sub">执行前会核对 path + bundle id</span><button class="primary-btn" id="uninstallAction">预览卸载</button></div>
+        <div class="software-layout">
+          <aside class="filter-rail">
+            <div class="filter-title">范围</div>
+            <div class="filter-item active">全部应用<b>64</b></div><div class="filter-item">未使用 30 天<b>9</b></div><div class="filter-item">体积较大<b>12</b></div><div class="filter-item">有残留数据<b>31</b></div>
+            <div class="filter-title">来源</div>
+            <div class="filter-item">App Store<b>18</b></div><div class="filter-item">直接安装<b>42</b></div><div class="filter-item">开发工具<b>4</b></div>
+            <div class="filter-title">厂商</div>
+            <div class="filter-item">Apple<b>7</b></div><div class="filter-item">Microsoft<b>3</b></div><div class="filter-item">Google<b>4</b></div><div class="filter-item">其他<b>50</b></div>
+          </aside>
+          <div class="software-main"><div class="app-list" id="appList">
+            <div class="app-row-wrap" data-name="ChatGPT" data-size="1.48" data-color="#222222"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#222">AI</div><div><div class="app-name">ChatGPT</div><div class="app-meta">26.707.41301 · 活跃中</div></div><div class="app-stat"><strong>1.48 GB</strong>应用大小</div><div class="app-stat last-used"><strong>今天</strong>最近使用</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div><div class="app-detail"></div></div>
+            <div class="app-row-wrap" data-name="Visual Studio Code" data-size="0.882" data-color="#2b91e4"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#2b91e4">VS</div><div><div class="app-name">Visual Studio Code</div><div class="app-meta">1.128.0 · 活跃中</div></div><div class="app-stat"><strong>882 MB</strong>应用大小</div><div class="app-stat last-used"><strong>今天</strong>最近使用</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div><div class="app-detail"></div></div>
+            <div class="app-row-wrap open" data-name="Claude" data-size="8.46" data-color="#e86f3c"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#e86f3c">C</div><div><div class="app-name">Claude</div><div class="app-meta">1.20186.1 · 21 小时前</div></div><div class="app-stat"><strong>781 MB</strong>应用大小</div><div class="app-stat last-used"><strong>8.46 GB</strong>关联数据</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div>
+              <div class="app-detail"><div class="app-detail-head"><div><div class="row-title">Claude</div><div class="row-sub mono">/Applications/Claude.app</div></div><div class="detail-total">9 项 · 8.46 GB</div></div><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="path-type">应用程序</div><div class="row-main"><div class="row-title mono">/Applications/Claude.app</div></div><div class="row-meta">781 MB</div></div><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="path-type">App Support</div><div class="row-main"><div class="row-title mono">~/Library/Application Support/Claude</div></div><div class="row-meta">7.67 GB</div></div><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="path-type">HTTP Storage</div><div class="row-main"><div class="row-title mono">~/Library/HTTPStorages/com.anthropic.claudefordesktop</div></div><div class="row-meta">2.1 MB</div></div><div class="row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="path-type">Logs</div><div class="row-main"><div class="row-title mono">~/Library/Logs/Claude</div></div><div class="row-meta">1 MB</div></div></div>
+            </div>
+            <div class="app-row-wrap" data-name="Docker" data-size="4.7" data-color="#2779bd"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#2779bd">D</div><div><div class="app-name">Docker</div><div class="app-meta">4.46.0 · 3 天前</div></div><div class="app-stat"><strong>4.7 GB</strong>应用大小</div><div class="app-stat last-used"><strong>14.2 GB</strong>关联数据</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div><div class="app-detail"></div></div>
+            <div class="app-row-wrap" data-name="Arc" data-size="0.68" data-color="#7251e3"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#7251e3">A</div><div><div class="app-name">Arc</div><div class="app-meta">1.93.1 · 昨天</div></div><div class="app-stat"><strong>680 MB</strong>应用大小</div><div class="app-stat last-used"><strong>2.3 GB</strong>关联数据</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div><div class="app-detail"></div></div>
+            <div class="app-row-wrap" data-name="Slack" data-size="0.54" data-color="#5f3ca1"><div class="app-row"><div class="check"></div><div class="app-icon" style="background:#5f3ca1">S</div><div><div class="app-name">Slack</div><div class="app-meta">4.46.99 · 12 天前</div></div><div class="app-stat"><strong>540 MB</strong>应用大小</div><div class="app-stat last-used"><strong>1.1 GB</strong>关联数据</div><button class="disclosure"><svg class="i"><use href="#ic-chevron"/></svg></button></div><div class="app-detail"></div></div>
+          </div></div>
+        </div>
+        <div class="whitelist-view">
+          <div class="eyebrow">原生编辑</div><div class="headline" style="font-size:22px">白名单</div><div class="lede">这些路径会在清理时保留。配置写入 <span class="mono">~/.config/mole/whitelist</span>。</div>
+          <div class="panel" style="margin-top:18px;max-width:760px">
+            <div class="row"><svg class="i"><use href="#ic-lock"/></svg><div class="row-main"><div class="row-title mono">~/Library/Caches/com.example.local-models</div><div class="row-sub">用户添加 · 始终保留</div></div><button class="ghost-btn">移除</button></div>
+            <div class="row"><svg class="i"><use href="#ic-lock"/></svg><div class="row-main"><div class="row-title mono">~/Library/Application Support/Code/User</div><div class="row-sub">用户添加 · 始终保留</div></div><button class="ghost-btn">移除</button></div>
+          </div>
+          <div class="whitelist-entry" style="max-width:760px"><input class="text-input" placeholder="输入要保留的路径，例如 ~/Library/Caches/MyApp"/><button class="tool-btn">选择文件夹…</button><button class="primary-btn">添加</button></div>
+        </div>
+      </section>
+
+      <!-- OPTIMIZE -->
+      <section class="page" id="page-optimize">
+        <div class="viewbar"><div class="scope"><button class="scope-btn on">维护</button><button class="scope-btn">Purge</button></div><div class="spacer"></div><span class="view-sub">所有任务先预览，再确认执行</span></div>
+        <div class="content-scroll"><div class="content-pad">
+          <div class="eyebrow">维护任务</div><div class="headline">把高频维护变成可控的一次操作</div><div class="lede">选择需要的任务。zmole 会先展示影响范围；权限需求会在执行前单独提示。</div>
+          <div class="optimize-grid">
+            <div class="task-card">
+              <div class="task-row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="task-glyph"><svg class="i"><use href="#ic-refresh"/></svg></div><div><div class="row-title">重建 Launch Services</div><div class="row-sub">修复重复的“打开方式”和应用注册</div></div><span class="badge good">低风险</span></div>
+              <div class="task-row"><div class="check on"><svg class="i"><use href="#ic-check"/></svg></div><div class="task-glyph"><svg class="i"><use href="#ic-terminal"/></svg></div><div><div class="row-title">刷新 DNS 缓存</div><div class="row-sub">清空本机 DNS 缓存并重启解析服务</div></div><span class="badge warn">需要授权</span></div>
+              <div class="task-row"><div class="check"><svg class="i"><use href="#ic-check"/></svg></div><div class="task-glyph"><svg class="i"><use href="#ic-file"/></svg></div><div><div class="row-title">清理过期日志数据库</div><div class="row-sub">仅处理已过期的诊断索引</div></div><span class="badge good">低风险</span></div>
+              <div class="task-row"><div class="check"><svg class="i"><use href="#ic-check"/></svg></div><div class="task-glyph"><svg class="i"><use href="#ic-bolt"/></svg></div><div><div class="row-title">刷新 Quick Look 缓存</div><div class="row-sub">适合缩略图或预览异常时使用</div></div><span class="badge blue">按需</span></div>
+            </div>
+            <div class="preview-box"><h3>执行预览</h3><div class="view-sub">当前选择 2 项</div><div class="preview-line"><span>预计耗时</span><b>10–20 秒</b></div><div class="preview-line"><span>需要管理员授权</span><b>1 项</b></div><div class="preview-line"><span>可撤销</span><b>否</b></div><div class="preview-line"><span>运行中的命令</span><b>0</b></div><button class="primary-btn" id="optimizeAction">预览 2 个任务</button></div>
+          </div>
+        </div></div>
+      </section>
+
+      <!-- ANALYZE -->
+      <section class="page" id="page-analyze">
+        <div class="viewbar"><div><div class="view-title">空间分析</div><div class="view-sub">只读浏览，不提供删除</div></div><div class="spacer"></div><div class="search" style="width:200px"><svg class="i"><use href="#ic-search"/></svg><input placeholder="查找文件夹"/></div><button class="tool-btn"><svg class="i"><use href="#ic-refresh"/></svg>重新分析</button></div>
+        <div class="analyze-layout">
+          <aside class="dir-pane">
+            <div class="breadcrumb"><span>Macintosh HD</span><span>›</span><b>/</b></div>
+            <div class="dir-list" id="dirList">
+              <div class="dir-row active" data-title="Users" data-size="238.4 GB" data-path="/Users"><div class="folder"></div><div><div class="dir-name">Users</div><div class="dir-note">用户文件与工作目录</div></div><div class="dir-size">238.4 GB</div></div>
+              <div class="dir-row" data-title="Applications" data-size="86.2 GB" data-path="/Applications"><div class="folder"></div><div><div class="dir-name">Applications</div><div class="dir-note">已安装应用程序</div></div><div class="dir-size">86.2 GB</div></div>
+              <div class="dir-row" data-title="System" data-size="62.9 GB" data-path="/System"><div class="folder"></div><div><div class="dir-name">System</div><div class="dir-note">macOS 系统文件</div></div><div class="dir-size">62.9 GB</div></div>
+              <div class="dir-row" data-title="Library" data-size="41.7 GB" data-path="/Library"><div class="folder"></div><div><div class="dir-name">Library</div><div class="dir-note">共享支持文件</div></div><div class="dir-size">41.7 GB</div></div>
+              <div class="dir-row" data-title="private" data-size="17.6 GB" data-path="/private"><div class="folder"></div><div><div class="dir-name">private</div><div class="dir-note">系统运行数据</div></div><div class="dir-size">17.6 GB</div></div>
+              <div class="dir-row" data-title="opt" data-size="9.3 GB" data-path="/opt"><div class="folder"></div><div><div class="dir-name">opt</div><div class="dir-note">第三方工具</div></div><div class="dir-size">9.3 GB</div></div>
+              <div class="dir-row" data-title="usr" data-size="6.1 GB" data-path="/usr"><div class="folder"></div><div><div class="dir-name">usr</div><div class="dir-note">Unix 工具与资源</div></div><div class="dir-size">6.1 GB</div></div>
+            </div>
+            <div class="disk-footer"><div style="display:flex;justify-content:space-between"><span class="view-sub">Macintosh HD</span><b style="font-size:11px">474 / 995 GB</b></div><div class="disk-meter"><i></i></div></div>
+          </aside>
+          <div class="space-pane" style="position:relative">
+            <div class="space-toolbar"><strong style="font-size:12px">空间地图</strong><span class="hint">面积代表占用大小 · 点击查看路径详情</span><div class="spacer"></div><button class="ghost-btn">深度 2</button></div>
+            <div class="treemap" id="treemap">
+              <div class="tile users" data-title="Users" data-size="238.4 GB" data-path="/Users"><div class="bubble"></div><strong>Users</strong><span>238.4 GB</span></div>
+              <div class="tile apps" data-title="Applications" data-size="86.2 GB" data-path="/Applications"><strong>Applications</strong><span>86.2 GB</span></div>
+              <div class="tile system" data-title="System" data-size="62.9 GB" data-path="/System"><strong>System</strong><span>62.9 GB</span></div>
+              <div class="tile library" data-title="Library" data-size="41.7 GB" data-path="/Library"><div class="bubble"></div><strong>Library</strong><span>41.7 GB</span></div>
+              <div class="tile private" data-title="private" data-size="17.6 GB" data-path="/private"><strong>private</strong><span>17.6 GB</span></div>
+              <div class="tile opt" data-title="opt" data-size="9.3 GB" data-path="/opt"><strong>opt</strong><span>9.3 GB</span></div>
+              <div class="tile cache" data-title="usr" data-size="6.1 GB" data-path="/usr"><strong>usr</strong><span>6.1 GB</span></div>
+            </div>
+            <div class="space-inspector" id="spaceInspector"><div class="ins-title">Users</div><div class="ins-path mono">/Users</div><div class="ins-grid"><div class="ins-cell"><span>大小</span><b>238.4 GB</b></div><div class="ins-cell"><span>占已用空间</span><b>50.3%</b></div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATUS -->
+      <section class="page" id="page-status">
+        <div class="viewbar"><div class="scope" id="statusScope"><button class="scope-btn on" data-status="live">实时</button><button class="scope-btn" data-status="history">历史</button></div><div class="spacer"></div><span class="badge good">系统正常</span><button class="tool-btn"><svg class="i"><use href="#ic-refresh"/></svg>刷新</button></div>
+        <div class="content-scroll"><div class="content-pad">
+          <div class="live-panel">
+            <div class="eyebrow">状态快照</div><div class="headline" style="font-size:22px">这台 Mac 当前很安静</div>
+            <div class="status-top">
+              <div class="metric health"><div class="label">健康度</div><div class="score"><div class="big">100</div><div class="unit">良好</div></div><div class="health-ring"></div><div class="metric-foot"><span>M5 Pro · 48 GB</span><span>已运行 3h 50m</span></div></div>
+              <div class="metric"><div class="label">CPU</div><div class="big">18<span class="unit">%</span></div><div class="spark"><svg viewBox="0 0 120 32" preserveAspectRatio="none"><path d="M0 22 L9 17 L17 19 L25 24 L33 23 L42 26 L52 25 L60 12 L69 18 L80 17 L92 19 L104 18 L120 20"/></svg></div><div class="metric-foot"><span>59°C</span><span>18 核</span></div></div>
+              <div class="metric"><div class="label">内存</div><div class="big">55<span class="unit">%</span></div><div class="mem-bar"><i></i></div><div class="metric-foot"><span>26.3 GB</span><span>压力 17%</span></div></div>
+              <div class="metric"><div class="label">磁盘 I/O</div><div class="big">12<span class="unit">MB/s</span></div><div class="spark blue"><svg viewBox="0 0 120 32" preserveAspectRatio="none"><path d="M0 26 L14 26 L28 25 L42 17 L56 9 L68 18 L84 20 L97 26 L108 19 L120 22"/></svg></div><div class="metric-foot"><span>写入 8</span><span>读取 4</span></div></div>
+              <div class="metric"><div class="label">网络</div><div class="big">71<span class="unit">KB/s</span></div><div class="spark amber"><svg viewBox="0 0 120 32" preserveAspectRatio="none"><path d="M0 25 L15 24 L30 25 L43 18 L57 22 L72 10 L86 16 L98 14 L110 23 L120 18"/></svg></div><div class="metric-foot"><span>Wi-Fi</span><span>↓ 26 KB/s</span></div></div>
+            </div>
+            <div class="section-head"><h2>进程</h2><div class="meta">按 CPU 使用率排序</div></div>
+            <div class="process-panel">
+              <div class="process-head"><div>名称</div><div>PID</div><div>CPU</div><div>内存</div><div>能耗</div></div>
+              <div class="process-row hot"><div class="proc-name"><div class="proc-icon">T</div>top</div><div>90080</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:100%"></i></div><span class="cpu-value">100.5</span></div><div>7 MB</div><div>—</div></div>
+              <div class="process-row hot"><div class="proc-name"><div class="proc-icon">B</div>BackgroundShortcut</div><div>89871</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:96%"></i></div><span class="cpu-value">98.7</span></div><div>81 MB</div><div>—</div></div>
+              <div class="process-row"><div class="proc-name"><div class="proc-icon">du</div>du</div><div>89934</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:50%"></i></div><span class="cpu-value">50.7</span></div><div>3 MB</div><div>—</div></div>
+              <div class="process-row"><div class="proc-name"><div class="proc-icon">WS</div>WindowServer</div><div>413</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:24%"></i></div><span class="cpu-value">24.0</span></div><div>291 MB</div><div>中</div></div>
+              <div class="process-row"><div class="proc-name"><div class="proc-icon">C</div>claude</div><div>44174</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:5%"></i></div><span class="cpu-value">4.5</span></div><div>601 MB</div><div>低</div></div>
+              <div class="process-row"><div class="proc-name"><div class="proc-icon">S</div>Stash</div><div>1950</div><div class="cpu-cell"><div class="cpu-bar"><i style="width:4%"></i></div><span class="cpu-value">4.6</span></div><div>238 MB</div><div>低</div></div>
+            </div>
+          </div>
+          <div class="history-panel">
+            <div class="eyebrow">运行记录</div><div class="headline" style="font-size:22px">最近 7 天的 zmole 操作</div><div class="lede">这里只记录本机执行结果，不上传遥测。</div>
+            <div class="panel history-list" style="margin-top:18px">
+              <div class="row"><span class="badge good">完成</span><div class="row-main"><div class="row-title">清理 6.2 GB</div><div class="row-sub">开发缓存、应用缓存、日志 · 今天 09:42</div></div><div class="row-meta">31 秒</div></div>
+              <div class="row"><span class="badge good">完成</span><div class="row-main"><div class="row-title">卸载 Raycast Beta</div><div class="row-sub">应用 + 7 个关联路径 · 昨天 20:11</div></div><div class="row-meta">1.1 GB</div></div>
+              <div class="row"><span class="badge warn">取消</span><div class="row-main"><div class="row-title">优化任务</div><div class="row-sub">用户在授权前取消 · 9 月 19 日 14:02</div></div><div class="row-meta">—</div></div>
+              <div class="row"><span class="badge good">完成</span><div class="row-main"><div class="row-title">Purge 预览</div><div class="row-sub">仅预览，没有执行 · 9 月 18 日 08:26</div></div><div class="row-meta">3.8 GB</div></div>
+            </div>
+          </div>
+        </div></div>
+      </section>
+
+      <div class="backdrop" id="confirmBackdrop">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h3 id="confirmTitle">确认操作</h3><p id="confirmText"></p><div class="dialog-list" id="confirmList"></div><div class="dialog-actions"><button class="tool-btn" id="cancelConfirm">取消</button><button class="danger-btn" id="confirmDanger">确认执行</button></div></div>
+      </div>
+      <div class="backdrop" id="settingsBackdrop">
+        <div class="dialog" role="dialog" aria-modal="true"><h3>设置</h3><p>这些设置属于 zmole，本身不修改捆绑 mole 的更新策略。</p><div class="settings-grid"><label>语言</label><select><option>跟随系统</option><option>简体中文</option><option>繁體中文</option><option>English</option></select><label>版本</label><span>0.1.0 · mole V1.55.0</span><label>隐私</label><span>无遥测 · 数据留在本机</span></div><div class="dialog-actions"><button class="tool-btn" id="closeSettings">完成</button></div></div>
+      </div>
+      <div class="toast" id="toast">已完成</div>
+    </section>
+  </main>
+</div>
+<script>
+const $$=(s,r=document)=>[...r.querySelectorAll(s)], $=(s,r=document)=>r.querySelector(s);
+const toast=$('#toast'); let toastTimer;
+function showToast(msg){toast.textContent=msg;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),1800)}
+function showPage(name){$$('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===name));$$('.page').forEach(p=>p.classList.toggle('active',p.id===`page-${name}`));}
+$$('.mode-btn').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
+
+// clean interactions
+function recalcClean(){let total=0;$$('.clean-category').forEach(c=>{if($('.row>.check',c)?.classList.contains('on')) total+=Number(c.dataset.size)});$('#cleanTotal').textContent=total.toFixed(2);$('#cleanAction').disabled=total===0}
+$$('.clean-category').forEach(c=>{
+  $('.disclosure',c).addEventListener('click',()=>c.classList.toggle('open'));
+  const mainCheck=$('.row>.check',c); mainCheck.addEventListener('click',e=>{e.stopPropagation();mainCheck.classList.toggle('on');$$('.clean-detail .check',c).forEach(x=>x.classList.toggle('on',mainCheck.classList.contains('on')));recalcClean()});
+  $$('.clean-detail .check',c).forEach(ch=>ch.addEventListener('click',()=>ch.classList.toggle('on')));
+});
+$('#rescanBtn').addEventListener('click',()=>{const b=$('#rescanBtn');b.disabled=true;b.textContent='正在扫描…';setTimeout(()=>{b.disabled=false;b.innerHTML='<svg class="i"><use href="#ic-refresh"/></svg>重新扫描';showToast('扫描完成，结果已更新')},900)});
+$('#cleanAction').addEventListener('click',()=>openConfirm('清理所选项目','这些文件将由捆绑的 mole 执行清理。执行前会重新核对本次预览。',[['开发缓存','3.24 GB'],['应用缓存','1.86 GB'],['日志与诊断','930 MB'],['其他临时文件','450 MB']]));
+
+// software interactions
+const selected=new Set();
+function updateSoftwareShelf(){const shelf=$('#softwareShelf'), icons=$('#selectedIcons');icons.innerHTML='';let size=0;selected.forEach(w=>{size+=Number(w.dataset.size);const i=document.createElement('div');i.className='mini-app';i.style.background=w.dataset.color;i.textContent=w.dataset.name.slice(0,2).toUpperCase();icons.appendChild(i)});$('#selectedCount').textContent=`${selected.size} 个 App`;$('#selectedSize').textContent=`${size.toFixed(2)} GB`;shelf.classList.toggle('show',selected.size>0);}
+$$('.app-row-wrap').forEach(w=>{
+  const row=$('.app-row',w),check=$('.check',row),dis=$('.disclosure',row);
+  check.addEventListener('click',e=>{e.stopPropagation();check.classList.toggle('on');row.classList.toggle('selected',check.classList.contains('on'));check.classList.contains('on')?selected.add(w):selected.delete(w);updateSoftwareShelf()});
+  dis.addEventListener('click',e=>{e.stopPropagation();w.classList.toggle('open')});
+});
+$('#clearSelection').addEventListener('click',()=>{selected.clear();$$('.app-row .check').forEach(x=>x.classList.remove('on'));$$('.app-row').forEach(x=>x.classList.remove('selected'));updateSoftwareShelf()});
+$('#uninstallAction').addEventListener('click',()=>{const items=[...selected].map(w=>[w.dataset.name,`${Number(w.dataset.size).toFixed(2)} GB`]);openConfirm(`预览卸载 ${selected.size} 个 App`,'应用本体将移到废纸篓；关联数据按本次预览选择处理。真正执行前仍会再次确认对象。',items,'移到废纸篓')});
+$('#softwareScope').addEventListener('click',e=>{const b=e.target.closest('.scope-btn');if(!b)return;$$('#softwareScope .scope-btn').forEach(x=>x.classList.toggle('on',x===b));$('#page-software').classList.toggle('software-whitelist',b.dataset.scope==='whitelist')});
+const appSearch=$('#appSearchInput');appSearch.addEventListener('input',()=>{const q=appSearch.value.trim().toLowerCase();$('#appSearch').classList.toggle('has-value',!!q);$$('.app-row-wrap').forEach(w=>w.style.display=w.dataset.name.toLowerCase().includes(q)?'':'none')});$('#appSearch .clear').addEventListener('click',()=>{appSearch.value='';appSearch.dispatchEvent(new Event('input'));appSearch.focus()});
+
+// optimize
+$$('.task-row .check').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));$('#optimizeAction').addEventListener('click',()=>openConfirm('预览维护任务','将执行 2 个维护任务，其中 1 个需要管理员授权。',[['重建 Launch Services','低风险'],['刷新 DNS 缓存','需要授权']],'开始执行'));
+
+// analyze
+function inspectSpace(el){const title=el.dataset.title,size=el.dataset.size,path=el.dataset.path;$('#spaceInspector .ins-title').textContent=title;$('#spaceInspector .ins-path').textContent=path;$('#spaceInspector .ins-cell b').textContent=size;$$('.dir-row').forEach(r=>r.classList.toggle('active',r.dataset.path===path))}
+$$('.tile').forEach(t=>t.addEventListener('click',()=>inspectSpace(t)));$$('.dir-row').forEach(r=>r.addEventListener('click',()=>inspectSpace(r)));
+
+// status + history
+$('#statusScope').addEventListener('click',e=>{const b=e.target.closest('.scope-btn');if(!b)return;$$('#statusScope .scope-btn').forEach(x=>x.classList.toggle('on',x===b));$('#page-status').classList.toggle('status-history',b.dataset.status==='history')});
+$('#historyQuick').addEventListener('click',()=>{showPage('status');$('#page-status').classList.add('status-history');$$('#statusScope .scope-btn').forEach(x=>x.classList.toggle('on',x.dataset.status==='history'))});
+
+// dialogs
+let confirmAction='确认执行';function openConfirm(title,text,items,action='确认执行'){confirmAction=action;$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;$('#confirmList').innerHTML=items.map(x=>`<div><span>${x[0]}</span><b>${x[1]}</b></div>`).join('');$('#confirmDanger').textContent=action;$('#confirmBackdrop').classList.add('show')}
+$('#cancelConfirm').addEventListener('click',()=>$('#confirmBackdrop').classList.remove('show'));$('#confirmDanger').addEventListener('click',()=>{$('#confirmBackdrop').classList.remove('show');showToast(`${confirmAction}：Demo 中未执行真实命令`)})
+$('#settingsBtn').addEventListener('click',()=>$('#settingsBackdrop').classList.add('show'));$('#closeSettings').addEventListener('click',()=>$('#settingsBackdrop').classList.remove('show'));
+$$('.backdrop').forEach(b=>b.addEventListener('click',e=>{if(e.target===b)b.classList.remove('show')}));
+
+// shortcuts
+window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key===','){e.preventDefault();$('#settingsBackdrop').classList.add('show')}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'&&$('#page-software').classList.contains('active')){e.preventDefault();appSearch.focus()}if((e.metaKey||e.ctrlKey)&&['1','2','3','4','5'].includes(e.key)){e.preventDefault();showPage(['clean','software','optimize','analyze','status'][Number(e.key)-1])}if(e.key==='Escape'){$$('.backdrop.show').forEach(x=>x.classList.remove('show'))}})
+</script>
+</body>
+</html>

@@ -1,23 +1,57 @@
 import Combine
 import Foundation
 
+enum MaintenanceKind: Sendable {
+    case optimize
+    case purge
+
+    var command: String {
+        switch self {
+        case .optimize: return "optimize"
+        case .purge: return "purge"
+        }
+    }
+
+    var failedKey: String {
+        "\(command).error.failed"
+    }
+
+    var cancelledKey: String {
+        "\(command).cancelled"
+    }
+
+    var executionArguments: [String] {
+        switch self {
+        case .optimize:
+            return [command]
+        case .purge:
+            return [command, "--yes"]
+        }
+    }
+}
+
+struct MaintenancePreviewSnapshot: Equatable, Sendable {
+    let generation: UUID
+    let output: String
+}
+
 @MainActor
-final class CleanViewModel: ObservableObject {
+class MaintenanceViewModel: ObservableObject {
     private let process: any MoleProcessControlling
-    private let previewStore: CleanPreviewStore
     private let coordinator: OperationCoordinator
-    private let session = OperationSession<CleanPreviewSnapshot>()
+    private let kind: MaintenanceKind
+    private let session = OperationSession<MaintenancePreviewSnapshot>()
     private var lease: OperationLease?
     private var previewCoordinatorGeneration: UInt64?
     private var coordinatorSubscription: AnyCancellable?
 
     init(
+        kind: MaintenanceKind,
         process: any MoleProcessControlling,
-        previewStore: CleanPreviewStore,
         coordinator: OperationCoordinator
     ) {
+        self.kind = kind
         self.process = process
-        self.previewStore = previewStore
         self.coordinator = coordinator
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
@@ -30,21 +64,9 @@ final class CleanViewModel: ObservableObject {
         }
     }
 
-    // Kept for the existing Clean domain tests; production assembly must pass the shared coordinator.
-    convenience init(
-        process: any MoleProcessControlling,
-        previewStore: CleanPreviewStore
-    ) {
-        self.init(
-            process: process,
-            previewStore: previewStore,
-            coordinator: OperationCoordinator()
-        )
-    }
-
-    var operationState: OperationState<CleanPreviewSnapshot> { session.state }
+    var operationState: OperationState<MaintenancePreviewSnapshot> { session.state }
     var result: OperationResult? { session.result }
-    var preview: CleanPreviewSnapshot? { session.preview }
+    var preview: MaintenancePreviewSnapshot? { session.preview }
     var isPreviewing: Bool { session.isPreviewing }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
@@ -56,64 +78,52 @@ final class CleanViewModel: ObservableObject {
         return result.summary
     }
 
-    func previewClean() async {
+    func previewMaintenance() async {
         guard !session.isBusy else { return }
         releaseLease()
         session.invalidate()
         guard let operationID = session.beginPreview() else { return }
-        guard let newLease = coordinator.acquire(.clean) else {
-            session.fail(
-                OperationResult(status: .failed, errorKey: "operation.error.busy"),
-                id: operationID
-            )
+        guard let newLease = coordinator.acquire(kind.writeOperation) else {
+            session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: operationID)
             return
         }
         lease = newLease
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
-            let generation = try previewStore.begin()
             let result = try await process.run(
-                ["clean", "--dry-run"],
+                [kind.command, "--dry-run"],
                 stdin: nil,
                 timeout: 120
             )
             guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
             guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
-                session.fail(
-                    OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
-                    id: operationID
-                )
+                session.fail(OperationResult(status: .failed, errorKey: "operation.error.stale_preview"), id: operationID)
                 releaseLease()
                 return
             }
-            guard result.exitCode == 0 else {
-                throw MoleBridgeError.commandFailed(result)
-            }
-            session.acceptPreview(try previewStore.read(generation), id: operationID)
-            releaseLease(clearPreviewGeneration: false)
-        } catch let error as MoleBridgeError where error == .cancelled {
-            session.finishCancelled(
-                OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
+            guard result.exitCode == 0 else { throw MoleBridgeError.commandFailed(result) }
+            session.acceptPreview(
+                MaintenancePreviewSnapshot(
+                    generation: operationID,
+                    output: MaintenanceOutput.summary(stdout: result.stdout)
+                ),
                 id: operationID
             )
+            releaseLease(clearPreviewGeneration: false)
+        } catch let error as MoleBridgeError where error == .cancelled {
+            session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
             releaseLease()
         } catch {
             guard session.accepts(operationID) else { return }
             let summary: String?
-            let errorKey: String?
-            if let previewError = error as? CleanPreviewStoreError {
-                summary = nil
-                errorKey = previewError.errorKey
-            } else if case let MoleBridgeError.commandFailed(result) = error {
-                summary = outputSummary(result)
-                errorKey = "clean.error.failed"
+            if case let MoleBridgeError.commandFailed(result) = error {
+                summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
             } else {
                 summary = error.localizedDescription
-                errorKey = nil
             }
             session.fail(
-                OperationResult(status: .failed, summary: summary, errorKey: errorKey),
+                OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
                 id: operationID
             )
             releaseLease()
@@ -123,10 +133,7 @@ final class CleanViewModel: ObservableObject {
     func cancelPreview() async {
         guard let operationID = session.beginPreviewCancellation() else { return }
         await process.cancel()
-        session.finishCancelled(
-            OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
-            id: operationID
-        )
+        session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
         releaseLease()
     }
 
@@ -138,28 +145,14 @@ final class CleanViewModel: ObservableObject {
     func cancelConfirmation() {
         guard session.isConfirmationPresented else { return }
         session.cancelConfirmation()
-        releaseLease()
     }
 
-    func confirmExecution() async {
-        guard session.isConfirmationPresented, canConfirm,
-              let snapshot = session.preview,
-              let previewID = operationID(for: session.state) else { return }
-        do {
-            try previewStore.verifyUnchanged(snapshot)
-        } catch {
-            session.fail(
-                OperationResult(
-                    status: .failed,
-                    errorKey: (error as? CleanPreviewStoreError)?.errorKey
-                ),
-                id: previewID
-            )
-            releaseLease()
-            return
-        }
-        guard let newLease = coordinator.acquire(.clean) else {
-            session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: previewID)
+    func confirmMaintenance() async {
+        guard session.isConfirmationPresented, canConfirm else { return }
+        guard let newLease = coordinator.acquire(kind.writeOperation) else {
+            if let id = operationID(for: session.state) {
+                session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: id)
+            }
             return
         }
         lease = newLease
@@ -171,36 +164,33 @@ final class CleanViewModel: ObservableObject {
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
-            let result = try await process.run(["clean"], stdin: nil, timeout: 600)
+            let result = try await process.run(kind.executionArguments, stdin: nil, timeout: 600)
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
-            let summary = outputSummary(result)
-            let operationResult: OperationResult
+            let summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
             if result.exitCode == 0 {
-                operationResult = OperationResult(status: .succeeded, summary: summary)
-                session.finish(operationResult, id: execution.id)
+                session.finish(OperationResult(status: .succeeded, summary: summary), id: execution.id)
             } else {
-                operationResult = OperationResult(
-                    status: .failed,
-                    summary: summary,
-                    errorKey: "clean.error.failed"
+                session.fail(
+                    OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
+                    id: execution.id
                 )
-                session.fail(operationResult, id: execution.id)
             }
             coordinator.invalidatePreviews()
             releaseLease()
         } catch let error as MoleBridgeError where error == .cancelled {
-            session.finishCancelled(
-                OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
-                id: execution.id
-            )
+            session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: execution.id)
             coordinator.invalidatePreviews()
             releaseLease()
         } catch {
             guard session.accepts(execution.id) else { return }
-            let summary = (error as? CleanPreviewStoreError)?.errorDescription
-                ?? error.localizedDescription
+            let summary: String?
+            if case let MoleBridgeError.commandFailed(result) = error {
+                summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
+            } else {
+                summary = error.localizedDescription
+            }
             session.fail(
-                OperationResult(status: .failed, summary: summary, errorKey: nil),
+                OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
                 id: execution.id
             )
             coordinator.invalidatePreviews()
@@ -211,10 +201,7 @@ final class CleanViewModel: ObservableObject {
     func cancelExecution() async {
         guard let operationID = session.beginExecutionCancellation() else { return }
         await process.cancel()
-        session.finishCancelled(
-            OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
-            id: operationID
-        )
+        session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
         coordinator.invalidatePreviews()
         releaseLease()
     }
@@ -224,7 +211,7 @@ final class CleanViewModel: ObservableObject {
         return coordinator.isCurrent(generation)
     }
 
-    private func operationID(for state: OperationState<CleanPreviewSnapshot>) -> UUID? {
+    private func operationID(for state: OperationState<MaintenancePreviewSnapshot>) -> UUID? {
         switch state {
         case let .ready(id, _), let .confirming(id, _), let .executing(id, _): return id
         default: return nil
@@ -234,15 +221,15 @@ final class CleanViewModel: ObservableObject {
     private func releaseLease(clearPreviewGeneration: Bool = true) {
         lease?.release()
         lease = nil
-        if clearPreviewGeneration {
-            previewCoordinatorGeneration = nil
-        }
+        if clearPreviewGeneration { previewCoordinatorGeneration = nil }
     }
+}
 
-    private func outputSummary(_ result: MoleCommandResult) -> String {
-        [result.stdout, result.stderr]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
+private extension MaintenanceKind {
+    var writeOperation: WriteOperation {
+        switch self {
+        case .optimize: return .optimize
+        case .purge: return .purge
+        }
     }
 }

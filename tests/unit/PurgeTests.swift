@@ -11,7 +11,7 @@ final class PurgeTests: XCTestCase {
                 exitCode: 0
             )
         ])
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
 
@@ -36,7 +36,7 @@ final class PurgeTests: XCTestCase {
             MoleCommandResult(stdout: "old plan", stderr: "", exitCode: 0),
             MoleCommandResult(stdout: "new plan", stderr: "purge failed", exitCode: 7)
         ])
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
         XCTAssertEqual(viewModel.preview?.output, "old plan")
@@ -54,7 +54,7 @@ final class PurgeTests: XCTestCase {
         let spy = PurgeProcessSpy(previewResults: [
             MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)
         ])
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
 
@@ -73,7 +73,7 @@ final class PurgeTests: XCTestCase {
                 exitCode: 0
             )
         )
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
         viewModel.requestConfirmation()
@@ -94,7 +94,7 @@ final class PurgeTests: XCTestCase {
             MoleCommandResult(stdout: "first plan", stderr: "", exitCode: 0),
             MoleCommandResult(stdout: "second plan", stderr: "", exitCode: 0)
         ])
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
         viewModel.requestConfirmation()
@@ -124,7 +124,7 @@ final class PurgeTests: XCTestCase {
                 exitCode: 9
             )
         )
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
         viewModel.requestConfirmation()
@@ -141,7 +141,7 @@ final class PurgeTests: XCTestCase {
             previewResults: [MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)]
         )
         await spy.setExecutionBlocked(true)
-        let viewModel = PurgeViewModel(process: spy)
+        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
 
         await viewModel.previewPurge()
         viewModel.requestConfirmation()

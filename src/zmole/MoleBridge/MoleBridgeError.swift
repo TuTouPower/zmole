@@ -7,6 +7,8 @@ public enum MoleBridgeError: Error, Equatable, LocalizedError, Sendable {
     case emptyOutput
     case executableNotFound(String)
     case launchFailed(String)
+    case outputLimitExceeded(channel: String, limit: Int)
+    case outputReadFailed(String)
     case timedOut
 
     public var errorDescription: String? {
@@ -27,6 +29,10 @@ public enum MoleBridgeError: Error, Equatable, LocalizedError, Sendable {
             return "找不到捆绑 mole：\(path)"
         case let .launchFailed(message):
             return "无法启动 mole：\(message)"
+        case let .outputLimitExceeded(channel, limit):
+            return "mole \(channel) 输出超过上限（\(limit) 字节）"
+        case let .outputReadFailed(message):
+            return "读取 mole 输出失败：\(message)"
         case .timedOut:
             return "mole 命令超时"
         }

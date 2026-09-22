@@ -10,32 +10,28 @@ struct OptimizeView: View {
                 DestructiveConfirmationView(
                     title: "optimize.confirm_title",
                     summary: "optimize.confirm_summary",
-                    onConfirm: {
-                        Task { await viewModel.confirmExecution() }
-                    },
-                    onCancel: {
-                        viewModel.cancelConfirmation()
-                    }
+                    onConfirm: { Task { await viewModel.confirmExecution() } },
+                    onCancel: { viewModel.cancelConfirmation() }
                 )
             } else {
                 content
             }
         }
-        .navigationTitle("sidebar.optimize")
+        .navigationTitle("optimize.maintenance")
         .toolbar {
             ToolbarItem {
                 if viewModel.isPreviewing {
-                    Button("optimize.cancel") {
-                        Task { await viewModel.cancelPreview() }
-                    }
+                    Button("optimize.cancel") { Task { await viewModel.cancelPreview() } }
                 } else if viewModel.isExecuting {
-                    Button("optimize.cancel") {
-                        Task { await viewModel.cancelExecution() }
-                    }
+                    Button("optimize.cancel") { Task { await viewModel.cancelExecution() } }
                 } else {
-                    Button("optimize.preview") {
+                    Button {
                         Task { await viewModel.previewOptimize() }
+                    } label: {
+                        Label("optimize.preview", systemImage: "eye")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(UtilityStyle.accent)
                 }
             }
         }
@@ -43,49 +39,73 @@ struct OptimizeView: View {
 
     @ViewBuilder
     private var content: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
+            UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath")
             if viewModel.isPreviewing {
-                ProgressView("optimize.previewing")
+                busyState(title: "optimize.previewing")
             } else if viewModel.isExecuting {
-                ProgressView("optimize.executing")
+                busyState(title: "optimize.executing")
             } else if let preview = viewModel.preview {
-                Text("optimize.output")
-                    .font(.headline)
-                ScrollView {
-                    if preview.output.isEmpty {
-                        Text("optimize.empty_output")
-                    } else {
-                        Text(preview.output)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
+                outputPanel(title: "optimize.preview_output", output: preview.output) {
+                    Button("optimize.execute", role: .destructive) {
+                        viewModel.requestConfirmation()
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(!viewModel.canConfirm)
                 }
-                .frame(maxHeight: .infinity)
-                Button("optimize.execute") {
-                    viewModel.requestConfirmation()
-                }
-                .disabled(!viewModel.canConfirm)
             } else {
-                Text("optimize.empty")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                UtilityEmptyState(symbol: "wrench.and.screwdriver", title: "optimize.empty", message: "optimize.preview_hint")
             }
 
             if let errorMessageKey = viewModel.errorMessageKey {
-                Text(LocalizedStringKey(errorMessageKey))
-                    .foregroundStyle(.red)
+                UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
             } else if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
+                UtilityNotice(title: "optimize.error_title", detail: errorMessage, isError: true)
             }
             if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
-                Text(executionSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                UtilityNotice(title: "optimize.result", detail: executionSummary, symbol: "checkmark.circle")
             }
         }
-        .padding()
+        .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(UtilityStyle.background)
+    }
+
+    private func busyState(title: LocalizedStringKey) -> some View {
+        UtilityPanel {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text(title).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 200)
+        }
+    }
+
+    private func outputPanel<Action: View>(
+        title: LocalizedStringKey,
+        output: String,
+        @ViewBuilder action: () -> Action
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(title).font(.system(size: 16, weight: .semibold))
+                Spacer()
+                UtilityBadge(title: "optimize.preview_ready", symbol: "checkmark")
+            }
+            ScrollView {
+                Text(output.isEmpty ? String(localized: "optimize.empty_output") : output)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+            .padding(12)
+            .background(UtilityStyle.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
+            HStack { Spacer(); action() }
+        }
+        .padding(16)
+        .background(UtilityStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(UtilityStyle.separator))
     }
 }
