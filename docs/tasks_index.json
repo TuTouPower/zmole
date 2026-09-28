@@ -2,5 +2,22 @@
     "generated_by": ".repo_template/scripts/task.py",
     "authority": "docs/tasks/{tid}_{slug}/task.md front matter",
     "workspace": ".",
-    "tasks": []
+    "tasks": [
+        {
+            "tid": "t014",
+            "slug": "refine_app_visual_design",
+            "title": "统一 macOS 主界面导航与视觉层级",
+            "status": "backlog",
+            "branch": "",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "改进主窗口导航、排版、卡片与色彩；覆盖三语、浅深色及小窗口。",
+            "dir": "docs/tasks/t014_refine_app_visual_design"
+        }
+    ]
 }
