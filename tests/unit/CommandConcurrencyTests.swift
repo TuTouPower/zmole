@@ -15,7 +15,7 @@ final class CommandConcurrencyTests: XCTestCase {
     func testAppDependenciesWiresDistinctLanes() {
         let dependencies = AppDependencies()
         let lanes = [
-            dependencies.lanes.analyze, dependencies.lanes.history, dependencies.lanes.uninstall,
+            dependencies.lanes.history, dependencies.lanes.uninstall,
             dependencies.lanes.installer, dependencies.lanes.statusCommand, dependencies.lanes.cleanCommand,
             dependencies.lanes.optimize, dependencies.lanes.purge, dependencies.lanes.estimate
         ]
@@ -24,25 +24,20 @@ final class CommandConcurrencyTests: XCTestCase {
             Set(identities).count, lanes.count,
             "production assembly must give each one-shot consumer its own lane"
         )
-        XCTAssertNotEqual(
-            ObjectIdentifier(dependencies.lanes.analyze as AnyObject),
-            ObjectIdentifier(dependencies.lanes.estimate as AnyObject),
-            "the overview estimate must not share the disk page analyze lane"
-        )
     }
 
     // AC-001: a busy read lane must not reject another read lane.
     func testBusyReadLaneDoesNotBlockAnotherReadLane() async throws {
         let lanes = try makeSleepLanes()
-        guard let analyze = lanes.analyze as? MoleBridge, let history = lanes.history as? MoleBridge else {
+        guard let estimate = lanes.estimate as? MoleBridge, let history = lanes.history as? MoleBridge else {
             return XCTFail("expected MoleBridge lanes")
         }
 
-        async let longRunning = analyze.run(["3"])
-        try await waitUntilBusy(analyze)
+        async let longRunning = estimate.run(["3"])
+        try await waitUntilBusy(estimate)
 
         let historyBusy = await history.isBusy
-        XCTAssertFalse(historyBusy, "the history lane must not be busy while analyze runs")
+        XCTAssertFalse(historyBusy, "the history lane must not be busy while another read lane runs")
         let result = try await lanes.history.run(["0"], stdin: nil, timeout: 5)
         XCTAssertEqual(result.exitCode, 0)
 
@@ -58,7 +53,7 @@ final class CommandConcurrencyTests: XCTestCase {
 
         _ = await lanes.statusStream.stream(["3"], stdin: nil, timeout: nil)
         try await waitUntilBusy(streamBridge)
-        let result = try await lanes.analyze.run(["0"], stdin: nil, timeout: 5)
+        let result = try await lanes.estimate.run(["0"], stdin: nil, timeout: 5)
         XCTAssertEqual(result.exitCode, 0)
         await lanes.statusStream.cancel()
     }
@@ -106,7 +101,7 @@ final class CommandConcurrencyTests: XCTestCase {
             try MoleBridge(executableURL: sleepURL)
         }
         return MoleCommandLanes(
-            analyze: try bridge(), history: try bridge(), uninstall: try bridge(),
+            history: try bridge(), uninstall: try bridge(),
             installer: try bridge(), statusCommand: try bridge(), cleanCommand: try bridge(),
             optimize: try bridge(), purge: try bridge(), estimate: try bridge(),
             statusStream: try MoleBridge(executableURL: sleepURL),

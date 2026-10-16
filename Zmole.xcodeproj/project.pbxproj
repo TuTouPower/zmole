@@ -42,6 +42,7 @@
 		7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */; };
 		7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */; };
 		7CCC6210BD38526F1C791EF9 /* AnalyzeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */; };
+		7CD4372C0CACFC2D9E655E19 /* DiskScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */; };
 		7E121472EF31C1A352D41987 /* InstallersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC9FE76922251F151CD714E /* InstallersView.swift */; };
 		8270D6BD09F46D38ED004EF6 /* PurgePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B23CE4C7F31BDFABF9A195 /* PurgePaths.swift */; };
 		82B257A7D14564D5BD4E34D5 /* CleanScanStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2183B1B2CAC6D3EA0C4F5B /* CleanScanStage.swift */; };
@@ -99,6 +100,7 @@
 		F9BB6CEA78E601B355B3FCF2 /* CleanPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C371A91DC8FACD70EFBBA7 /* CleanPresentationTests.swift */; };
 		F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A163D8C0D3365385123088B /* HistorySnapshot.swift */; };
 		FA1F3FD5C2AC72FCF949B235 /* UninstallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3909A9F9948552E8947D86D /* UninstallTests.swift */; };
+		FC42F47C457B5840D87EC034 /* DiskScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 712DAFB527447D596914377D /* DiskScanner.swift */; };
 		FDA4DD86FF9FF3CB8259B6C0 /* WhitelistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */; };
 		FE5CFBCC200CEF5FD5A8AEC0 /* StorageEstimate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5724403826635CB3BE44298D /* StorageEstimate.swift */; };
 		FFEB25E285D453B446E27BED /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCCADC6AE01D10BCDE931BA /* SidebarView.swift */; };
@@ -167,10 +169,12 @@
 		5D6224A16B0D76BB1F6C4FBF /* BatchUninstallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchUninstallTests.swift; sourceTree = "<group>"; };
 		67FA972D9F6E688D5C582DC7 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		6A48BCD75626BE496BC329D3 /* OverviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewViewModel.swift; sourceTree = "<group>"; };
+		6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskScannerTests.swift; sourceTree = "<group>"; };
 		6EAC7ABDE452386AAC489B16 /* CommandBusy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandBusy.swift; sourceTree = "<group>"; };
 		6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskExplorerTests.swift; sourceTree = "<group>"; };
 		6FC9FE76922251F151CD714E /* InstallersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallersView.swift; sourceTree = "<group>"; };
 		70AD53256D3AB0960670856A /* ZmoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZmoleTests.swift; sourceTree = "<group>"; };
+		712DAFB527447D596914377D /* DiskScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskScanner.swift; sourceTree = "<group>"; };
 		77F3BC43C66FFD1FFABE5573 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		78C972BD31A9D530B068FFA0 /* mole */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mole; path = src/zmole/Resources/mole; sourceTree = SOURCE_ROOT; };
 		7F7FE0EAA22198905325F47A /* NavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationTests.swift; sourceTree = "<group>"; };
@@ -315,6 +319,7 @@
 				56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */,
 				C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */,
 				304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */,
+				712DAFB527447D596914377D /* DiskScanner.swift */,
 				48174D617546904A2B32F04F /* SpaceMapLayout.swift */,
 			);
 			path = Analyze;
@@ -330,6 +335,7 @@
 				D0EECB2840553CD0BF53693E /* CleanPreviewStoreTests.swift */,
 				B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */,
 				6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */,
+				6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */,
 				BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
 				4E2A3EB57EF98F5A4F9801C4 /* MoleStreamTests.swift */,
@@ -619,6 +625,7 @@
 				9BA909784B55073617781DA1 /* CleanPreviewStoreTests.swift in Sources */,
 				A16BD324EF1D18D53E361A2F /* CommandConcurrencyTests.swift in Sources */,
 				B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */,
+				7CD4372C0CACFC2D9E655E19 /* DiskScannerTests.swift in Sources */,
 				D0E6D7139D18476B9A0C4132 /* InstallersPageTests.swift in Sources */,
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
 				292D2C2042E6EB9020294BD9 /* MoleStreamTests.swift in Sources */,
@@ -663,6 +670,7 @@
 				A35740A74F30B0E9235790FA /* CommandBusy.swift in Sources */,
 				A9E3BC9E069984C4DC7AA35C /* CommandPaletteView.swift in Sources */,
 				C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */,
+				FC42F47C457B5840D87EC034 /* DiskScanner.swift in Sources */,
 				F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */,
 				47C413712EF1B93809099416 /* HistoryView.swift in Sources */,
 				740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */,
