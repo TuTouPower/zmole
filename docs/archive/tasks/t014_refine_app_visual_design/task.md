@@ -2,7 +2,7 @@
 tid: "t014"
 slug: "refine_app_visual_design"
 title: "统一 macOS 主界面导航与视觉层级"
-status: "backlog"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "single"
@@ -11,7 +11,7 @@ verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: "改进主窗口导航、排版、卡片与色彩；覆盖三语、浅深色及小窗口。"
+note: "改进主窗口导航、排版、卡片与色彩；覆盖三语、浅深色及小窗口。; dropped: 被 t015 起的侧边栏重构取代；旧顶部导航视觉 task 不再做。"
 ---
 
 # Task 过程总账
