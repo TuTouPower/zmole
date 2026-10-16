@@ -1,7 +1,7 @@
 ---
 tid: "t035"
 slug: "ui_page_head_unify"
-title: "页面头统一为 demo 结构"
+title: "UI 对齐 demo：页头、状态页、历史页与说明条"
 status: "backlog"
 branch: ""
 worktree: ""
@@ -10,8 +10,8 @@ review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
-conflicts_with: "t032,t037,t038,t039"
-note: "卸载/磁盘/状态/历史/设置补 page-head，动作按钮移入页头。来源：2026-10-17 用户批准 UI 级别2 修复。"
+conflicts_with: "t028"
+note: "用户 2026-10-17 批准（原 t035；合并 t037/t038/t039）。"
 ---
 
 # Task 过程总账

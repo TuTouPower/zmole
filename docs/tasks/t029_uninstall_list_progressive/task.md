@@ -1,7 +1,7 @@
 ---
 tid: "t029"
 slug: "uninstall_list_progressive"
-title: "卸载名单先列出再补大小"
+title: "名单复用与空闲预跑"
 status: "backlog"
 branch: ""
 worktree: ""
@@ -9,9 +9,9 @@ review_level: "full"
 review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
-depends_on: ""
+depends_on: "t028"
 conflicts_with: ""
-note: "用户 2026-10-17 批准。冷扫描先出应用，预览和确认不重复全量算大小。"
+note: "用户 2026-10-17 批准（原 t029；合并 t030/t031）。"
 ---
 
 # Task 过程总账
