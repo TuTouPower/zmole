@@ -2,5 +2,54 @@
     "generated_by": ".repo_template/scripts/task.py",
     "authority": "docs/tasks/{tid}_{slug}/task.md front matter",
     "workspace": ".",
-    "tasks": []
+    "tasks": [
+        {
+            "tid": "t025",
+            "slug": "command_concurrency_lanes",
+            "title": "命令并发通道按类型区分",
+            "status": "backlog",
+            "branch": "",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "只读命令可并发、写入串行、长驻流独立。来源 p006。",
+            "dir": "docs/tasks/t025_command_concurrency_lanes"
+        },
+        {
+            "tid": "t026",
+            "slug": "overview_storage_estimate_cache",
+            "title": "概览磁盘估算缓存与后台刷新",
+            "status": "backlog",
+            "branch": "",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "",
+            "depends_on": "t025",
+            "conflicts_with": "",
+            "note": "开屏用缓存即时显示，后台刷新。来源 p007。",
+            "dir": "docs/tasks/t026_overview_storage_estimate_cache"
+        },
+        {
+            "tid": "t027",
+            "slug": "recoverable_busy_state",
+            "title": "mole busy 降级为可恢复提示",
+            "status": "backlog",
+            "branch": "",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "",
+            "depends_on": "t025",
+            "conflicts_with": "",
+            "note": "区分瞬时忙碌与真实失败。来源 p008。",
+            "dir": "docs/tasks/t027_recoverable_busy_state"
+        }
+    ]
 }
