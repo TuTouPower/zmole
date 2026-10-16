@@ -17,18 +17,14 @@ struct HistorySnapshotLoader: Sendable {
     }
 
     func load(limit: Int = 20) async throws -> HistorySnapshot {
-        let boundedLimit = min(max(limit, 1), 200)
-        let result = try await runCommand(
-            ["history", "--json", "--limit", String(boundedLimit)]
-        )
-        guard result.exitCode == 0 else {
-            throw MoleBridgeError.commandFailed(result)
-        }
+        let raw = try await loadRaw(limit: limit)
+        return try Self.decode(raw)
+    }
 
-        guard let data = result.stdout.data(using: .utf8) else {
+    static func decode(_ raw: String) throws -> HistorySnapshot {
+        guard let data = raw.data(using: .utf8) else {
             throw HistorySnapshotError.invalidJSON
         }
-
         do {
             return try JSONDecoder().decode(HistorySnapshot.self, from: data)
         } catch let error as HistorySnapshotError {
@@ -37,11 +33,24 @@ struct HistorySnapshotLoader: Sendable {
             throw HistorySnapshotError.invalidJSON
         }
     }
+
+    /// Returns the exact `history --json` payload, used by the export action.
+    func loadRaw(limit: Int = 20) async throws -> String {
+        let boundedLimit = min(max(limit, 1), 200)
+        let result = try await runCommand(
+            ["history", "--json", "--limit", String(boundedLimit)]
+        )
+        guard result.exitCode == 0 else {
+            throw MoleBridgeError.commandFailed(result)
+        }
+        return result.stdout
+    }
 }
 
 @MainActor
 final class HistoryViewModel: ObservableObject {
     @Published private(set) var snapshot: HistorySnapshot?
+    @Published private(set) var rawJSON: String?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
@@ -68,6 +77,7 @@ final class HistoryViewModel: ObservableObject {
 
     func refresh() async {
         snapshot = nil
+        rawJSON = nil
         errorMessage = nil
         isLoading = true
         defer { isLoading = false }
@@ -78,9 +88,25 @@ final class HistoryViewModel: ObservableObject {
         }
 
         do {
-            snapshot = try await loader.load(limit: limit)
+            let raw = try await loader.loadRaw(limit: limit)
+            snapshot = try HistorySnapshotLoader.decode(raw)
+            rawJSON = raw
+        } catch {
+            rawJSON = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Writes the exact JSON from the latest refresh to the chosen file.
+    @discardableResult
+    func export(to url: URL) -> Bool {
+        guard let rawJSON else { return false }
+        do {
+            try rawJSON.write(to: url, atomically: true, encoding: .utf8)
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 }
