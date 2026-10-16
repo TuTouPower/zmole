@@ -10,6 +10,7 @@ final class InstallersViewModel: ObservableObject {
     @Published private(set) var isRemoving = false
     @Published private(set) var isConfirmationPresented = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var showBusyNotice = false
 
     /// Snapshot of the listing that the current selection/confirmation binds to.
     /// A new scan replaces it and clears the selection.
@@ -50,6 +51,7 @@ final class InstallersViewModel: ObservableObject {
         guard !isListing, !isRemoving else { return }
         isListing = true
         errorMessage = nil
+        showBusyNotice = false
         failures = []
         defer { isListing = false }
         do {
@@ -59,6 +61,10 @@ final class InstallersViewModel: ObservableObject {
             selectedPaths.removeAll()
             isConfirmationPresented = false
         } catch {
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                return
+            }
             candidates = []
             lastListing = []
             selectedPaths.removeAll()
@@ -99,11 +105,12 @@ final class InstallersViewModel: ObservableObject {
         let batch = selectedCandidates
         guard !batch.isEmpty else { return }
         guard let newLease = coordinator.acquire(.installer) else {
-            errorMessage = String(localized: "operation.error.busy")
+            showBusyNotice = true
             isConfirmationPresented = false
             return
         }
         lease = newLease
+        showBusyNotice = false
         isRemoving = true
         isConfirmationPresented = false
         defer {

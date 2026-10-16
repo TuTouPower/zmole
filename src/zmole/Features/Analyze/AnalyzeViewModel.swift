@@ -45,6 +45,7 @@ final class AnalyzeViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var canGoBack = false
     @Published private(set) var expandedPaths: Set<String> = []
+    @Published private(set) var showBusyNotice = false
     @Published private(set) var childrenByPath: [String: [AnalyzeEntry]] = [:]
 
     private let loader: AnalyzeSnapshotLoader?
@@ -144,8 +145,10 @@ final class AnalyzeViewModel: ObservableObject {
     }
 
     private func loadCurrentPath() async {
+        let previous = snapshot
         snapshot = nil
         errorMessage = nil
+        showBusyNotice = false
         isLoading = true
         canGoBack = pathStack.count > 1
         defer { isLoading = false }
@@ -158,6 +161,11 @@ final class AnalyzeViewModel: ObservableObject {
         do {
             snapshot = try await loader.load(path: pathStack.last ?? nil)
         } catch {
+            if CommandBusy.isBusy(error) {
+                snapshot = previous
+                showBusyNotice = true
+                return
+            }
             errorMessage = error.localizedDescription
         }
     }

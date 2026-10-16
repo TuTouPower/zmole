@@ -70,6 +70,7 @@ final class OverviewViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// Set when a write operation invalidated the cached estimate.
     @Published private(set) var estimateInvalidated = false
+    @Published private(set) var showBusyNotice = false
 
     private let storageLoader: StorageEstimateLoader?
     private let historyLoader: HistorySnapshotLoader?
@@ -136,7 +137,14 @@ final class OverviewViewModel: ObservableObject {
         do {
             recentOperations = try await historyLoader.load(limit: 5).sessions
             errorMessage = nil
+            showBusyNotice = false
         } catch {
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                errorMessage = nil
+                return
+            }
+            showBusyNotice = false
             recentOperations = []
             errorMessage = error.localizedDescription
         }
