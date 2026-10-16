@@ -25,6 +25,7 @@ xcodegen generate
 xcodebuild test -scheme Zmole -destination 'platform=macOS'
 pytest .repo_template/tests -q -m contract
 bash tests/integration/clean_trash_test.sh
+bash tests/integration/installer_interface_test.sh
 ```
 
 当前阶段以模板工具链测试为主；业务 Swift 测试随首个实现 task 接入本命令。填本命令时按「门禁类别清单」逐类覆盖；项目不适用某类写「无」并说明理由。

@@ -58,3 +58,13 @@
     3. 只改 Swift 侧、不改捆绑脚本
 - 结论：选 2。补丁限于捆绑树内的 clean 删除路径（`lib/core/file_ops.sh` 新增 `_mole_clean_trash_path`；`lib/clean/user.sh` 的 `clean_trash` 直接返回）。卸载本就进废纸篓；项目清理与优化的删除维持永久删除并由页面写明；安装包删除在后续 task 改为废纸篓。上游 tag 升级时该补丁需重放。
 - 替代：004 中「clean 破坏性操作一律预览后执行」不变，仅改删除落点。
+
+## 008 安装包走非交互接口，删除进废纸篓（2026-10-16）
+
+- 背景：上游 `mo installer` 只有全屏选择菜单，无 JSON，删除走 `mole_delete` 默认永久删除；GUI 不能代按键。
+- 选项：
+    1. 保持 TUI/代按键
+    2. 在捆绑 installer 上增加非交互接口：`--list-json` 列出候选（绝对路径、字节大小、来源、身份），`--remove <path>` 只接受本次列出的路径并核对身份与大小，删除显式置 `MOLE_DELETE_MODE=trash`
+    3. 在 Swift 里重写扫描
+- 结论：选 2。扫描规则仍用捆绑 installer 的现有目录、深度与 ZIP 判断；删除失败保留原文件，不退回永久删除；界面（t023）只消费该接口。补丁限于捆绑 installer 脚本并标注 `zmole local patch (t022)`，上游 tag 升级时重放。
+- 替代：无

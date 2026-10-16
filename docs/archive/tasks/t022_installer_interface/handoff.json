@@ -1,0 +1,20 @@
+{
+  "tid": "t022",
+  "attempt": 1,
+  "execution_id": "4fb078d22c58413aaeae6b47210313da",
+  "status": "done",
+  "branch": "t022_installer_interface",
+  "base_sha": "770ea9aa58d07d4dbc1930669bdf7cdf520c0544",
+  "tests": "bash tests/integration/installer_interface_test.sh (13 cases pass); bash tests/integration/clean_trash_test.sh (pass); pytest .repo_template/tests -q -m contract (147 pass); bash -n installer.sh",
+  "blackbox": "The installer interface integration test is the executable blackbox: real bundled installer.sh subprocess against a temporary scan root and MOLE_TEST_TRASH_DIR; no GUI.",
+  "review": "full: review_code.md PASS (rounds 1-2), review_test.md PASS (rounds 1-2); reviewed_scope 9ea11152a01334fb; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Resources/mole/bin/installer.sh collect_installers_noninteractive + zip payload filter", "tests/integration/installer_interface_test.sh AC-001 cases (dmg listed, plain zip excluded, payload zip listed)"],
+    "AC-002": ["src/zmole/Resources/mole/bin/installer.sh installer_list_json", "tests/integration/installer_interface_test.sh AC-002 cases (fields, no escape sequences, empty scan [])"],
+    "AC-003": ["src/zmole/Resources/mole/bin/installer.sh installer_remove_path (MOLE_DELETE_MODE=trash)", "tests/integration/installer_interface_test.sh AC-003 case"],
+    "AC-004": ["src/zmole/Resources/mole/bin/installer.sh installer_remove_path verification", "tests/integration/installer_interface_test.sh AC-004 cases (unlisted / missing size+identity / size change / identity mismatch)"],
+    "AC-005": ["src/zmole/Resources/mole/bin/installer.sh (no permanent fallback)", "tests/integration/installer_interface_test.sh AC-005 case"]
+  },
+  "pending": [],
+  "findings": []
+}
