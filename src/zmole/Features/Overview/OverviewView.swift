@@ -4,20 +4,24 @@ import SwiftUI
 struct OverviewView: View {
     @ObservedObject var statusViewModel: StatusViewModel
     @ObservedObject var viewModel: OverviewViewModel
+    @ObservedObject var cleanViewModel: CleanViewModel
     @ObservedObject var navigation: NavigationModel
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                header
+                head
                 if viewModel.showBusyNotice {
                     RecoverableBusyNotice()
                 }
                 heroRow
-                quickCards
                 lowerRow
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 32)
+            .frame(maxWidth: 1180, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(MoleTheme.background)
         .navigationTitle("overview.title")
@@ -37,18 +41,30 @@ struct OverviewView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("overview.eyebrow")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(MoleTheme.accentStrong)
-                .textCase(.uppercase)
-            Text(greetingKey)
-                .font(.system(size: 30, weight: .bold))
-            Text("overview.subtitle")
-                .font(.system(size: 12))
-                .foregroundStyle(MoleTheme.muted)
+    private var head: some View {
+        MolePageHead(
+            eyebrow: "overview.eyebrow",
+            title: greetingKey,
+            subtitle: "overview.subtitle"
+        ) {
+            Button {
+                Task { await statusViewModel.resample() }
+            } label: {
+                Label("overview.refresh", systemImage: "arrow.clockwise")
+            }
+            Button {
+                navigation.select(.clean)
+            } label: {
+                if let reclaimBytes = cleanViewModel.lastReclaimBytes {
+                    Label("overview.clean_entry \(OverviewMetrics.bytes(reclaimBytes))", systemImage: "sparkle")
+                } else {
+                    Label("overview.clean_entry_plain", systemImage: "sparkle")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MoleTheme.accent)
         }
+        .padding(.bottom, 10)
     }
 
     private var greetingKey: LocalizedStringKey {
@@ -60,81 +76,176 @@ struct OverviewView: View {
         }
     }
 
-    @ViewBuilder
     private var heroRow: some View {
         HStack(alignment: .top, spacing: 14) {
-            metricsCard
-            diskCard
+            healthCard
+            storageCard
         }
     }
 
-    private var metricsCard: some View {
-        let metrics = statusViewModel.snapshot.map(OverviewMetrics.init)
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("overview.health")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                Text(metrics?.healthText ?? "—")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(MoleTheme.accentStrong)
-            }
-            if metrics == nil {
-                Text("overview.waiting")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoleTheme.subtle)
+    // MARK: - Health card
+
+    private var healthCard: some View {
+        let card = OverviewHealthCard.make(
+            snapshot: statusViewModel.snapshot,
+            reclaimBytes: cleanViewModel.lastReclaimBytes
+        )
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("overview.health.eyebrow")
+                        .font(.system(size: 10, weight: .semibold))
+                        .textCase(.uppercase)
+                        .tracking(0.5)
+                        .foregroundStyle(MoleTheme.accentStrong)
+                    Text(LocalizedStringKey(card.status.titleKey))
+                        .font(.system(size: 22, weight: .bold))
+                    Text("overview.health.body")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoleTheme.muted)
+                        .frame(maxWidth: 360, alignment: .leading)
+                }
+                Spacer(minLength: 8)
+                healthRing(card)
             }
             HStack(spacing: 10) {
-                metricTile("overview.cpu", metrics?.cpuText ?? "—")
-                metricTile("overview.memory", metrics?.memoryText ?? "—")
-                metricTile("overview.free_disk", metrics?.freeDiskText ?? "—")
+                ForEach(card.tiles) { tile in
+                    tileView(tile)
+                }
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 210, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
 
-    private func metricTile(_ title: LocalizedStringKey, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+    private func healthRing(_ card: OverviewHealthCard) -> some View {
+        let snapshot = statusViewModel.snapshot
+        let score = (snapshot?.healthScoreAvailable == true) ? snapshot?.healthScore : nil
+        let fraction = Double(min(100, max(0, score ?? 0))) / 100
+        return ZStack {
+            Circle()
+                .stroke(MoleTheme.surface3, style: StrokeStyle(lineWidth: 12))
+            if score != nil {
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(MoleTheme.accentStrong, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            VStack(spacing: 1) {
+                Text(verbatim: card.scoreText)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                Text("overview.health.score_label")
+                    .font(.system(size: 9))
+                    .foregroundStyle(MoleTheme.muted)
+            }
+        }
+        .frame(width: 104, height: 104)
+        .accessibilityHidden(true)
+    }
+
+    private func tileView(_ tile: OverviewTile) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(LocalizedStringKey(tile.titleKey))
                 .font(.system(size: 10))
                 .foregroundStyle(MoleTheme.subtle)
-            Text(verbatim: value)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+            Text(verbatim: tile.value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            if let note = tile.note {
+                Text(LocalizedStringKey(note))
+                    .font(.system(size: 10))
+                    .foregroundStyle(MoleTheme.muted)
+                    .lineLimit(1)
+            }
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
     }
 
-    private var diskCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("overview.storage")
-                    .font(.system(size: 13, weight: .semibold))
+    // MARK: - Storage card
+
+    private var storageCard: some View {
+        let card = OverviewStorageCard.make(breakdown: viewModel.breakdown, disk: primaryDisk)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("overview.storage")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(verbatim: card.capacityText ?? "")
+                        .font(.system(size: 10))
+                        .foregroundStyle(MoleTheme.muted)
+                }
                 Spacer()
                 Text("overview.storage.estimate")
                     .font(.system(size: 10))
                     .foregroundStyle(MoleTheme.subtle)
             }
-            HStack(alignment: .center, spacing: 18) {
-                StorageRingView(breakdown: viewModel.breakdown)
-                    .frame(width: 118, height: 118)
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(StorageSegment.allCases) { segment in
-                        legendRow(segment)
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: card.usedText)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                    Text("overview.storage.used_label")
+                        .font(.system(size: 10))
+                        .foregroundStyle(MoleTheme.muted)
+                }
+                Spacer()
+                if let freeText = card.freeText {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("overview.storage.free_format \(freeText)")
+                            .font(.system(size: 12, weight: .semibold))
+                        if let percent = card.freePercentText {
+                            Text("overview.storage.free_percent \(percent)")
+                                .font(.system(size: 10))
+                                .foregroundStyle(MoleTheme.muted)
+                        }
                     }
+                }
+            }
+            segmentedBar(card)
+            if !card.isComplete {
+                Text("overview.storage.incomplete")
+                    .font(.system(size: 10))
+                    .foregroundStyle(MoleTheme.muted)
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(StorageSegment.allCases) { segment in
+                    legendRow(segment)
                 }
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 210, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
+    }
+
+    private func segmentedBar(_ card: OverviewStorageCard) -> some View {
+        GeometryReader { proxy in
+            let total = proxy.size.width
+            let freeFraction = card.freeFraction.map { min(1, max(0, $0)) }
+            let usedWidth = total * CGFloat(1 - (freeFraction ?? 0))
+            HStack(spacing: 2) {
+                ForEach(card.segments) { segment in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(segment.segment.color)
+                        .frame(width: max(1, usedWidth * CGFloat(segment.fraction)))
+                }
+                if freeFraction != nil {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(MoleTheme.surface3)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .frame(height: 10)
+        .accessibilityHidden(true)
     }
 
     private func legendRow(_ segment: StorageSegment) -> some View {
@@ -151,70 +262,41 @@ struct OverviewView: View {
         }
     }
 
-    private var quickCards: some View {
-        HStack(spacing: 12) {
-            ForEach(viewModel.quickActions) { action in
-                Button {
-                    navigation.select(action.destination)
-                } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Image(systemName: action.destination.symbol)
-                            .font(.system(size: 15))
-                            .foregroundStyle(MoleTheme.accentStrong)
-                        Text(action.destination.titleKey)
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(action.destination.subtitleKey)
-                            .font(.system(size: 10))
-                            .foregroundStyle(MoleTheme.muted)
-                            .lineLimit(2)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-                    .padding(16)
-                    .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
-                    .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
+    // MARK: - Lower row
 
-    @ViewBuilder
     private var lowerRow: some View {
         HStack(alignment: .top, spacing: 14) {
             activityCard
-            trendCard
+            statusGridCard
         }
     }
 
     private var activityCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("overview.recent")
-                .font(.system(size: 13, weight: .semibold))
-                .padding(16)
-            Divider()
-            if viewModel.hasRecentOperations {
-                ForEach(Array(viewModel.recentOperations.prefix(4).enumerated()), id: \.offset) { _, session in
-                    HStack(spacing: 10) {
-                        Text(session.command)
-                            .font(.system(size: 11, weight: .medium))
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(verbatim: session.size ?? "—")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(MoleTheme.muted)
-                        Text(verbatim: session.dateText ?? "")
-                            .font(.system(size: 10))
-                            .foregroundStyle(MoleTheme.subtle)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    Divider().padding(.leading, 16)
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("overview.recent")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("overview.recent_subtitle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(MoleTheme.muted)
                 }
-            } else {
+                Spacer()
+                Button("overview.view_history") { navigation.select(.history) }
+                    .buttonStyle(.borderless)
+            }
+            .padding(16)
+            Divider()
+            let rows = OverviewActivity.rows(from: viewModel.recentOperations)
+            if rows.isEmpty {
                 Text("overview.recent_empty")
                     .font(.system(size: 11))
                     .foregroundStyle(MoleTheme.subtle)
                     .padding(16)
+            } else {
+                ForEach(rows) { row in
+                    activityRow(row)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -222,18 +304,51 @@ struct OverviewView: View {
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
 
-    private var trendCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("overview.trend")
-                .font(.system(size: 13, weight: .semibold))
-            if OverviewTrend.hasEnoughSamples(statusViewModel.series) {
-                OverviewSparklineView(series: statusViewModel.series)
-                    .frame(height: 80)
-            } else {
-                Text("overview.trend_insufficient")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoleTheme.subtle)
-                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+    private func activityRow(_ row: OverviewActivityRow) -> some View {
+        HStack(spacing: 11) {
+            ZStack {
+                Circle().fill(MoleTheme.accentSoft)
+                Image(systemName: row.symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MoleTheme.accentStrong)
+            }
+            .frame(width: 30, height: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: row.command).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Text(verbatim: row.time).font(.system(size: 10)).foregroundStyle(MoleTheme.muted).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(verbatim: row.value)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                if let items = row.items {
+                    Text("overview.items \(items)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(MoleTheme.muted)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 16)
+        }
+    }
+
+    private var statusGridCard: some View {
+        let grid = OverviewStatusGrid.make(snapshot: statusViewModel.snapshot)
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("overview.status_grid")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("overview.status_grid.subtitle")
+                    .font(.system(size: 10))
+                    .foregroundStyle(MoleTheme.muted)
+            }
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(grid.tiles) { tile in
+                    tileView(tile)
+                }
             }
         }
         .padding(16)
@@ -242,11 +357,12 @@ struct OverviewView: View {
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
 
+    private var primaryDisk: StatusSnapshot.Disk? {
+        statusViewModel.snapshot.map(OverviewMetrics.init)?.primaryDisk
+    }
+
     private var usedBytes: Int64? {
-        guard let disk = statusViewModel.snapshot?.disks.first(where: { $0.used != nil && $0.total != nil }) else {
-            return nil
-        }
-        return disk.used
+        primaryDisk?.used
     }
 }
 
@@ -289,71 +405,5 @@ extension StorageBreakdown {
         case .developer: developerBytes
         case .other: otherBytes
         }
-    }
-}
-
-private struct StorageRingView: View {
-    let breakdown: StorageBreakdown
-
-    var body: some View {
-        ZStack {
-            if breakdown.isComplete {
-                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                    Circle()
-                        .trim(from: segment.start, to: segment.start + segment.fraction)
-                        .stroke(segment.color, style: StrokeStyle(lineWidth: 18, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-                }
-            } else {
-                Circle()
-                    .stroke(MoleTheme.surface3, style: StrokeStyle(lineWidth: 18))
-            }
-            Circle()
-                .fill(MoleTheme.surface)
-                .frame(width: 74, height: 74)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private struct Segment: Hashable {
-        let start: CGFloat
-        let fraction: CGFloat
-        let color: Color
-    }
-
-    private var segments: [Segment] {
-        let total = StorageSegment.allCases
-            .compactMap { breakdown.bytes(for: $0) }
-            .reduce(Int64(0), +)
-        guard total > 0 else { return [] }
-        var start: CGFloat = 0
-        return StorageSegment.allCases.compactMap { segment in
-            guard let bytes = breakdown.bytes(for: segment), bytes > 0 else { return nil }
-            let fraction = CGFloat(Double(bytes) / Double(total))
-            let result = Segment(start: start, fraction: fraction, color: segment.color)
-            start += fraction
-            return result
-        }
-    }
-}
-
-private struct OverviewSparklineView: View {
-    let series: [StatusSeriesPoint]
-
-    var body: some View {
-        GeometryReader { proxy in
-            let values = series.compactMap(\.memoryUsedPercent)
-            let maxValue = max(values.max() ?? 1, 1)
-            HStack(alignment: .bottom, spacing: 4) {
-                ForEach(Array(values.enumerated()), id: \.offset) { _, value in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(MoleTheme.accent)
-                        .frame(width: max(3, proxy.size.width / CGFloat(max(values.count, 1)) - 4),
-                               height: max(3, proxy.size.height * CGFloat(value / maxValue)))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        }
-        .accessibilityHidden(true)
     }
 }

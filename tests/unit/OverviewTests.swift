@@ -47,18 +47,27 @@ final class OverviewTests: XCTestCase {
         XCTAssertNil(StorageBreakdown.placeholder.applicationsBytes)
     }
 
-    func testStorageEstimateLoaderSumsAnalyzeEntriesPerSegment() async {
+    func testStorageEstimateLoaderSumsAnalyzeEntriesPerSegment() async throws {
         let sizes: [String: Int64] = [
             "/Applications": 40,
-            "/System": 25,
+            "/System/Library": 20,
+            "/System/Developer": 5,
+            "/System/Volumes": 1_470_000_000_000,
             "~/Library/Developer": 30,
             "/Users": 90
         ]
-        let loader = StorageEstimateLoader { path in sizes[path] }
-        let breakdown = await loader.load(usedBytes: 300)
+        let loader = StorageEstimateLoader(
+            directorySize: { sizes[$0] },
+            systemChildren: { ["Library", "Developer", "Volumes"] }
+        )
+        let breakdown = try await loader.load(usedBytes: 300)
 
         XCTAssertEqual(breakdown.applicationsBytes, 40)
-        XCTAssertEqual(breakdown.systemBytes, 25)
+        XCTAssertEqual(
+            breakdown.systemBytes,
+            25,
+            "system = analyze /System top-level children except /System/Volumes"
+        )
         XCTAssertEqual(breakdown.developerBytes, 30)
         XCTAssertEqual(breakdown.userDataBytes, 60)
         XCTAssertEqual(breakdown.otherBytes, 145)
@@ -88,33 +97,16 @@ final class OverviewTests: XCTestCase {
         XCTAssertEqual(metrics.freeDiskText, "—")
     }
 
-    func testOverviewTrendNeedsMinimumSamples() {
-        let now = Date()
-        let short = (0..<2).map { index in
-            StatusSeriesPoint(
-                snapshot: StatusSnapshot(cpu: .init(usage: Double(index), usageAvailable: true)),
-                receivedAt: now
-            )
-        }
-        let enough = (0..<OverviewTrend.minimumSamples).map { index in
-            StatusSeriesPoint(
-                snapshot: StatusSnapshot(cpu: .init(usage: Double(index), usageAvailable: true)),
-                receivedAt: now
-            )
-        }
-        XCTAssertFalse(OverviewTrend.hasEnoughSamples(short))
-        XCTAssertTrue(OverviewTrend.hasEnoughSamples(enough))
-    }
-
-    func testOverviewQuickActionsOnlyNavigateToDestinations() {
-        let actions = OverviewQuickAction.all
-        XCTAssertFalse(actions.isEmpty)
-        XCTAssertTrue(actions.allSatisfy { AppDestination.allCases.contains($0.destination) })
-        XCTAssertFalse(actions.contains { $0.destination == .installers })
-    }
+    // The t036 demo alignment removed the overview trend bar and the quick
+    // cards, so `testOverviewTrendNeedsMinimumSamples` and
+    // `testOverviewQuickActionsOnlyNavigateToDestinations` were deleted with
+    // their types; the new page layout tests live in OverviewLayoutTests.
 
     func testOverviewViewModelLoadsBreakdownAndHistoryAndHandlesEmptyHistory() async {
-        let loader = StorageEstimateLoader { _ in 10 }
+        let loader = StorageEstimateLoader(
+            directorySize: { _ in 10 },
+            systemChildren: { ["Library"] }
+        )
         let historyLoader = HistorySnapshotLoader { _ in
             MoleCommandResult(stdout: Self.historyFixture, stderr: "", exitCode: 0)
         }
@@ -166,6 +158,20 @@ final class OverviewTests: XCTestCase {
 
         let stopCount = await service.stopCallCount
         XCTAssertGreaterThanOrEqual(stopCount, 1)
+    }
+
+    @MainActor
+    func testOverviewRefreshResamplesByRestartingTheSubscription() async {
+        let service = WatchServiceSpy()
+        let viewModel = StatusViewModel(service: service, loader: nil)
+        viewModel.start()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        await viewModel.resample()
+
+        let pauseCount = await service.pauseCallCount
+        XCTAssertGreaterThanOrEqual(pauseCount, 1, "refresh pauses the current subscription")
+        XCTAssertTrue(viewModel.isSampling, "refresh immediately starts a fresh subscription")
     }
 
     private static let historyFixture = """
