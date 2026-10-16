@@ -2,7 +2,7 @@
 
 - 来源：用户实测反馈 2026-10-16（2026-10-16 修订：不做按钮触发）
 - 内容：概览页开屏自动串行执行 4 次 `analyze`（/Applications、/System、~/Library/Developer、/Users）算五段估算；/Users 类扫描可达数十秒到数分钟，且占用共用命令通道，表现为“数据出不来、一直在算”。不做“点击计算”按钮；改为：开屏先用缓存立即出结果，后台在独立只读通道刷新，刷新期间不阻塞其他页面命令。缓存与刷新策略见下。
-- 处理：待办
+- 处理：t026
 - 缓存设计：
     - 缓存对象：4 个目录的字节和（apps/system/developer/users）+ 采集时间；不缓存最终五段（“其他”每次用 status 已用空间重算）。
     - 存储：进程内 + 磁盘各一份。磁盘落 `~/Library/Application Support/zmole/storage_estimate.json`（`{schemaVersion, capturedAt, apps, system, developer, users}`），原子写；schema 不符或超过最大年龄（如 7 天）视为无效。
