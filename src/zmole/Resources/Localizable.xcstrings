@@ -328,7 +328,13 @@
     "uninstall.trash": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Move to Trash"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"移到废纸篓"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"移到垃圾桶"}}}},
     "uninstall.detail.empty": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Select an app to see details."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"选择一项查看详情。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"選擇一項查看詳情。"}}}},
     "uninstall.app_size_estimate": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"App body estimate"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"应用本体估算"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"應用本體估算"}}}},
-    "uninstall.files_check": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Check related files"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"检查关联文件"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"檢查關聯檔案"}}}}
+    "uninstall.files_check": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Check related files"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"检查关联文件"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"檢查關聯檔案"}}}},
+    "analyze.root": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Root"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"根目录"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"根目錄"}}}},
+    "analyze.sort": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Sort"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"排序"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"排序"}}}},
+    "analyze.sort_size": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Size"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"大小"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"大小"}}}},
+    "analyze.sort_name": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Name"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"名称"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"名稱"}}}},
+    "analyze.expand": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Expand"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"展开"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"展開"}}}},
+    "analyze.reveal": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Show in Finder"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在 Finder 中显示"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"在 Finder 中顯示"}}}}
   },
   "version": "1.0"
 }
