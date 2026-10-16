@@ -289,6 +289,7 @@ final class AppDependencies: ObservableObject {
     let uninstallViewModel: UninstallViewModel
     let optimizeViewModel: OptimizeViewModel
     let purgeViewModel: PurgeViewModel
+    let purgePathsViewModel: PurgePathsViewModel
     let whitelistViewModel: WhitelistViewModel
     let analyzeViewModel: AnalyzeViewModel
     let statusViewModel: StatusViewModel
@@ -361,6 +362,13 @@ final class AppDependencies: ObservableObject {
             : WhitelistStore.live.fileURL
         whitelistViewModel = WhitelistViewModel(
             store: WhitelistStore(fileURL: whitelistURL),
+            coordinator: coordinator
+        )
+        let purgePathsURL = configuration.isEnabled
+            ? demoDirectory.appendingPathComponent("purge_paths")
+            : PurgePathsStore.live.fileURL
+        purgePathsViewModel = PurgePathsViewModel(
+            store: PurgePathsStore(fileURL: purgePathsURL),
             coordinator: coordinator
         )
 
