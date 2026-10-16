@@ -1,0 +1,23 @@
+{
+  "tid": "t024",
+  "attempt": 1,
+  "execution_id": "19a9a0352c074d189f7d3b2dcf606328",
+  "status": "done",
+  "branch": "t024_history_settings",
+  "base_sha": "cb934138cb075b79802ed765e1cff753e8c1a3aa",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (178 pass incl. SettingsHistoryTests 8); pytest .repo_template/tests -q -m contract (147 pass); md_format --changed",
+  "blackbox": "GUI environment-limited (recorded in t015). History export, whitelist kinds, login-item failure, appearance/lifecycle constants covered by automated tests with temp config dirs and a fake login-item service.",
+  "review": "single: review_general.md final PASS (rounds 1-2); reviewed_scope ca198a9fd7f794ab; no unresolved findings",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/History/HistoryViewModel.swift refresh", "src/zmole/Features/History/HistoryView.swift empty state", "tests/unit/SettingsHistoryTests.swift testEmptyHistoryShowsEmptyStateAndExportMatchesJSON"],
+    "AC-002": ["src/zmole/Features/History/HistoryViewModel.swift export(to:)", "tests/unit/SettingsHistoryTests.swift testEmptyHistoryShowsEmptyStateAndExportMatchesJSON"],
+    "AC-003": ["src/zmole/App/AppAppearance.swift", "src/zmole/App/AppLanguage.swift storageKey", "src/zmole/App/AppShellView.swift preferredColorScheme", "tests/unit/SettingsHistoryTests.swift testAppAppearanceRoundTrip"],
+    "AC-004": ["src/zmole/Features/Settings/LoginItem.swift", "tests/unit/SettingsHistoryTests.swift testLoginItemFailureKeepsToggleOffAndShowsReason"],
+    "AC-005": ["src/zmole/App/ZmoleApp.swift AppDelegate/AppLifecycle", "tests/unit/SettingsHistoryTests.swift testNoMenuBarExtraAndQuitOnLastWindowClose"],
+    "AC-006": ["src/zmole/Features/Whitelist/WhitelistViewModel.swift WhitelistKind optimize", "src/zmole/Features/Whitelist/WhitelistStore.swift optimize", "tests/unit/SettingsHistoryTests.swift testOptimizeWhitelistAcceptsTaskIDsOnly / testCleanWhitelistSaveInvalidatesPreviewViaSharedCoordinator"],
+    "AC-007": ["src/zmole/Features/Settings/BundledMoleInfo.swift", "src/zmole/Features/Settings/SettingsView.swift cliVersionText", "tests/unit/SettingsHistoryTests.swift testBundledMoleTagParsing"],
+    "AC-008": ["src/zmole/Features/Settings/SettingsView.swift (no removed toggles)", "tests/unit/SettingsHistoryTests.swift testSettingsHasNoRemovedToggles"]
+  },
+  "pending": [],
+  "findings": []
+}

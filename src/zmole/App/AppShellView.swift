@@ -5,6 +5,7 @@ struct AppShellView: View {
     @ObservedObject var dependencies: AppDependencies
     @ObservedObject var navigation: NavigationModel
     @AppStorage(AppLanguage.storageKey) private var languageOverride = AppLanguage.system.rawValue
+    @AppStorage(AppAppearance.storageKey) private var appearanceOverride = AppAppearance.system.rawValue
 
     var body: some View {
         HStack(spacing: 0) {
@@ -82,7 +83,10 @@ struct AppShellView: View {
         case .settings:
             SettingsView(
                 demoLanguage: dependencies.demo.language,
-                whitelistViewModel: dependencies.whitelistViewModel
+                whitelistViewModel: dependencies.whitelistViewModel,
+                optimizeWhitelistViewModel: dependencies.optimizeWhitelistViewModel,
+                purgePathsViewModel: dependencies.purgePathsViewModel,
+                loginItemViewModel: dependencies.loginItemViewModel
             )
         }
     }
@@ -101,7 +105,8 @@ struct AppShellView: View {
         switch dependencies.demo.appearance {
         case .light: return .light
         case .dark: return .dark
-        case nil: return nil
+        case nil:
+            return AppAppearance(rawValue: appearanceOverride)?.colorScheme
         }
     }
 
