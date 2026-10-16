@@ -340,7 +340,10 @@ struct UninstallView: View {
 
     @ViewBuilder
     private var resultPanel: some View {
-        if let preview = viewModel.preview {
+        if viewModel.showBusyNotice {
+            RecoverableBusyNotice()
+                .padding(12)
+        } else if let preview = viewModel.preview {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("uninstall.preview_result").font(.system(size: 13, weight: .semibold))

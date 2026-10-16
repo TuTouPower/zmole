@@ -31,6 +31,11 @@ struct HistoryView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            if viewModel.showBusyNotice {
+                RecoverableBusyNotice().padding(16)
+            }
+        }
         .navigationTitle("sidebar.history")
         .toolbar {
             ToolbarItem {

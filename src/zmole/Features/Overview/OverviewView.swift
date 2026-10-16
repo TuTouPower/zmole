@@ -10,6 +10,9 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if viewModel.showBusyNotice {
+                    RecoverableBusyNotice()
+                }
                 heroRow
                 quickCards
                 lowerRow

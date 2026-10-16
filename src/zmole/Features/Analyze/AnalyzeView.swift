@@ -59,6 +59,11 @@ struct AnalyzeView: View {
         }
         .background(MoleTheme.background)
         .navigationTitle("sidebar.disk")
+        .overlay(alignment: .top) {
+            if viewModel.showBusyNotice {
+                RecoverableBusyNotice().padding(16)
+            }
+        }
         .task {
             if viewModel.snapshot == nil, !viewModel.isLoading { await viewModel.loadOverview() }
         }

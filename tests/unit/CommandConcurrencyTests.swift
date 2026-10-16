@@ -75,7 +75,10 @@ final class CommandConcurrencyTests: XCTestCase {
         await optimizeSpy.waitForStart()
 
         await purge.previewPurge()
-        XCTAssertEqual(purge.errorMessageKey, "operation.error.busy")
+        // Representation-agnostic mutual exclusion: the second write must not
+        // spawn a command on its own lane nor enter previewing.
+        let purgeInvocations = await purgeSpy.invocations
+        XCTAssertEqual(purgeInvocations, 0, "a second write must not spawn while one is active")
         XCTAssertFalse(purge.isPreviewing)
 
         await optimizeSpy.finish()
@@ -122,6 +125,7 @@ final class CommandConcurrencyTests: XCTestCase {
 
 private actor BlockingProcessSpy: MoleProcessControlling {
     private var started = false
+    private(set) var invocations = 0
     private var continuation: CheckedContinuation<MoleCommandResult, Error>?
 
     func run(
@@ -129,6 +133,7 @@ private actor BlockingProcessSpy: MoleProcessControlling {
         stdin: Data?,
         timeout: TimeInterval
     ) async throws -> MoleCommandResult {
+        invocations += 1
         started = true
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
