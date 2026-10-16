@@ -44,7 +44,7 @@ struct SidebarView: View {
 
     private var brand: some View {
         HStack(spacing: 11) {
-            Image(nsImage: NSApp.applicationIconImage)
+            Image(nsImage: brandIcon)
                 .resizable()
                 .frame(width: 30, height: 30)
                 .accessibilityHidden(true)
@@ -58,6 +58,18 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 22)
+    }
+
+    /// The brand mark loads the bundled icns directly so the transparent
+    /// vector rendering is shown as authored. `NSApp.applicationIconImage`
+    /// goes through the system icon cache/decoration and can serve a stale or
+    /// plated image for the same bundle identifier.
+    private var brandIcon: NSImage {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return NSApp.applicationIconImage
     }
 
     private func navItem(_ destination: AppDestination) -> some View {

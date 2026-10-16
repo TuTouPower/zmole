@@ -12,9 +12,10 @@ enum MoleTheme {
     static let muted = adaptive(light: 0x6E6E73, dark: 0xA1A1A6)
     static let subtle = adaptive(light: 0x8E8E93, dark: 0x85858B)
     static let line = adaptive(light: 0x1D1D1F, dark: 0xFFFFFF).opacity(0.10)
-    static let accent = adaptive(light: 0x2F8F68, dark: 0x58B889)
-    static let accentStrong = adaptive(light: 0x237554, dark: 0x73C69D)
-    static let accentSoft = adaptive(light: 0xE8F4EE, dark: 0x23342C)
+    /// Accent family matches the app icon's blue gradients.
+    static let accent = adaptive(light: 0x0072FF, dark: 0x4FACFE)
+    static let accentStrong = adaptive(light: 0x0052D4, dark: 0x7CC4FF)
+    static let accentSoft = adaptive(light: 0xE8F1FF, dark: 0x152A4A)
     /// Demo `.info-banner` tokens: soft blue background with a readable blue
     /// that stays legible on the dark surface (the demo media query does not
     /// override the banner text color).

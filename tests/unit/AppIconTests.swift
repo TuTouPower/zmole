@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import Zmole
 
@@ -73,6 +74,26 @@ final class AppIconTests: XCTestCase {
         }
     }
 
+    func testAppIconKeepsATransparentBackground() throws {
+        let shipped = Self.repoRoot.appendingPathComponent("src/zmole/Resources/AppIcon.icns")
+        let iconset = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AppIcon-\(UUID().uuidString).iconset")
+        defer { try? FileManager.default.removeItem(at: iconset) }
+        try run("/usr/bin/iconutil", ["-c", "iconset", "-o", iconset.path, shipped.path])
+
+        let data = try Data(contentsOf: iconset.appendingPathComponent("icon_512x512.png"))
+        let rep = try XCTUnwrap(NSBitmapImageRep(data: data))
+        let corner = try XCTUnwrap(rep.colorAt(x: 2, y: 2))
+        XCTAssertEqual(
+            corner.alphaComponent,
+            0,
+            accuracy: 0.01,
+            "the icon background must stay transparent (no white preview page)"
+        )
+        let center = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2))
+        XCTAssertGreaterThan(center.alphaComponent, 0.5, "the glyph stays opaque")
+    }
+
     func testNoStaleIconSourceReferences() throws {
         let root = Self.repoRoot
         for file in ["project.yml", "scripts/build_app_icon.sh", "src/zmole/Info.plist"] {
@@ -91,12 +112,20 @@ final class AppIconTests: XCTestCase {
         )
     }
 
-    func testSidebarShowsTheBundleApplicationIcon() throws {
+    // Renamed in the icon hotfix: the sidebar now loads the bundled icns
+    // directly (NSApp.applicationIconImage goes through the system icon
+    // cache/decoration and served a plated image), with the system icon as a
+    // fallback only.
+    func testSidebarLoadsTheBundledIconDirectly() throws {
         let source = try String(
             contentsOf: Self.repoRoot.appendingPathComponent("src/zmole/App/SidebarView.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(source.contains("NSApp.applicationIconImage"))
+        XCTAssertTrue(
+            source.contains("Bundle.main.url(forResource: \"AppIcon\", withExtension: \"icns\")"),
+            "the sidebar must load the bundled icns directly"
+        )
+        XCTAssertTrue(source.contains("NSApp.applicationIconImage"), "a fallback stays for missing resources")
     }
 
     private func run(_ executable: String, _ arguments: [String]) throws {

@@ -44,8 +44,7 @@ struct OverviewView: View {
     private var head: some View {
         MolePageHead(
             eyebrow: "overview.eyebrow",
-            title: greetingKey,
-            subtitle: "overview.subtitle"
+            title: "overview.title"
         ) {
             Button {
                 Task { await statusViewModel.resample() }
@@ -65,15 +64,6 @@ struct OverviewView: View {
             .tint(MoleTheme.accent)
         }
         .padding(.bottom, 10)
-    }
-
-    private var greetingKey: LocalizedStringKey {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "overview.greeting.morning"
-        case 12..<18: return "overview.greeting.afternoon"
-        default: return "overview.greeting.evening"
-        }
     }
 
     private var heroRow: some View {

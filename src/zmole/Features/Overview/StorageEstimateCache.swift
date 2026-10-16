@@ -9,7 +9,10 @@ struct StorageEstimateCacheEntry: Codable, Equatable, Sendable {
 }
 
 struct StorageEstimateCache: Sendable {
-    static let schemaVersion = 1
+    /// Bumped to 2 when the system segment moved to the read-only system
+    /// volume: schema-1 entries carry the old (data-volume-inflated) sums and
+    /// must not be treated as authoritative.
+    static let schemaVersion = 2
     /// Refresh the estimate in the background when older than this.
     static let timeToLive: TimeInterval = 6 * 60 * 60
     /// Treat the entry as unusable when older than this.

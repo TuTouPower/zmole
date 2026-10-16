@@ -5,6 +5,11 @@
 # the .icns in src/zmole/Resources/ is a generated artifact that must be
 # refreshed with this script whenever the source changes.
 #
+# The SVG is rasterized through the system SVG support (ImageIO) into a
+# transparent 1024px master, then sliced with sips and packed with iconutil.
+# Do not use `qlmanage -t`: it renders a white "document preview" page and
+# destroys the icon's transparency.
+#
 # Usage:
 #   scripts/build_app_icon.sh [source.svg] [output.icns]
 set -euo pipefail
@@ -13,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="${1:-$REPO_ROOT/assets/app_icon_source.svg}"
 OUTPUT="${2:-$REPO_ROOT/src/zmole/Resources/AppIcon.icns}"
 
-for tool in qlmanage sips iconutil; do
+for tool in swift sips iconutil; do
     command -v "$tool" > /dev/null 2>&1 || {
         echo "build_app_icon: $tool is required" >&2
         exit 1
@@ -27,11 +32,10 @@ done
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# qlmanage renders the SVG at 1024x1024 through the system renderer.
-qlmanage -t -s 1024 -o "$WORK" "$SOURCE" > /dev/null 2>&1
-MASTER="$(find "$WORK" -maxdepth 1 -name '*.png' | head -1)"
+MASTER="$WORK/master.png"
+swift "$REPO_ROOT/scripts/svg_to_png.swift" "$SOURCE" "$MASTER" 1024
 [[ -f "$MASTER" ]] || {
-    echo "build_app_icon: qlmanage produced no render for $SOURCE" >&2
+    echo "build_app_icon: renderer produced no PNG for $SOURCE" >&2
     exit 1
 }
 
