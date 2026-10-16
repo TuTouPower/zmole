@@ -51,6 +51,7 @@ struct AppShellView: View {
             OverviewView(
                 statusViewModel: dependencies.statusViewModel,
                 viewModel: dependencies.overviewViewModel,
+                cleanViewModel: dependencies.cleanViewModel,
                 navigation: navigation
             )
         case .clean:

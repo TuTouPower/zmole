@@ -119,6 +119,13 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     private static func analyzeFixture(path: String?) -> String {
         guard let path else { return defaultAnalyzeFixture }
         if path.hasSuffix("/Library/Developer") { return developerAnalyzeFixture }
+        if path.hasPrefix("/System/") {
+            // The system segment is summed child by child, skipping the data
+            // volume.
+            if path == "/System/Volumes" { return dataVolumeAnalyzeFixture }
+            if path == "/System/Library" { return systemAnalyzeFixture }
+            return systemChildAnalyzeFixture
+        }
         switch path {
         case "/Applications": return applicationsAnalyzeFixture
         case "/System": return systemAnalyzeFixture
@@ -154,6 +161,20 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     {"path":"/System","overview":false,"entries":[
       {"name":"Library","path":"/System/Library","size":18000000000,"is_dir":true},
       {"name":"Frameworks","path":"/System/Library/Frameworks","size":7000000000,"is_dir":true}
+    ]}
+    """
+
+    // Only reachable if something wrongly walks the data volume; the estimate
+    // loader skips /System/Volumes, so this never enters the system segment.
+    private static let dataVolumeAnalyzeFixture = """
+    {"path":"/System/Volumes","overview":false,"entries":[
+      {"name":"Data","path":"/System/Volumes/Data","size":1470000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let systemChildAnalyzeFixture = """
+    {"path":"/System/Child","overview":false,"entries":[
+      {"name":"Payload","path":"/System/Child/Payload","size":120000000,"is_dir":true}
     ]}
     """
 

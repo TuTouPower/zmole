@@ -19,6 +19,7 @@
 |安装包|installer|扫描下载中的安装包；非交互列出后按路径移入废纸篓|
 |操作历史|history|mole 操作日志|
 |健康分|health score|status 给出的综合分|
+|五段估算|storage estimate|概览的 系统/应用程序/用户数据/开发者/其他 估算；系统段只计只读系统卷（`analyze /System` 顶层排除 `/System/Volumes`）；不完整或被取消的扫描不落盘、不作权威值|
 
 ## 第一版非目标
 

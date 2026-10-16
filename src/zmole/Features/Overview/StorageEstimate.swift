@@ -78,12 +78,20 @@ struct StorageSums: Equatable, Codable, Sendable {
 }
 
 struct StorageEstimateLoader: Sendable {
-    typealias DirectorySize = @Sendable (String) async -> Int64?
+    typealias DirectorySize = @Sendable (String) async throws -> Int64?
+    typealias SystemChildren = @Sendable () throws -> [String]
 
     private let directorySize: DirectorySize
+    private let systemChildren: SystemChildren
 
-    init(directorySize: @escaping DirectorySize) {
+    init(
+        directorySize: @escaping DirectorySize,
+        systemChildren: @escaping SystemChildren = {
+            try StorageEstimateLoader.directoryChildren(of: "/System")
+        }
+    ) {
         self.directorySize = directorySize
+        self.systemChildren = systemChildren
     }
 
     init(loader: AnalyzeSnapshotLoader, home: String = NSHomeDirectory()) {
@@ -91,17 +99,45 @@ struct StorageEstimateLoader: Sendable {
             let expanded = path.hasPrefix("~")
                 ? home + path.dropFirst()
                 : path
-            guard let snapshot = try? await loader.load(path: expanded) else { return nil }
-            return snapshot.entries.reduce(Int64(0)) { $0 + $1.size }
+            do {
+                let snapshot = try await loader.load(path: expanded)
+                return snapshot.entries.reduce(Int64(0)) { $0 + $1.size }
+            } catch let error as MoleBridgeError where error == .cancelled {
+                throw CancellationError()
+            } catch {
+                return nil
+            }
+        }
+        systemChildren = {
+            try Self.directoryChildren(of: "/System")
         }
     }
 
-    /// Runs the four directory probes sequentially on this lane's bridge.
-    func loadSums() async -> StorageSums {
-        let applications = await directorySize("/Applications")
-        let system = await directorySize("/System")
-        let developer = await directorySize("~/Library/Developer")
-        let users = await directorySize("/Users")
+    /// Directory-only children (files like `.DS_Store` are not system-volume
+    /// content worth probing).
+    private static func directoryChildren(of path: String) throws -> [String] {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        let children = try FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: []
+        )
+        return children.compactMap { child in
+            guard (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                return nil
+            }
+            return child.lastPathComponent
+        }
+    }
+
+    /// Runs the directory probes sequentially on this lane's bridge. Throws
+    /// `CancellationError` when the scan is cancelled, so callers never treat
+    /// a cancelled pass as a complete result.
+    func loadSums() async throws -> StorageSums {
+        let applications = try await directorySize("/Applications")
+        let system = try await systemSize()
+        let developer = try await directorySize("~/Library/Developer")
+        let users = try await directorySize("/Users")
         return StorageSums(
             applications: applications,
             system: system,
@@ -110,7 +146,34 @@ struct StorageEstimateLoader: Sendable {
         )
     }
 
-    func load(usedBytes: Int64?) async -> StorageBreakdown {
-        await loadSums().breakdown(usedBytes: usedBytes)
+    /// The `系统` segment only covers the read-only system volume: `/System` is
+    /// summed child by child with `/System/Volumes` (the whole data volume,
+    /// snapshots included) skipped. The value stays `analyze /System`'s
+    /// top-level sum minus `/System/Volumes`, and the data volume is never
+    /// walked, keeping the probe at seconds instead of minutes. A single
+    /// unreadable child makes the whole segment unavailable: a partial sum
+    /// must never masquerade as a complete one.
+    private func systemSize() async throws -> Int64? {
+        let children: [String]
+        do {
+            children = try systemChildren()
+        } catch {
+            return nil
+        }
+        let probes = children.filter { $0 != "Volumes" }.sorted()
+        guard !probes.isEmpty else { return nil }
+        var total: Int64 = 0
+        for child in probes {
+            try Task.checkCancellation()
+            guard let size = try await directorySize("/System/" + child) else {
+                return nil
+            }
+            total += size
+        }
+        return total
+    }
+
+    func load(usedBytes: Int64?) async throws -> StorageBreakdown {
+        try await loadSums().breakdown(usedBytes: usedBytes)
     }
 }
