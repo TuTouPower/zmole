@@ -76,7 +76,7 @@ struct AppShellView: View {
                 onOpenSettings: { navigation.select(.settings) }
             )
         case .installers:
-            InstallersView()
+            InstallersView(viewModel: dependencies.installersViewModel)
         case .history:
             HistoryView(viewModel: dependencies.historyViewModel)
         case .settings:

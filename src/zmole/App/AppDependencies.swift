@@ -81,6 +81,14 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
             return MoleCommandResult(stdout: Self.statusFixture(stale: state == .stale, includeDetails: state != .partial), stderr: "", exitCode: 0)
         case "history":
             return MoleCommandResult(stdout: Self.historyFixture, stderr: "", exitCode: 0)
+        case "installer":
+            if arguments.contains("--list-json") {
+                return MoleCommandResult(stdout: Self.installerListFixture, stderr: "", exitCode: 0)
+            }
+            if arguments.contains("--remove") {
+                return MoleCommandResult(stdout: "Moved to Trash", stderr: "", exitCode: 0)
+            }
+            return MoleCommandResult(stdout: "[]", stderr: "", exitCode: 0)
         case "uninstall":
             if arguments.contains("--dry-run") {
                 return MoleCommandResult(
@@ -175,6 +183,10 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
 
     private static let historyFixture = """
     {"limit":20,"sessions":[{"command":"clean","ended_at":"2026-09-22T10:20:00+08:00","items":12,"size":"3.2 GB"}],"deletions":[{"path":"/Users/demo/Library/Caches","timestamp":"2026-09-22T10:20:04+08:00","mode":"clean","status":"success","size_kb":128}]}
+    """
+
+    private static let installerListFixture = """
+    [{"path":"/Users/demo/Downloads/Android Studio.dmg","size_bytes":1210000000,"source":"Downloads","identity":"1:2:3"},{"path":"/Users/demo/Downloads/Figma.pkg","size_bytes":640000000,"source":"Downloads","identity":"4:5:6"},{"path":"/Users/demo/Downloads/VSCode.zip","size_bytes":310000000,"source":"Downloads","identity":"7:8:9"}]
     """
 
     private static let uninstallFixture = """
@@ -294,6 +306,7 @@ final class AppDependencies: ObservableObject {
     let analyzeViewModel: AnalyzeViewModel
     let statusViewModel: StatusViewModel
     let historyViewModel: HistoryViewModel
+    let installersViewModel: InstallersViewModel
     let overviewViewModel: OverviewViewModel
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
@@ -386,6 +399,10 @@ final class AppDependencies: ObservableObject {
             try await processBox.process.run(arguments, stdin: nil, timeout: 120)
         }
         historyViewModel = HistoryViewModel(loader: historyLoader)
+        installersViewModel = InstallersViewModel(
+            interface: InstallerInterface(process: process),
+            coordinator: coordinator
+        )
 
         let storageLoader = StorageEstimateLoader(loader: loader)
         overviewViewModel = OverviewViewModel(

@@ -6,6 +6,7 @@ enum WriteOperation: Hashable, Sendable {
     case uninstall
     case optimize
     case purge
+    case installer
     case protectionRules
 }
 
