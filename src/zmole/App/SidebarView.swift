@@ -5,6 +5,7 @@ import SwiftUI
 struct SidebarView: View {
     @ObservedObject var navigation: NavigationModel
     @ObservedObject var statusViewModel: StatusViewModel
+    @ObservedObject var cleanViewModel: CleanViewModel
     @State private var showingAbout = false
 
     var body: some View {
@@ -71,6 +72,14 @@ struct SidebarView: View {
                 Text(destination.titleKey)
                     .font(.system(size: 13))
                 Spacer(minLength: 0)
+                if destination == .clean, let bytes = cleanViewModel.lastReclaimBytes {
+                    Text(verbatim: ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(MoleTheme.accentStrong)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(MoleTheme.accentSoft, in: RoundedRectangle(cornerRadius: 7))
+                }
                 if destination == .status, statusViewModel.isSampling {
                     Circle()
                         .fill(MoleTheme.accent)

@@ -303,6 +303,7 @@ final class AppDependencies: ObservableObject {
         demo = configuration
         let process: any MoleProcessControlling
         let streaming: any MoleStreaming
+        let cleanStreaming: (any MoleStreaming)?
         let demoDirectory = configuration.dataRoot ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("zmole-demo-\(UUID().uuidString)", isDirectory: true)
         let demoCleanPreviewURL = configuration.isEnabled
@@ -320,16 +321,20 @@ final class AppDependencies: ObservableObject {
         if configuration.isEnabled {
             process = DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state)
             streaming = DemoMoleStreaming(state: configuration.state)
+            cleanStreaming = nil
         } else if let commandBridge = try? MoleBridge(),
-                  let streamBridge = try? MoleBridge() {
-            // A long-running status watch owns its bridge for the whole time the
-            // overview or status page is visible. One-shot commands use a second
-            // bridge so they are not rejected as busy while the watch runs.
+                  let streamBridge = try? MoleBridge(),
+                  let cleanPreviewBridge = try? MoleBridge() {
+            // One bridge per long-lived stream: the status watch and the clean
+            // dry-run preview must not share an active-runner slot, and one-shot
+            // commands need a third so neither stream blocks them.
             process = commandBridge
             streaming = streamBridge
+            cleanStreaming = cleanPreviewBridge
         } else {
             process = UnavailableMoleProcess()
             streaming = UnavailableMoleStreaming()
+            cleanStreaming = nil
         }
 
         coordinator = OperationCoordinator()
@@ -345,7 +350,8 @@ final class AppDependencies: ObservableObject {
         cleanViewModel = CleanViewModel(
             process: process,
             previewStore: previewStore,
-            coordinator: coordinator
+            coordinator: coordinator,
+            streaming: cleanStreaming
         )
         uninstallViewModel = UninstallViewModel(process: process, coordinator: coordinator)
         optimizeViewModel = OptimizeViewModel(process: process, coordinator: coordinator)

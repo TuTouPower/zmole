@@ -9,7 +9,7 @@
 |桥接层|MoleBridge|spawn 捆绑 mole 并解析输出|
 |干跑|dry-run|只预览，不落盘修改|
 |白名单|whitelist|`~/.config/mole/whitelist` 中受保护路径；GUI 编辑 clean 文件，optimize 白名单暂不支持|
-|清理|clean|清缓存、日志、已卸 App 残留；删除移入废纸篓，且同一次不再清空废纸篓|
+|清理|clean|清缓存、日志、已卸 App 残留；删除移入废纸篓，且同一次不再清空废纸篓；不能按界面勾选子集执行|
 |卸载|uninstall|移除 App 及关联文件；默认进废纸篓|
 |优化|optimize|有限维护（DNS、Spotlight 等）；其中删除保持永久删除|
 |磁盘分析|analyze|只读浏览占用；第一版不在浏览结果上删除|

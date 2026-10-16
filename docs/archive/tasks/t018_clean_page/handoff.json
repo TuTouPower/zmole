@@ -1,0 +1,22 @@
+{
+  "tid": "t018",
+  "attempt": 1,
+  "execution_id": "ee2df115378c46328a76d2ec7e6723b4",
+  "status": "done",
+  "branch": "t018_clean_page",
+  "base_sha": "ef1efac64fa4d2338b4ff5e421b26f4512d91fb0",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (133 pass incl. CleanPageTests 10); pytest .repo_template/tests -q -m contract (147 pass); bash tests/integration/clean_trash_test.sh (8/8); md_format --changed",
+  "blackbox": "testing.md GUI demo smoke cannot run in this environment (no displayable window; baseline parity, recorded in t015). Clean page behaviour covered by injected fake bridge tests: argv, preview generation, stage mapping, badge, copy.",
+  "review": "full: review_code.md PASS (rounds 1-2), review_test.md PASS (rounds 1-2); reviewed_scope 8a70ed92bb4d7e6c; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Clean/CleanViewModel.swift runDryRun", "tests/unit/CleanPageTests.swift testPreviewUsesDryRunAndExecutesOnlyAfterConfirmation"],
+    "AC-002": ["tests/unit/ZmoleTests.swift testCleanConfirmationCancelExpiresPreviewWithoutExecution", "tests/unit/CleanPageTests.swift testCancelPreviewCancelsTheStreamingProcess"],
+    "AC-003": ["src/zmole/Features/Clean/CleanView.swift protect button (no subset control)", "tests/unit/CleanPageTests.swift testProtectingPathInvalidatesCurrentPreview / testCleanViewHasNoSubsetExecutionControl"],
+    "AC-004": ["src/zmole/Features/Clean/CleanScanStage.swift", "src/zmole/Features/Clean/CleanViewModel.swift currentStage", "tests/unit/CleanPageTests.swift testStageParsingStripsANSIAndLocalizesKnownSection / testStreamingPreviewShowsLiveStageAndAcceptsPreview / testStageCatalogCoversBundledCleanSections / testStageLocalizationKeysHaveThreeLocales"],
+    "AC-005": ["src/zmole/Features/Clean/CleanViewModel.swift lastReclaimBytes", "src/zmole/App/SidebarView.swift clean badge", "tests/unit/CleanPageTests.swift testReclaimBadgeOnlyAfterSuccessfulPreview"],
+    "AC-006": ["src/zmole/Features/Clean/CleanView.swift resultNotices", "tests/unit/ZmoleTests.swift testCleanExecutionFailurePersistsErrorStateAndSummary"],
+    "AC-007": ["src/zmole/Resources/Localizable.xcstrings clean.execution_note/confirm_summary/subtitle zh-Hans 废纸篓", "tests/unit/CleanPageTests.swift testZhHansCleanCopyMentionsTrash"]
+  },
+  "pending": [],
+  "findings": []
+}

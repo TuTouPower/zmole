@@ -8,7 +8,11 @@ struct AppShellView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(navigation: navigation, statusViewModel: dependencies.statusViewModel)
+            SidebarView(
+                navigation: navigation,
+                statusViewModel: dependencies.statusViewModel,
+                cleanViewModel: dependencies.cleanViewModel
+            )
             NavigationStack {
                 destinationView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -49,7 +53,11 @@ struct AppShellView: View {
                 navigation: navigation
             )
         case .clean:
-            CleanView(viewModel: dependencies.cleanViewModel)
+            CleanView(
+                viewModel: dependencies.cleanViewModel,
+                whitelistViewModel: dependencies.whitelistViewModel,
+                onOpenWhitelist: { navigation.select(.settings) }
+            )
         case .uninstall:
             UninstallView(viewModel: dependencies.uninstallViewModel)
         case .disk:
