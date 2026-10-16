@@ -1,0 +1,21 @@
+{
+  "tid": "t020",
+  "attempt": 1,
+  "execution_id": "10352e3885c648ff921d52cd1e02a0c0",
+  "status": "done",
+  "branch": "t020_disk_explorer",
+  "base_sha": "a6b20775333d4ce11d98401017e0638e32dd96ea",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (153 pass incl. DiskExplorerTests 8); pytest .repo_template/tests -q -m contract (147 pass); md_format --changed",
+  "blackbox": "GUI environment-limited (recorded in t015). Disk explorer covered by injected two-level analyze JSON: drill-down argv, breadcrumb, order, area share, expand, Finder path, no-delete.",
+  "review": "single: review_general.md final PASS (rounds 1-2); reviewed_scope 8539e0d49daafe35; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift openDirectory/loadCurrentPath", "tests/unit/DiskExplorerTests.swift testEnteringDirectoryAnalyzesThatPathOnly"],
+    "AC-002": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift AnalyzeArea.share", "tests/unit/DiskExplorerTests.swift testAreaShareIsSizeOverCurrentLayerTotal"],
+    "AC-003": ["src/zmole/Features/Analyze/AnalyzeView.swift selectedPath shared by list and map", "tests/unit/DiskExplorerTests.swift testMapTilesCarryTheSamePathsAsCurrentLevelEntries"],
+    "AC-004": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift AnalyzeListOrder", "tests/unit/DiskExplorerTests.swift testNameSortReordersRowsWithoutChangingBytes"],
+    "AC-005": ["src/zmole/Features/Analyze/AnalyzeView.swift (no delete/trash controls)", "tests/unit/DiskExplorerTests.swift testDiskPageHasNoDeleteControl"],
+    "AC-006": ["src/zmole/Features/Analyze/AnalyzeViewModel.swift revealInFinder", "tests/unit/DiskExplorerTests.swift testRevealUsesEntryPath"]
+  },
+  "pending": [],
+  "findings": []
+}
