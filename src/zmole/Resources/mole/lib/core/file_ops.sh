@@ -1253,6 +1253,45 @@ _mole_record_clean_cancellation() {
     fi
 }
 
+# zmole local patch (t017): clean moves deletable targets to the user's Trash
+# instead of running `rm -rf`. `_mole_clean_trash_destination` resolves and
+# de-duplicates a Trash landing path; `_mole_clean_trash_path` performs the
+# non-privileged move. Returns 0 only when the target no longer exists at its
+# original path and now lives under the Trash directory; any failure leaves the
+# original in place so callers must not fall back to permanent deletion.
+# Upstream (V1.55.0) had no such path.
+_mole_clean_trash_destination() {
+    local path="$1"
+    local trash_dir="${MOLE_TRASH_DIR:-$HOME/.Trash}"
+
+    [[ -e "$path" || -L "$path" ]] || return 1
+    if [[ ! -d "$trash_dir" ]]; then
+        mkdir -p "$trash_dir" 2> /dev/null || return 1
+    fi
+
+    local base
+    base="$(basename "${path%/}")"
+    [[ -n "$base" ]] || return 1
+
+    local destination="$trash_dir/$base"
+    local suffix=0
+    while [[ -e "$destination" || -L "$destination" ]]; do
+        suffix=$((suffix + 1))
+        destination="$trash_dir/${base}.${suffix}.$(date +%s).$$"
+    done
+    printf '%s\n' "$destination"
+}
+
+_mole_clean_trash_path() {
+    local path="$1"
+    local destination=""
+    destination="$(_mole_clean_trash_destination "$path")" || return 1
+    [[ -n "$destination" ]] || return 1
+    mv "$path" "$destination" 2> /dev/null || return 1
+    [[ -e "$path" ]] && return 1
+    return 0
+}
+
 # Safe wrapper around rm -rf with validation
 safe_remove() {
     local path="$1"
@@ -1565,6 +1604,21 @@ safe_remove() {
     fi
 
     # Perform the deletion
+    # zmole local patch (t017): under `clean`, route the final deletion to the
+    # user's Trash. There is deliberately no fallback to rm: a failed Trash move
+    # keeps the original file and reports failure.
+    if [[ "${MOLE_CURRENT_COMMAND:-}" == "clean" ]]; then
+        local trash_rc=0
+        _mole_clean_trash_path "$path" || trash_rc=$?
+        if [[ $trash_rc -eq 0 ]]; then
+            log_operation "${MOLE_CURRENT_COMMAND:-clean}" "TRASHED" "$path" "$size_human"
+            return 0
+        fi
+        [[ "$silent" != "true" ]] && log_error "Failed to move to Trash: $path"
+        log_operation "${MOLE_CURRENT_COMMAND:-clean}" "FAILED" "$path" "trash failed"
+        return 1
+    fi
+
     # Use || to capture the exit code so set -e won't abort on rm failures
     local error_msg
     local rm_exit=0
@@ -1985,6 +2039,31 @@ safe_sudo_remove() {
         log_operation "${MOLE_CURRENT_COMMAND:-clean}" "SKIPPED" "$path" "identity changed"
         return 1
     fi
+
+    # zmole local patch (t017): clean routes even privileged deletions to the
+    # Trash, after the same identity recheck the rm path uses. It delegates to
+    # `_mole_move_path_to_user_trash` (root staging relay + invoking-user
+    # final move) so a root mv never targets the user-controlled ~/.Trash
+    # directly. There is no fallback to `rm -rf`; an un-trashable target is
+    # kept and reported as a failure (AC-005). Dry-run is handled earlier.
+    if [[ "${MOLE_CURRENT_COMMAND:-}" == "clean" &&
+        "${MOLE_DRY_RUN:-0}" != "1" ]]; then
+        local trash_rc=0
+        _mole_move_path_to_user_trash "$path" true \
+            "$expected_parent" "$expected_parent_id" "$expected_target_id" || trash_rc=$?
+        if [[ $trash_rc -eq 0 && ! -e "$path" ]]; then
+            log_operation "${MOLE_CURRENT_COMMAND:-clean}" "TRASHED" "$path" "$size_human"
+            return 0
+        fi
+        if [[ $trash_rc -eq 124 || $trash_rc -ge 128 ]]; then
+            _mole_record_clean_cancellation "$trash_rc"
+            return "$trash_rc"
+        fi
+        log_error "Failed to move to Trash, sudo: $path"
+        log_operation "${MOLE_CURRENT_COMMAND:-clean}" "FAILED" "$path" "trash failed"
+        return 1
+    fi
+
     local remove_timeout=""
     local section_deadline_spent=0
     remove_timeout=$(_mole_timeout_with_deadline "$MOLE_TIMEOUT_DISK_VERIFY_SEC" \
