@@ -15,17 +15,22 @@ final class CleanViewModel: ObservableObject {
     @Published private(set) var currentStage: CleanScanStage?
     @Published private(set) var lastReclaimBytes: Int64?
     @Published private(set) var showBusyNotice = false
+    @Published private(set) var previewCapturedAt: Date?
+
+    private weak var prewarm: (any PrewarmResultProviding)?
 
     init(
         process: any MoleProcessControlling,
         previewStore: CleanPreviewStore,
         coordinator: OperationCoordinator,
-        streaming: (any MoleStreaming)? = nil
+        streaming: (any MoleStreaming)? = nil,
+        prewarm: (any PrewarmResultProviding)? = nil
     ) {
         self.process = process
         self.previewStore = previewStore
         self.coordinator = coordinator
         self.streaming = streaming
+        self.prewarm = prewarm
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
             guard let self,
@@ -64,8 +69,23 @@ final class CleanViewModel: ObservableObject {
         return result.summary
     }
 
+    /// Shows a finished background prewarm preview without re-running the
+    /// scan. Does nothing when the user already has a preview or no prewarm
+    /// result is available.
+    func adoptPrewarmPreviewIfAvailable() {
+        guard session.preview == nil, !session.isBusy else { return }
+        guard let result = prewarm?.takeResult(.cleanDryRun),
+              case let .cleanPreview(snapshot) = result.payload else { return }
+        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        session.adoptPreview(snapshot)
+        lastReclaimBytes = snapshot.reclaimBytes
+        previewCapturedAt = result.capturedAt
+    }
+
     func previewClean() async {
         guard !session.isBusy else { return }
+        prewarm?.userDidRescan(.cleanDryRun)
+        previewCapturedAt = nil
         releaseLease()
         session.invalidate()
         currentStage = nil
@@ -173,6 +193,7 @@ final class CleanViewModel: ObservableObject {
             id: operationID
         )
         lastReclaimBytes = nil
+        previewCapturedAt = nil
         releaseLease()
     }
 
@@ -185,6 +206,7 @@ final class CleanViewModel: ObservableObject {
         guard session.isConfirmationPresented else { return }
         session.cancelConfirmation()
         lastReclaimBytes = nil
+        previewCapturedAt = nil
         releaseLease()
     }
 
@@ -218,6 +240,7 @@ final class CleanViewModel: ObservableObject {
         coordinator.invalidatePreviews()
         previewCoordinatorGeneration = coordinator.invalidationGeneration
         lastReclaimBytes = nil
+        previewCapturedAt = nil
 
         do {
             let result = try await process.run(["clean"], stdin: nil, timeout: 600)

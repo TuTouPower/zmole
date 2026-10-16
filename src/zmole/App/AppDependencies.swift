@@ -189,7 +189,7 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     [{"path":"/Users/demo/Downloads/Android Studio.dmg","size_bytes":1210000000,"source":"Downloads","identity":"1:2:3"},{"path":"/Users/demo/Downloads/Figma.pkg","size_bytes":640000000,"source":"Downloads","identity":"4:5:6"},{"path":"/Users/demo/Downloads/VSCode.zip","size_bytes":310000000,"source":"Downloads","identity":"7:8:9"}]
     """
 
-    private static let uninstallFixture = """
+    static let uninstallFixture = """
     [{"name":"Demo Editor","bundle_id":"com.example.demo-editor","uninstall_name":"Demo Editor","path":"/Applications/Demo Editor.app","source":"App","size":"1.4 GB"},{"name":"Brew Tool","bundle_id":"com.example.brew-tool","uninstall_name":"Brew Tool","path":"/Applications/Brew Tool.app","source":"Homebrew","size":"820 MB"},{"name":"Photo Vault","bundle_id":"com.example.photo-vault","uninstall_name":"Photo Vault","path":"/Applications/Photo Vault.app","source":"App","size":"2.1 GB"},{"name":"Terminal Plus","bundle_id":"com.example.terminal-plus","uninstall_name":"Terminal Plus","path":"/Applications/Terminal Plus.app","source":"App","size":null},{"name":"Note Studio with a Long Name","bundle_id":"com.example.note-studio","uninstall_name":"Note Studio with a Long Name","path":"/Applications/Note Studio with a Long Name.app","source":"Homebrew","size":"640 MB"},{"name":"Render Farm","bundle_id":"com.example.render-farm","uninstall_name":"Render Farm","path":"/Applications/Render Farm.app","source":"App","size":"3.8 GB"},{"name":"Data Tools","bundle_id":"com.example.data-tools","uninstall_name":"Data Tools","path":"/Applications/Data Tools.app","source":"Homebrew","size":"120 MB"},{"name":"Legacy Client","bundle_id":"com.example.legacy-client","uninstall_name":"Legacy Client","path":"/Applications/Legacy Client.app","source":"App","size":"55 MB"}]
     """
 
@@ -250,6 +250,74 @@ private struct DemoMoleStreaming: MoleStreaming {
         return """
         {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
         """
+    }
+}
+
+/// Progressive uninstall listing for demo mode: identities first, then the
+/// resolved rows, so the staged page is visible without spawning mole.
+private struct DemoUninstallListStream: MoleStreaming {
+    let state: DemoState
+
+    func stream(
+        _ arguments: [String],
+        stdin: Data?,
+        timeout: TimeInterval?
+    ) async -> AsyncThrowingStream<MoleOutputEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                if state == .error {
+                    continuation.finish(throwing: MoleBridgeError.commandFailed(
+                        MoleCommandResult(stdout: "", stderr: "Demo uninstall scan failed", exitCode: 7)
+                    ))
+                    return
+                }
+                if state == .empty {
+                    continuation.finish()
+                    return
+                }
+                let apps = (try? JSONDecoder().decode(
+                    [UninstallApp].self,
+                    from: Data(DemoMoleProcess.uninstallFixture.utf8)
+                )) ?? []
+                for app in apps {
+                    guard !Task.isCancelled else { return }
+                    continuation.yield(.stdoutLine(Self.identityLine(app)))
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+                let resolvedCount = state == .partial ? min(4, apps.count) : apps.count
+                for (index, app) in apps.enumerated() where index < resolvedCount {
+                    guard !Task.isCancelled else { return }
+                    continuation.yield(.stdoutLine(Self.fullLine(app, index: index)))
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+                continuation.yield(.stdoutLine(Data("{\"event\":\"done\"}\n".utf8)))
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func line(_ object: [String: Any]) -> Data {
+        var payload = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
+        payload.append(0x0A)
+        return payload
+    }
+
+    private static func identityLine(_ app: UninstallApp) -> Data {
+        line(["path": app.path, "name": app.name])
+    }
+
+    private static func fullLine(_ app: UninstallApp, index: Int) -> Data {
+        line([
+            "path": app.path,
+            "name": app.name,
+            "bundle_id": app.bundleID,
+            "uninstall_name": app.uninstallName,
+            "source": app.source ?? "App",
+            "size": app.size ?? "N/A",
+            "version": "\(1 + index % 4).\(index % 10).0",
+            "last_used_epoch": Int(Date().addingTimeInterval(-Double(index) * 86_400).timeIntervalSince1970)
+        ])
     }
 }
 
@@ -445,6 +513,9 @@ final class AppDependencies: ObservableObject {
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
     let lanes: MoleCommandLanes
+    let prewarmService: PrewarmService?
+
+    private var prewarmSubscriptions: [AnyCancellable] = []
 
     let demo: DemoConfiguration
 
@@ -468,23 +539,28 @@ final class AppDependencies: ObservableObject {
         if configuration.isEnabled {
             lanes = .demo(
                 process: DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state),
-                streaming: DemoMoleStreaming(state: configuration.state)
+                streaming: DemoMoleStreaming(state: configuration.state),
+                uninstallStream: DemoUninstallListStream(state: configuration.state)
             )
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                   let streamBridge = try? MoleBridge(),
-                  let cleanBridge = try? MoleBridge() {
+                  let cleanBridge = try? MoleBridge(),
+                  let uninstallStreamBridge = try? MoleBridge(),
+                  let prewarmBridge = try? MoleBridge() {
             // One bridge per one-shot consumer: a slow read no longer rejects
             // other pages as busy. Writes stay mutually exclusive via the
             // coordinator lease, not the bridge.
             lanes = MoleCommandLanes(
                 history: bridges[0],
                 uninstall: bridges[1],
+                uninstallStream: uninstallStreamBridge,
                 installer: bridges[2],
                 statusCommand: bridges[3],
                 cleanCommand: bridges[4],
                 optimize: bridges[5],
                 purge: bridges[6],
                 estimate: bridges[7],
+                prewarm: prewarmBridge,
                 statusStream: streamBridge,
                 cleanStream: cleanBridge
             )
@@ -492,7 +568,8 @@ final class AppDependencies: ObservableObject {
             lanes = .unavailable()
         }
 
-        coordinator = OperationCoordinator()
+        let sharedCoordinator = OperationCoordinator()
+        coordinator = sharedCoordinator
         let previewStore: CleanPreviewStore
         if configuration.isEnabled {
             previewStore = CleanPreviewStore(
@@ -501,15 +578,38 @@ final class AppDependencies: ObservableObject {
         } else {
             previewStore = .live
         }
+        let prewarm = lanes.prewarm.map { lane in
+            PrewarmService(
+                process: lane,
+                installerInterface: InstallerInterface(process: lane),
+                cleanPreviewStore: previewStore,
+                coordinator: sharedCoordinator
+            )
+        }
+        prewarmService = prewarm
         cleanViewModel = CleanViewModel(
             process: lanes.cleanCommand,
             previewStore: previewStore,
             coordinator: coordinator,
-            streaming: lanes.cleanStream
+            streaming: lanes.cleanStream,
+            prewarm: prewarm
         )
-        uninstallViewModel = UninstallViewModel(process: lanes.uninstall, coordinator: coordinator)
-        optimizeViewModel = OptimizeViewModel(process: lanes.optimize, coordinator: coordinator)
-        purgeViewModel = PurgeViewModel(process: lanes.purge, coordinator: coordinator)
+        uninstallViewModel = UninstallViewModel(
+            process: lanes.uninstall,
+            listStream: UninstallListStream(streaming: lanes.uninstallStream),
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
+        optimizeViewModel = OptimizeViewModel(
+            process: lanes.optimize,
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
+        purgeViewModel = PurgeViewModel(
+            process: lanes.purge,
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
         let whitelistURL = configuration.isEnabled
             ? demoDirectory.appendingPathComponent("whitelist")
             : WhitelistStore.live.fileURL
@@ -556,7 +656,8 @@ final class AppDependencies: ObservableObject {
         historyViewModel = HistoryViewModel(loader: historyLoader)
         installersViewModel = InstallersViewModel(
             interface: InstallerInterface(process: lanes.installer),
-            coordinator: coordinator
+            coordinator: coordinator,
+            prewarm: prewarm
         )
 
         let estimateBox = MoleProcessBox(lanes.estimate)
@@ -570,5 +671,36 @@ final class AppDependencies: ObservableObject {
             storageCache: configuration.isEnabled ? nil : .live,
             coordinator: coordinator
         )
+
+        if let prewarm {
+            prewarm.externalActivityProvider = { [weak analyzeViewModel, weak uninstallViewModel, weak installersViewModel] in
+                (analyzeViewModel?.isScanning ?? false)
+                    || (uninstallViewModel?.isListing ?? false)
+                    || (installersViewModel?.isListing ?? false)
+            }
+            prewarm.cleanPreviewActiveProvider = { [weak cleanViewModel] in
+                guard let cleanViewModel else { return false }
+                return cleanViewModel.preview != nil
+                    || cleanViewModel.isConfirmationPresented
+                    || cleanViewModel.isPreviewing
+            }
+            // Published changes fire before the mutation lands; hop one main
+            // actor turn so the idle check reads the new values.
+            prewarmSubscriptions = [
+                analyzeViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                uninstallViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                installersViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                cleanViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                }
+            ]
+            prewarm.noteActivityChanged()
+        }
     }
 }

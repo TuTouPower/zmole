@@ -1,20 +1,19 @@
 import Foundation
 
-struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
+struct UninstallApp: Decodable, Equatable, Hashable, Identifiable, Sendable {
     let name: String
     let bundleID: String
     let uninstallName: String
     let path: String
     let source: String?
     let size: String?
+    let version: String?
+    let lastUsed: Date?
 
-    var id: String {
-        [path, bundleID, uninstallName].joined(separator: "\u{1F}")
-    }
-
-    var identity: UninstallIdentity {
-        UninstallIdentity(path: path, bundleID: bundleID, uninstallName: uninstallName)
-    }
+    /// Stable identity for selection and confirmation binding. The full
+    /// path/bundle-id/uninstall-name triplet is still validated separately
+    /// before any destructive step.
+    var id: String { path }
 
     var sizeBytes: Int64? {
         UninstallSizeParser.bytes(from: size)
@@ -34,6 +33,8 @@ struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         case path
         case source
         case size
+        case version
+        case lastUsedEpoch = "last_used_epoch"
     }
 
     init(
@@ -42,7 +43,9 @@ struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         uninstallName: String,
         path: String,
         source: String? = nil,
-        size: String? = nil
+        size: String? = nil,
+        version: String? = nil,
+        lastUsed: Date? = nil
     ) {
         self.name = name
         self.bundleID = bundleID
@@ -50,6 +53,8 @@ struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         self.path = path
         self.source = source
         self.size = size
+        self.version = version
+        self.lastUsed = lastUsed
     }
 
     init(from decoder: Decoder) throws {
@@ -68,18 +73,13 @@ struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         } else {
             size = nil
         }
+        version = try? container.decodeIfPresent(String.self, forKey: .version)
+        if let epoch = try? container.decodeIfPresent(Double.self, forKey: .lastUsedEpoch), epoch > 0 {
+            lastUsed = Date(timeIntervalSince1970: epoch)
+        } else {
+            lastUsed = nil
+        }
     }
-}
-
-struct UninstallIdentity: Codable, Equatable, Hashable, Sendable {
-    let path: String
-    let bundleID: String
-    let uninstallName: String
-}
-
-struct UninstallListSnapshot: Equatable, Sendable {
-    let generation: UUID
-    let apps: [UninstallApp]
 }
 
 struct UninstallPreviewSnapshot: Equatable, Sendable {
@@ -87,8 +87,6 @@ struct UninstallPreviewSnapshot: Equatable, Sendable {
     let apps: [UninstallApp]
     let selectedIDs: Set<String>
     let output: String
-
-    var identities: Set<UninstallIdentity> { Set(apps.map(\.identity)) }
 
     init(
         generation: UUID,
@@ -131,30 +129,19 @@ enum UninstallViewModelError: Error, Equatable, Sendable {
     }
 }
 
-enum UninstallListDecoder {
-    static func decode(_ output: String) throws -> [UninstallApp] {
-        guard let data = output.data(using: .utf8) else {
-            throw UninstallViewModelError.invalidList
-        }
-
-        do {
-            return try JSONDecoder().decode([UninstallApp].self, from: data)
-        } catch {
-            throw UninstallViewModelError.invalidList
-        }
-    }
-}
-
 enum UninstallListFilter {
-    /// Row visibility only. It never touches the selection set, so hiding a row
-    /// by search keeps it selected.
-    static func visible(_ apps: [UninstallApp], search: String, source: String) -> [UninstallApp] {
-        apps
+    /// Progressive listing rows use the same search/source semantics.
+    static func visibleListings(
+        _ listings: [UninstallAppListing],
+        search: String,
+        source: String
+    ) -> [UninstallAppListing] {
+        listings
             .filter { source == "all" || $0.source == source }
             .filter {
                 search.isEmpty
                     || $0.name.localizedCaseInsensitiveContains(search)
-                    || $0.bundleID.localizedCaseInsensitiveContains(search)
+                    || ($0.bundleID?.localizedCaseInsensitiveContains(search) ?? false)
                     || $0.path.localizedCaseInsensitiveContains(search)
             }
     }

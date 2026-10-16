@@ -15,12 +15,12 @@ struct UninstallView: View {
     @State private var sort: UninstallSort = .name
 
     private var sources: [String] {
-        let values = Set(viewModel.apps.compactMap(\.source)).sorted()
+        let values = Set(viewModel.listings.compactMap(\.source)).sorted()
         return ["all"] + values
     }
 
-    private var visibleApps: [UninstallApp] {
-        UninstallListFilter.visible(viewModel.apps, search: search, source: source)
+    private var visibleListings: [UninstallAppListing] {
+        UninstallListFilter.visibleListings(viewModel.listings, search: search, source: source)
             .sorted { lhs, rhs in
                 switch sort {
                 case .name:
@@ -34,7 +34,7 @@ struct UninstallView: View {
     }
 
     private var selectedApps: [UninstallApp] {
-        viewModel.apps.filter { viewModel.selectedIDs.contains($0.id) }
+        viewModel.selectedApps
     }
 
     private var knownSelectedBytes: Int64 {
@@ -111,6 +111,11 @@ struct UninstallView: View {
                 }
             }
             .frame(width: 120)
+            if let capturedAt = viewModel.listCapturedAt {
+                Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
@@ -156,13 +161,13 @@ struct UninstallView: View {
                 Text("uninstall.executing").foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.isListing {
+        } else if viewModel.isListing, viewModel.listings.isEmpty {
             VStack(spacing: 12) {
                 ProgressView()
                 Text("uninstall.loading").foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.apps.isEmpty {
+        } else if viewModel.listings.isEmpty {
             UtilityEmptyState(symbol: "square.stack.3d.up", title: "sidebar.uninstall", message: "uninstall.empty")
         } else {
             HStack(alignment: .top, spacing: 0) {
@@ -176,42 +181,55 @@ struct UninstallView: View {
 
     private var listPane: some View {
         List {
-            ForEach(visibleApps) { app in
-                appRow(app)
-                    .listRowBackground(viewModel.focusedAppID == app.id ? MoleTheme.surface2 : Color.clear)
+            ForEach(visibleListings) { listing in
+                listingRow(listing)
+                    .listRowBackground(viewModel.focusedAppID == listing.path ? MoleTheme.surface2 : Color.clear)
             }
         }
         .listStyle(.inset)
         .frame(minWidth: 320)
     }
 
-    private func appRow(_ app: UninstallApp) -> some View {
+    private func listingRow(_ listing: UninstallAppListing) -> some View {
         HStack(spacing: 11) {
             Button {
-                viewModel.toggleSelection(app)
+                viewModel.toggleSelection(path: listing.path)
             } label: {
-                Image(systemName: viewModel.selectedIDs.contains(app.id) ? "checkmark.square.fill" : "square")
+                Image(systemName: viewModel.selectedPaths.contains(listing.path) ? "checkmark.square.fill" : "square")
                     .font(.system(size: 15))
-                    .foregroundStyle(viewModel.selectedIDs.contains(app.id) ? MoleTheme.accent : .secondary)
+                    .foregroundStyle(viewModel.selectedPaths.contains(listing.path) ? MoleTheme.accent : .secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(viewModel.selectedIDs.contains(app.id) ? "uninstall.selected_state" : "uninstall.not_selected_state"))
+            .accessibilityLabel(Text(viewModel.selectedPaths.contains(listing.path) ? "uninstall.selected_state" : "uninstall.not_selected_state"))
 
             Button {
-                viewModel.focus(app)
-                Task { await viewModel.loadDetail(for: app) }
+                viewModel.focus(path: listing.path)
             } label: {
                 HStack(spacing: 11) {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
-                        .resizable()
-                        .frame(width: 32, height: 32)
+                    // Icons load after the list is interactive; a placeholder
+                    // keeps rendering from blocking on synchronous icon reads.
+                    if let icon = viewModel.icon(forPath: listing.path) {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 32, height: 32)
+                    } else {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(MoleTheme.surface2)
+                            .frame(width: 32, height: 32)
+                            .overlay {
+                                Image(systemName: "app.dashed")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(app.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                        Text(listing.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
                         HStack(spacing: 7) {
-                            Text(verbatim: metadataLine(app))
+                            Text(verbatim: versionLine(listing))
                             Spacer(minLength: 0)
-                            Text(verbatim: app.sizeText ?? String(localized: "uninstall.size_unknown"))
+                            Text(verbatim: sizeLabel(listing))
                                 .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -222,14 +240,29 @@ struct UninstallView: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: UninstallAccessibility.description(for: app)))
+            .accessibilityLabel(Text(verbatim: accessibilityDescription(listing)))
         }
         .padding(.vertical, 6)
     }
 
-    private func metadataLine(_ app: UninstallApp) -> String {
-        let version = viewModel.metadata(for: app)?.version ?? String(localized: "uninstall.unknown")
+    private func versionLine(_ listing: UninstallAppListing) -> String {
+        let version = listing.version ?? String(localized: "uninstall.unknown")
         return String(localized: "uninstall.version_line") + " " + version
+    }
+
+    /// Unknown size never renders as zero: while the scan runs it reads as
+    /// computing, afterwards as unknown.
+    private func sizeLabel(_ listing: UninstallAppListing) -> String {
+        if let size = listing.sizeText { return size }
+        if viewModel.isListing { return String(localized: "uninstall.size_computing") }
+        return String(localized: "uninstall.size_unknown")
+    }
+
+    private func accessibilityDescription(_ listing: UninstallAppListing) -> String {
+        if let app = listing.uninstallApp {
+            return UninstallAccessibility.description(for: app)
+        }
+        return [listing.name, listing.path].joined(separator: " · ")
     }
 
     private var detailPane: some View {
@@ -249,12 +282,18 @@ struct UninstallView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
-                        .resizable()
-                        .frame(width: 52, height: 52)
+                    if let icon = viewModel.icon(for: app) {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 52, height: 52)
+                    } else {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(MoleTheme.surface2)
+                            .frame(width: 52, height: 52)
+                    }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.name).font(.system(size: 17, weight: .semibold)).lineLimit(1)
-                        Text(verbatim: "\(String(localized: "uninstall.version_line")) \(viewModel.metadata(for: app)?.version ?? String(localized: "uninstall.unknown"))")
+                        Text(verbatim: "\(String(localized: "uninstall.version_line")) \(app.version ?? String(localized: "uninstall.unknown"))")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
@@ -332,7 +371,7 @@ struct UninstallView: View {
     }
 
     private func lastUsedText(_ app: UninstallApp) -> String {
-        guard let date = viewModel.metadata(for: app)?.lastUsed else {
+        guard let date = app.lastUsed else {
             return String(localized: "uninstall.unknown")
         }
         return date.formatted(date: .abbreviated, time: .shortened)
@@ -373,6 +412,9 @@ struct UninstallView: View {
                 .padding(12)
         } else if let errorMessage = viewModel.errorMessage {
             UtilityNotice(title: "uninstall.error_title", detail: errorMessage, isError: true)
+                .padding(12)
+        } else if let listError = viewModel.listErrorMessage {
+            UtilityNotice(title: "uninstall.error_title", detail: listError, isError: true)
                 .padding(12)
         } else if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
             UtilityNotice(title: "uninstall.result", detail: executionSummary)

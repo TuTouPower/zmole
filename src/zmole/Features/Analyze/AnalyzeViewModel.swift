@@ -11,6 +11,7 @@ final class AnalyzeViewModel: ObservableObject {
 
     @Published private(set) var level: LevelState?
     @Published private(set) var isListing = false
+    @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var canGoBack = false
 
@@ -51,6 +52,17 @@ final class AnalyzeViewModel: ObservableObject {
     }
 
     var currentPath: String? { level?.path }
+
+    private var wantsScanningState: Bool {
+        isListing || measurementWorker != nil || !pendingMeasurements.isEmpty
+    }
+
+    private func refreshScanState() {
+        let scanning = wantsScanningState
+        if isScanning != scanning {
+            isScanning = scanning
+        }
+    }
 
     /// Lists the scan root, reusing the session cache when present.
     func loadOverview() async {
@@ -112,7 +124,11 @@ final class AnalyzeViewModel: ObservableObject {
         nextGeneration += 1
         let generation = nextGeneration
         isListing = true
-        defer { isListing = false }
+        refreshScanState()
+        defer {
+            isListing = false
+            refreshScanState()
+        }
         do {
             let entries = try await scanner.listDirectory(path)
             let deduplicator = HardLinkDeduplicator()
@@ -166,6 +182,7 @@ final class AnalyzeViewModel: ObservableObject {
         measurementWorker = Task { @MainActor [weak self] in
             await self?.processMeasurements()
         }
+        refreshScanState()
     }
 
     private func processMeasurements() async {
@@ -180,6 +197,7 @@ final class AnalyzeViewModel: ObservableObject {
             apply(result, parent: request.parent, generation: request.generation)
         }
         measurementWorker = nil
+        refreshScanState()
     }
 
     private func apply(_ result: DiskScanResult, parent: String, generation: Int) {

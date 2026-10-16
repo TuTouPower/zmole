@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class UninstallDetailTests: XCTestCase {
     func testBatchPreviewUsesOnlySelectedUninstallNamesAndConfirmationInput() async {
-        let process = DetailProcessSpy(listJSON: Self.listJSON)
+        let process = DetailProcessSpy()
         let viewModel = makeViewModel(process: process)
 
         await viewModel.loadListIfNeeded()
@@ -20,44 +20,42 @@ final class UninstallDetailTests: XCTestCase {
     }
 
     func testFocusAndSelectionAreIndependentOfEachOther() async {
-        let viewModel = makeViewModel(process: DetailProcessSpy(listJSON: Self.listJSON))
+        let viewModel = makeViewModel(process: DetailProcessSpy())
         await viewModel.loadListIfNeeded()
         let apps = viewModel.apps
 
         viewModel.toggleSelection(apps[0])
         viewModel.focus(apps[1])
-        await viewModel.loadDetail(for: apps[1])
 
         XCTAssertEqual(viewModel.focusedAppID, apps[1].id)
         XCTAssertEqual(viewModel.selectedIDs, [apps[0].id])
         XCTAssertEqual(viewModel.focusedApp?.path, apps[1].path)
     }
 
-    func testMetadataShowsUnknownWhenMissing() async {
-        let provider = FakeMetadataProvider(values: [:])
-        let viewModel = makeViewModel(process: DetailProcessSpy(listJSON: Self.listJSON), metadata: provider)
+    func testMissingVersionAndLastUsedStayUnknown() async {
+        let viewModel = makeViewModel(process: DetailProcessSpy())
         await viewModel.loadListIfNeeded()
-        await viewModel.loadDetail(for: viewModel.apps[0])
 
-        let metadata = viewModel.metadata(for: viewModel.apps[0])
-        XCTAssertNotNil(metadata)
-        XCTAssertNil(metadata?.version)
-        XCTAssertNil(metadata?.lastUsed)
+        let app = viewModel.apps[0]
+        XCTAssertNil(app.version)
+        XCTAssertNil(app.lastUsed)
     }
 
-    func testMetadataFromLocalProviderIsSurfaced() async {
-        let version = UninstallAppMetadata(version: "1.2.3", lastUsed: Date(timeIntervalSince1970: 1_700_000_000))
-        let provider = FakeMetadataProvider(values: ["/Applications/Alpha.app": version])
-        let viewModel = makeViewModel(process: DetailProcessSpy(listJSON: Self.listJSON), metadata: provider)
+    func testVersionAndLastUsedComeFromTheListScan() async {
+        let capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let viewModel = makeViewModel(
+            process: DetailProcessSpy(),
+            alphaVersion: "1.2.3",
+            alphaLastUsed: capturedAt
+        )
         await viewModel.loadListIfNeeded()
-        await viewModel.loadDetail(for: viewModel.apps[0])
 
-        XCTAssertEqual(viewModel.metadata(for: viewModel.apps[0])?.version, "1.2.3")
+        XCTAssertEqual(viewModel.apps[0].version, "1.2.3")
+        XCTAssertEqual(viewModel.apps[0].lastUsed, capturedAt)
     }
 
     func testRelatedPathsOnlyComeFromThatAppsDryRun() async {
         let process = DetailProcessSpy(
-            listJSON: Self.listJSON,
             dryRunOutput: "Files to be removed:\n  /Applications/Alpha.app\n  /Users/example/Library/Caches/com.example.alpha\n"
         )
         let viewModel = makeViewModel(process: process)
@@ -73,8 +71,22 @@ final class UninstallDetailTests: XCTestCase {
         )
     }
 
+    func testRelatedPathsAreNotLoadedWithoutAUserRequest() async {
+        let process = DetailProcessSpy(
+            dryRunOutput: "Files to be removed:\n  /Applications/Alpha.app\n"
+        )
+        let viewModel = makeViewModel(process: process)
+        await viewModel.loadListIfNeeded()
+
+        for app in viewModel.apps {
+            XCTAssertNil(viewModel.relatedPaths(for: app))
+        }
+        let invocations = await process.invocations
+        XCTAssertTrue(invocations.isEmpty, "the related-files dry-run runs only on demand")
+    }
+
     func testRelatedPathsEmptyWhenDryRunHasNoPaths() async {
-        let process = DetailProcessSpy(listJSON: Self.listJSON, dryRunOutput: "Nothing to remove\n")
+        let process = DetailProcessSpy(dryRunOutput: "Nothing to remove\n")
         let viewModel = makeViewModel(process: process)
         await viewModel.loadListIfNeeded()
         let app = viewModel.apps[0]
@@ -85,7 +97,7 @@ final class UninstallDetailTests: XCTestCase {
 
     func testRevealInFinderUsesTheAppPath() async {
         let revealer = RevealerSpy()
-        let viewModel = makeViewModel(process: DetailProcessSpy(listJSON: Self.listJSON), revealer: revealer)
+        let viewModel = makeViewModel(process: DetailProcessSpy(), revealer: revealer)
         await viewModel.loadListIfNeeded()
         let app = viewModel.apps[0]
 
@@ -97,7 +109,7 @@ final class UninstallDetailTests: XCTestCase {
     }
 
     func testCancelConfirmationDoesNotExecuteUninstall() async {
-        let process = DetailProcessSpy(listJSON: Self.listJSON)
+        let process = DetailProcessSpy()
         let viewModel = makeViewModel(process: process)
         await viewModel.loadListIfNeeded()
         viewModel.toggleSelection(viewModel.apps[0])
@@ -108,7 +120,7 @@ final class UninstallDetailTests: XCTestCase {
         viewModel.cancelConfirmation()
 
         let invocations = await process.invocations
-        XCTAssertFalse(invocations.contains { $0.arguments.first == "uninstall" && !$0.arguments.contains("--dry-run") && !$0.arguments.contains("--list") })
+        XCTAssertFalse(invocations.contains { $0.arguments.first == "uninstall" && !$0.arguments.contains("--dry-run") })
         XCTAssertNil(viewModel.preview)
         XCTAssertFalse(viewModel.canConfirm)
     }
@@ -137,18 +149,18 @@ final class UninstallDetailTests: XCTestCase {
     }
 
     func testSearchFilterHidesRowButKeepsSelection() async {
-        let viewModel = makeViewModel(process: DetailProcessSpy(listJSON: Self.listJSON))
+        let viewModel = makeViewModel(process: DetailProcessSpy())
         await viewModel.loadListIfNeeded()
         let apps = viewModel.apps
         viewModel.toggleSelection(apps[0])
 
-        let visible = UninstallListFilter.visible(viewModel.apps, search: "Beta", source: "all")
+        let visible = UninstallListFilter.visibleListings(viewModel.listings, search: "Beta", source: "all")
         XCTAssertEqual(visible.map(\.name), ["Beta Tool"])
         XCTAssertEqual(viewModel.selectedIDs, [apps[0].id])
     }
 
     func testConfirmationExecutesOnlySelectedBatch() async {
-        let process = DetailProcessSpy(listJSON: Self.listJSON)
+        let process = DetailProcessSpy()
         let viewModel = makeViewModel(process: process)
         await viewModel.loadListIfNeeded()
         let apps = viewModel.apps
@@ -162,7 +174,6 @@ final class UninstallDetailTests: XCTestCase {
         let invocations = await process.invocations
         let execution = invocations.last { invocation in
             invocation.arguments.first == "uninstall"
-                && !invocation.arguments.contains("--list")
                 && !invocation.arguments.contains("--dry-run")
         }
         XCTAssertEqual(execution?.arguments, ["uninstall", "Alpha App", "Beta Tool"])
@@ -180,23 +191,40 @@ final class UninstallDetailTests: XCTestCase {
 
     private func makeViewModel(
         process: DetailProcessSpy,
-        metadata: UninstallMetadataProviding = FakeMetadataProvider(values: [:]),
+        alphaVersion: String? = nil,
+        alphaLastUsed: Date? = nil,
         revealer: FileRevealing = RevealerSpy()
     ) -> UninstallViewModel {
         UninstallViewModel(
             process: process,
+            listStream: UninstallFixture.stream(rows: [
+                UninstallAppListing(
+                    path: "/Applications/Alpha.app",
+                    name: "Alpha App",
+                    bundleID: "com.example.alpha",
+                    uninstallName: "Alpha App",
+                    source: "App",
+                    sizeText: "1.4 GB",
+                    version: alphaVersion,
+                    lastUsed: alphaLastUsed
+                ),
+                UninstallAppListing(
+                    path: "/Applications/Beta.app",
+                    name: "Beta Tool",
+                    bundleID: "com.example.beta",
+                    uninstallName: "Beta Tool",
+                    source: "Homebrew",
+                    sizeText: nil,
+                    version: nil,
+                    lastUsed: nil
+                )
+            ]),
             coordinator: OperationCoordinator(),
-            metadataProvider: metadata,
+            targetChecker: FixedTargetChecker(matches: true),
+            iconProvider: NoopIconProvider(),
             revealer: revealer
         )
     }
-
-    private static let listJSON = """
-    [
-      {"name":"Alpha App","bundle_id":"com.example.alpha","uninstall_name":"Alpha App","path":"/Applications/Alpha.app","source":"App","size":"1.4 GB"},
-      {"name":"Beta Tool","bundle_id":"com.example.beta","uninstall_name":"Beta Tool","path":"/Applications/Beta.app","source":"Homebrew","size":"unknown"}
-    ]
-    """
 }
 
 private struct DetailInvocation: Sendable {
@@ -206,11 +234,9 @@ private struct DetailInvocation: Sendable {
 
 private actor DetailProcessSpy: MoleProcessControlling {
     private(set) var invocations: [DetailInvocation] = []
-    private let listJSON: String
     private let dryRunOutput: String
 
-    init(listJSON: String, dryRunOutput: String = "") {
-        self.listJSON = listJSON
+    init(dryRunOutput: String = "") {
         self.dryRunOutput = dryRunOutput
     }
 
@@ -220,9 +246,6 @@ private actor DetailProcessSpy: MoleProcessControlling {
         timeout: TimeInterval
     ) async throws -> MoleCommandResult {
         invocations.append(DetailInvocation(arguments: arguments, stdin: stdin))
-        if arguments == ["uninstall", "--list"] {
-            return MoleCommandResult(stdout: listJSON, stderr: "", exitCode: 0)
-        }
         if arguments.first == "uninstall", arguments.contains("--dry-run") {
             return MoleCommandResult(stdout: dryRunOutput, stderr: "", exitCode: 0)
         }
@@ -230,14 +253,6 @@ private actor DetailProcessSpy: MoleProcessControlling {
     }
 
     func cancel() async {}
-}
-
-private struct FakeMetadataProvider: UninstallMetadataProviding {
-    let values: [String: UninstallAppMetadata]
-
-    func metadata(forAppAt path: String) async -> UninstallAppMetadata {
-        values[path] ?? UninstallAppMetadata(version: nil, lastUsed: nil)
-    }
 }
 
 private actor RevealerSpy: FileRevealing {

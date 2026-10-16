@@ -39,6 +39,7 @@ setup_fixture() {
 run_installer() {
     MOLE_INSTALLER_SCAN_ROOT="$MOLE_INSTALLER_SCAN_ROOT" \
         MOLE_TEST_TRASH_DIR="$MOLE_TEST_TRASH_DIR" \
+        MOLE_INSTALLER_SCAN_DISABLED="${MOLE_INSTALLER_SCAN_DISABLED:-0}" \
         HOME="$HOME" \
         bash "$INSTALLER" "$@"
 }
@@ -154,6 +155,29 @@ if [[ "$EMPTY_OUTPUT" == "[]" ]]; then
     pass "AC-002 empty scan emits []"
 else
     fail "AC-002 empty scan output: '$EMPTY_OUTPUT'"
+fi
+
+# t029: removal verifies the target itself and never re-walks the scan roots.
+# The scan-disabled hook makes any hidden re-scan fail loudly.
+setup_fixture
+LIST_OUTPUT="$(run_installer --list-json 2>/dev/null)"
+DMG_META="$(list_metadata "$LIST_OUTPUT" app.dmg)"
+DMG_SIZE="$(sed -n '1p' <<< "$DMG_META")"
+DMG_IDENTITY="$(sed -n '2p' <<< "$DMG_META")"
+DMG="$SCAN/app.dmg"
+MOLE_INSTALLER_SCAN_DISABLED=1 run_installer --remove "$DMG" --size "$DMG_SIZE" --identity "$DMG_IDENTITY" >/dev/null 2>&1
+RC=$?
+if [[ $RC -eq 0 && ! -e "$DMG" ]]; then
+    pass "t029 removal does not re-scan the roots"
+else
+    fail "t029 removal rc=$RC origin=$([[ -e "$DMG" ]] && echo present || echo gone)"
+fi
+MOLE_INSTALLER_SCAN_DISABLED=1 run_installer --remove "$SCAN/notes.txt" --size 1 --identity whatever >/dev/null 2>&1
+RC2=$?
+if [[ $RC2 -ne 0 && -e "$SCAN/notes.txt" ]]; then
+    pass "t029 target verification still refuses non-candidates"
+else
+    fail "t029 noncandidate rc=$RC2"
 fi
 
 if [[ $failures -eq 0 ]]; then

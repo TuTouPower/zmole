@@ -8,35 +8,41 @@ import Foundation
 final class MoleCommandLanes {
     let history: any MoleProcessControlling
     let uninstall: any MoleProcessControlling
+    let uninstallStream: any MoleStreaming
     let installer: any MoleProcessControlling
     let statusCommand: any MoleProcessControlling
     let cleanCommand: any MoleProcessControlling
     let optimize: any MoleProcessControlling
     let purge: any MoleProcessControlling
     let estimate: any MoleProcessControlling
+    let prewarm: (any MoleProcessControlling & MoleStreaming)?
     let statusStream: any MoleStreaming
     let cleanStream: (any MoleStreaming)?
 
     init(
         history: any MoleProcessControlling,
         uninstall: any MoleProcessControlling,
+        uninstallStream: any MoleStreaming,
         installer: any MoleProcessControlling,
         statusCommand: any MoleProcessControlling,
         cleanCommand: any MoleProcessControlling,
         optimize: any MoleProcessControlling,
         purge: any MoleProcessControlling,
         estimate: any MoleProcessControlling,
+        prewarm: (any MoleProcessControlling & MoleStreaming)?,
         statusStream: any MoleStreaming,
         cleanStream: (any MoleStreaming)?
     ) {
         self.history = history
         self.uninstall = uninstall
+        self.uninstallStream = uninstallStream
         self.installer = installer
         self.statusCommand = statusCommand
         self.cleanCommand = cleanCommand
         self.optimize = optimize
         self.purge = purge
         self.estimate = estimate
+        self.prewarm = prewarm
         self.statusStream = statusStream
         self.cleanStream = cleanStream
     }
@@ -53,11 +59,16 @@ final class MoleCommandLanes {
         return bridges
     }
 
-    static func demo(process: any MoleProcessControlling, streaming: any MoleStreaming) -> MoleCommandLanes {
+    static func demo(
+        process: any MoleProcessControlling,
+        streaming: any MoleStreaming,
+        uninstallStream: any MoleStreaming
+    ) -> MoleCommandLanes {
         MoleCommandLanes(
-            history: process, uninstall: process, installer: process,
-            statusCommand: process, cleanCommand: process, optimize: process, purge: process,
-            estimate: process,
+            history: process, uninstall: process, uninstallStream: uninstallStream,
+            installer: process, statusCommand: process, cleanCommand: process,
+            optimize: process, purge: process, estimate: process,
+            prewarm: nil,
             statusStream: streaming,
             cleanStream: nil
         )
@@ -66,9 +77,10 @@ final class MoleCommandLanes {
     static func unavailable() -> MoleCommandLanes {
         let process = UnavailableMoleProcess()
         return MoleCommandLanes(
-            history: process, uninstall: process, installer: process,
-            statusCommand: process, cleanCommand: process, optimize: process, purge: process,
-            estimate: process,
+            history: process, uninstall: process, uninstallStream: UnavailableMoleStreaming(),
+            installer: process, statusCommand: process, cleanCommand: process,
+            optimize: process, purge: process, estimate: process,
+            prewarm: nil,
             statusStream: UnavailableMoleStreaming(),
             cleanStream: nil
         )

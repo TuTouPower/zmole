@@ -24,6 +24,7 @@ struct OptimizeView: View {
             }
         }
         .navigationTitle("sidebar.optimize")
+        .task { viewModel.adoptPrewarmPreviewIfAvailable() }
         .toolbar {
             ToolbarItem {
                 if viewModel.isPreviewing {
@@ -53,6 +54,11 @@ struct OptimizeView: View {
                         .textCase(.uppercase)
                     Text("optimize.title").font(.system(size: 30, weight: .bold))
                     Text("optimize.subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                    if let capturedAt = viewModel.previewCapturedAt {
+                        Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(MoleTheme.muted)
+                    }
                 }
 
                 UtilityNotice(title: "optimize.permanent_note", symbol: "exclamationmark.triangle", isError: true)
