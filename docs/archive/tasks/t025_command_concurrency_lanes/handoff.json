@@ -1,0 +1,19 @@
+{
+  "tid": "t025",
+  "attempt": 1,
+  "execution_id": "abdb5171e37d43008bae2d2476599c45",
+  "status": "done",
+  "branch": "t025_command_concurrency_lanes",
+  "base_sha": "156c58d3f779f9e3562e1f727c0fe1e7c9d50127",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (184 pass incl. CommandConcurrencyTests 6); pytest .repo_template/tests -q -m contract (147 pass); bash tests/integration/clean_trash_test.sh; bash tests/integration/installer_interface_test.sh",
+  "blackbox": "GUI environment-limited (recorded in t015). Concurrency proven with real MoleBridge lanes (/bin/sleep) and fake blocking processes; production assembly distinctness asserted via AppDependencies.lanes.",
+  "review": "full: review_code.md PASS (rounds 1-2), review_test.md PASS (rounds 1-2); reviewed_scope 6d211272f4bcb643; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/App/MoleCommandLanes.swift", "src/zmole/App/AppDependencies.swift per-consumer lanes", "tests/unit/CommandConcurrencyTests.swift testAppDependenciesWiresDistinctLanes / testCommandBridgesAreDistinct / testBusyReadLaneDoesNotBlockAnotherReadLane"],
+    "AC-002": ["tests/unit/CommandConcurrencyTests.swift testActiveStatusStreamDoesNotBlockReadLane"],
+    "AC-003": ["src/zmole/Features/Operations/OperationCoordinator.swift single lease", "tests/unit/CommandConcurrencyTests.swift testTwoWriteViewModelsCannotRunConcurrently / testWriteLeaseIsMutuallyExclusiveAcrossOperations"],
+    "AC-004": ["tests/unit/CommandConcurrencyTests.swift testSameBridgeRejectsConcurrentRun", "tests/unit/ZmoleTests.swift testCleanDuplicateExecutionCreatesOneProcess"]
+  },
+  "pending": [],
+  "findings": []
+}

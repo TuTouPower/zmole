@@ -49,7 +49,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
-常驻 `status --watch` 与同页的一次性命令不能共用一条桥：`MoleBridge` 只允许一个 active runner。App 装配为流式命令（status watch）和一次性命令各持一条独立 `MoleBridge` 实例，避免 watch 占桥导致概览/状态的 analyze、history 被判 busy。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（analyze、history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。
 
 ## 捆绑与进程边界
 
