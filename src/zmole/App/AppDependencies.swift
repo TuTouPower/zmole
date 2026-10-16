@@ -72,11 +72,23 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
             if state == .error {
                 return MoleCommandResult(stdout: "", stderr: "Demo analyze failed", exitCode: 7)
             }
-            return MoleCommandResult(stdout: state == .empty ? Self.emptyAnalyzeFixture : Self.analyzeFixture, stderr: "", exitCode: 0)
+            if state == .empty {
+                return MoleCommandResult(stdout: Self.emptyAnalyzeFixture, stderr: "", exitCode: 0)
+            }
+            let path = arguments.last.flatMap { $0.hasPrefix("/") || $0.hasPrefix("~") ? $0 : nil }
+            return MoleCommandResult(stdout: Self.analyzeFixture(path: path), stderr: "", exitCode: 0)
         case "status":
             return MoleCommandResult(stdout: Self.statusFixture(stale: state == .stale, includeDetails: state != .partial), stderr: "", exitCode: 0)
         case "history":
             return MoleCommandResult(stdout: Self.historyFixture, stderr: "", exitCode: 0)
+        case "installer":
+            if arguments.contains("--list-json") {
+                return MoleCommandResult(stdout: Self.installerListFixture, stderr: "", exitCode: 0)
+            }
+            if arguments.contains("--remove") {
+                return MoleCommandResult(stdout: "Moved to Trash", stderr: "", exitCode: 0)
+            }
+            return MoleCommandResult(stdout: "[]", stderr: "", exitCode: 0)
         case "uninstall":
             if arguments.contains("--dry-run") {
                 return MoleCommandResult(
@@ -104,7 +116,18 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
 
     func cancel() async {}
 
-    private static let analyzeFixture = """
+    private static func analyzeFixture(path: String?) -> String {
+        guard let path else { return defaultAnalyzeFixture }
+        if path.hasSuffix("/Library/Developer") { return developerAnalyzeFixture }
+        switch path {
+        case "/Applications": return applicationsAnalyzeFixture
+        case "/System": return systemAnalyzeFixture
+        case "/Users": return usersAnalyzeFixture
+        default: return defaultAnalyzeFixture
+        }
+    }
+
+    private static let defaultAnalyzeFixture = """
     {"path":"/Users/demo","overview":true,"entries":[
       {"name":"Applications","path":"/Users/demo/Applications","size":34400550912,"is_dir":true},
       {"name":"Library","path":"/Users/demo/Library","size":18123968512,"is_dir":true},
@@ -119,12 +142,40 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     ]}
     """
 
+    private static let applicationsAnalyzeFixture = """
+    {"path":"/Applications","overview":false,"entries":[
+      {"name":"Xcode.app","path":"/Applications/Xcode.app","size":22000000000,"is_dir":true},
+      {"name":"Docker.app","path":"/Applications/Docker.app","size":12000000000,"is_dir":true},
+      {"name":"Other","path":"/Applications/Other","size":6000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let systemAnalyzeFixture = """
+    {"path":"/System","overview":false,"entries":[
+      {"name":"Library","path":"/System/Library","size":18000000000,"is_dir":true},
+      {"name":"Frameworks","path":"/System/Library/Frameworks","size":7000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let developerAnalyzeFixture = """
+    {"path":"~/Library/Developer","overview":false,"entries":[
+      {"name":"Xcode","path":"~/Library/Developer/Xcode","size":24000000000,"is_dir":true},
+      {"name":"CoreSimulator","path":"~/Library/Developer/CoreSimulator","size":6000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let usersAnalyzeFixture = """
+    {"path":"/Users","overview":false,"entries":[
+      {"name":"demo","path":"/Users/demo","size":90000000000,"is_dir":true}
+    ]}
+    """
+
     private static let emptyAnalyzeFixture = """
     {"path":"/Users/demo","overview":true,"entries":[]}
     """
 
     private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ]" : ""
+        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
         return """
         {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
         """
@@ -132,6 +183,10 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
 
     private static let historyFixture = """
     {"limit":20,"sessions":[{"command":"clean","ended_at":"2026-09-22T10:20:00+08:00","items":12,"size":"3.2 GB"}],"deletions":[{"path":"/Users/demo/Library/Caches","timestamp":"2026-09-22T10:20:04+08:00","mode":"clean","status":"success","size_kb":128}]}
+    """
+
+    private static let installerListFixture = """
+    [{"path":"/Users/demo/Downloads/Android Studio.dmg","size_bytes":1210000000,"source":"Downloads","identity":"1:2:3"},{"path":"/Users/demo/Downloads/Figma.pkg","size_bytes":640000000,"source":"Downloads","identity":"4:5:6"},{"path":"/Users/demo/Downloads/VSCode.zip","size_bytes":310000000,"source":"Downloads","identity":"7:8:9"}]
     """
 
     private static let uninstallFixture = """
@@ -191,7 +246,7 @@ private struct DemoMoleStreaming: MoleStreaming {
     }
 
     private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ]" : ""
+        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
         return """
         {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
         """
@@ -200,7 +255,7 @@ private struct DemoMoleStreaming: MoleStreaming {
 
 struct DemoConfiguration: Equatable, Sendable {
     let isEnabled: Bool
-    let page: AppMode
+    let page: AppDestination
     let state: DemoState
     let dataRoot: URL?
     let language: AppLanguage?
@@ -208,7 +263,8 @@ struct DemoConfiguration: Equatable, Sendable {
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         isEnabled = arguments.contains("--demo")
-        page = Self.value(after: "--demo-page", in: arguments).flatMap(AppMode.init(rawValue:)) ?? .analyze
+        page = Self.value(after: "--demo-page", in: arguments)
+            .flatMap(AppDestination.init(demoValue:)) ?? .overview
         state = Self.value(after: "--demo-state", in: arguments).flatMap(DemoState.init(rawValue:)) ?? .populated
         let root = Self.value(after: "--demo-data-root", in: arguments).map { URL(fileURLWithPath: $0, isDirectory: true) }
         dataRoot = isEnabled ? root : nil
@@ -245,10 +301,15 @@ final class AppDependencies: ObservableObject {
     let uninstallViewModel: UninstallViewModel
     let optimizeViewModel: OptimizeViewModel
     let purgeViewModel: PurgeViewModel
+    let purgePathsViewModel: PurgePathsViewModel
     let whitelistViewModel: WhitelistViewModel
+    let optimizeWhitelistViewModel: WhitelistViewModel
+    let loginItemViewModel: LoginItemViewModel
     let analyzeViewModel: AnalyzeViewModel
     let statusViewModel: StatusViewModel
     let historyViewModel: HistoryViewModel
+    let installersViewModel: InstallersViewModel
+    let overviewViewModel: OverviewViewModel
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
 
@@ -258,6 +319,7 @@ final class AppDependencies: ObservableObject {
         demo = configuration
         let process: any MoleProcessControlling
         let streaming: any MoleStreaming
+        let cleanStreaming: (any MoleStreaming)?
         let demoDirectory = configuration.dataRoot ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("zmole-demo-\(UUID().uuidString)", isDirectory: true)
         let demoCleanPreviewURL = configuration.isEnabled
@@ -275,12 +337,20 @@ final class AppDependencies: ObservableObject {
         if configuration.isEnabled {
             process = DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state)
             streaming = DemoMoleStreaming(state: configuration.state)
-        } else if let bridge = try? MoleBridge() {
-            process = bridge
-            streaming = bridge
+            cleanStreaming = nil
+        } else if let commandBridge = try? MoleBridge(),
+                  let streamBridge = try? MoleBridge(),
+                  let cleanPreviewBridge = try? MoleBridge() {
+            // One bridge per long-lived stream: the status watch and the clean
+            // dry-run preview must not share an active-runner slot, and one-shot
+            // commands need a third so neither stream blocks them.
+            process = commandBridge
+            streaming = streamBridge
+            cleanStreaming = cleanPreviewBridge
         } else {
             process = UnavailableMoleProcess()
             streaming = UnavailableMoleStreaming()
+            cleanStreaming = nil
         }
 
         coordinator = OperationCoordinator()
@@ -296,7 +366,8 @@ final class AppDependencies: ObservableObject {
         cleanViewModel = CleanViewModel(
             process: process,
             previewStore: previewStore,
-            coordinator: coordinator
+            coordinator: coordinator,
+            streaming: cleanStreaming
         )
         uninstallViewModel = UninstallViewModel(process: process, coordinator: coordinator)
         optimizeViewModel = OptimizeViewModel(process: process, coordinator: coordinator)
@@ -306,6 +377,22 @@ final class AppDependencies: ObservableObject {
             : WhitelistStore.live.fileURL
         whitelistViewModel = WhitelistViewModel(
             store: WhitelistStore(fileURL: whitelistURL),
+            coordinator: coordinator
+        )
+        let optimizeWhitelistURL = configuration.isEnabled
+            ? demoDirectory.appendingPathComponent("whitelist_optimize")
+            : WhitelistStore.optimize.fileURL
+        optimizeWhitelistViewModel = WhitelistViewModel(
+            store: WhitelistStore(fileURL: optimizeWhitelistURL),
+            coordinator: coordinator,
+            kind: .optimize
+        )
+        loginItemViewModel = LoginItemViewModel()
+        let purgePathsURL = configuration.isEnabled
+            ? demoDirectory.appendingPathComponent("purge_paths")
+            : PurgePathsStore.live.fileURL
+        purgePathsViewModel = PurgePathsViewModel(
+            store: PurgePathsStore(fileURL: purgePathsURL),
             coordinator: coordinator
         )
 
@@ -323,5 +410,15 @@ final class AppDependencies: ObservableObject {
             try await processBox.process.run(arguments, stdin: nil, timeout: 120)
         }
         historyViewModel = HistoryViewModel(loader: historyLoader)
+        installersViewModel = InstallersViewModel(
+            interface: InstallerInterface(process: process),
+            coordinator: coordinator
+        )
+
+        let storageLoader = StorageEstimateLoader(loader: loader)
+        overviewViewModel = OverviewViewModel(
+            storageLoader: storageLoader,
+            historyLoader: historyLoader
+        )
     }
 }

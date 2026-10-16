@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 struct HistoryView: View {
@@ -32,6 +34,10 @@ struct HistoryView: View {
         .navigationTitle("sidebar.history")
         .toolbar {
             ToolbarItem {
+                Button("history.export") { exportJSON() }
+                    .disabled(viewModel.rawJSON == nil)
+            }
+            ToolbarItem {
                 Button("history.refresh") {
                     Task { await viewModel.refresh() }
                 }
@@ -41,6 +47,15 @@ struct HistoryView: View {
         .task {
             guard viewModel.snapshot == nil, !viewModel.isLoading else { return }
             await viewModel.refresh()
+        }
+    }
+
+    private func exportJSON() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "mole-history.json"
+        panel.allowedContentTypes = [.json]
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.export(to: url)
         }
     }
 }

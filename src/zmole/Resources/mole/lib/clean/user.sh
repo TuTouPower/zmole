@@ -34,6 +34,12 @@ _user_safe_clean_process_guarded() {
 }
 
 clean_trash() {
+    # zmole local patch (t017): clean no longer empties the user's Trash.
+    # Because clean now moves targets into ~/.Trash, emptying it in the same
+    # run would make the result permanent again. The original upstream body is
+    # kept below for reference and is re-applied on the next upstream upgrade.
+    return 0
+
     if is_path_whitelisted "$HOME/.Trash"; then
         return 0
     fi

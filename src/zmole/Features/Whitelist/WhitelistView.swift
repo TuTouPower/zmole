@@ -26,7 +26,7 @@ struct WhitelistView: View {
             } else if let document = viewModel.document {
                 List {
                     Section {
-                        Text("whitelist.clean_summary")
+                        Text(viewModel.kind == .optimize ? "whitelist.clean_summary.optimize" : "whitelist.clean_summary")
                             .foregroundStyle(.secondary)
                         Text(viewModel.filePath)
                             .font(.caption)
@@ -48,7 +48,10 @@ struct WhitelistView: View {
                     }
 
                     Section("whitelist.patterns") {
-                        if let errorMessage = viewModel.errorMessage {
+                        if let errorKey = viewModel.errorMessageKey {
+                            Text(LocalizedStringKey(errorKey))
+                                .foregroundStyle(.red)
+                        } else if let errorMessage = viewModel.errorMessage {
                             Text(errorMessage)
                                 .foregroundStyle(.red)
                         }
@@ -78,7 +81,7 @@ struct WhitelistView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("sidebar.whitelist")
+        .navigationTitle(viewModel.kind == .optimize ? "sidebar.optimize" : "sidebar.whitelist")
         .toolbar {
             ToolbarItem {
                 Button("whitelist.save") {
@@ -90,7 +93,7 @@ struct WhitelistView: View {
         .safeAreaInset(edge: .bottom) {
             if viewModel.document != nil {
                 HStack {
-                    TextField("whitelist.add_placeholder", text: $viewModel.newPattern)
+                    TextField(viewModel.kind == .optimize ? "whitelist.add_placeholder.optimize" : "whitelist.add_placeholder", text: $viewModel.newPattern)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { viewModel.addPattern() }
                     Button("whitelist.add") {

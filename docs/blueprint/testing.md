@@ -24,6 +24,8 @@ xcodegen generate
 xcodegen generate
 xcodebuild test -scheme Zmole -destination 'platform=macOS'
 pytest .repo_template/tests -q -m contract
+bash tests/integration/clean_trash_test.sh
+bash tests/integration/installer_interface_test.sh
 ```
 
 当前阶段以模板工具链测试为主；业务 Swift 测试随首个实现 task 接入本命令。填本命令时按「门禁类别清单」逐类覆盖；项目不适用某类写「无」并说明理由。
@@ -35,11 +37,11 @@ pytest .repo_template/tests -q -m contract
 ```bash
 DEMO_ROOT="$PWD/.scratch/ui_rebuild/demo_data"
 mkdir -p "$DEMO_ROOT"
-open -a Zmole --args --demo --demo-page analyze --demo-state populated \
+open -a Zmole --args --demo --demo-page disk --demo-state populated \
   --demo-language zh-Hans --demo-appearance light --demo-data-root "$DEMO_ROOT"
 ```
 
-打开后检查 Analyze 生产页面显示 fixture；进入 Software → Protection rules 并保存、或执行 Clean preview 后，再检查对应文件只出现在 `DEMO_ROOT`。截图验收覆盖 1200×760 与 880×620、浅/深色和三语。
+打开后检查 Disk 生产页面显示 fixture；进入设置 → 保护规则并保存、或执行 Clean preview 后，再检查对应文件只出现在 `DEMO_ROOT`。截图验收覆盖 1200×780 与 1100×700、浅/深色和三语。
 
 Status read-only watch 验证：
 

@@ -18,6 +18,8 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
     let topProcesses: [ProcessInfo]?
     let processCollectedAt: Date?
     let processStale: Bool
+    let cpuTemperature: Double?
+    let zombieCount: Int?
 
     struct CPU: Codable, Equatable, Sendable {
         let usage: Double
@@ -210,6 +212,25 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         case topProcesses = "top_processes"
         case processCollectedAt = "process_collected_at"
         case processStale = "process_stale"
+        case thermal
+        case zombieCount = "zombie_count"
+    }
+
+    struct Thermal: Codable, Equatable, Sendable {
+        let cpuTemp: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case cpuTemp = "cpu_temp"
+        }
+
+        init(cpuTemp: Double? = nil) {
+            self.cpuTemp = cpuTemp
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            cpuTemp = try? container.decode(Double.self, forKey: .cpuTemp)
+        }
     }
 
     init(
@@ -224,7 +245,9 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         network: [NetworkInterface]? = nil,
         topProcesses: [ProcessInfo]? = nil,
         processCollectedAt: Date? = nil,
-        processStale: Bool = true
+        processStale: Bool = true,
+        cpuTemperature: Double? = nil,
+        zombieCount: Int? = nil
     ) {
         self.collectedAt = collectedAt
         self.healthScore = healthScore
@@ -238,6 +261,8 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         self.topProcesses = topProcesses
         self.processCollectedAt = processCollectedAt
         self.processStale = processStale
+        self.cpuTemperature = cpuTemperature
+        self.zombieCount = zombieCount
     }
 
     init(from decoder: Decoder) throws {
@@ -264,6 +289,8 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         collectedAt = Self.decodeDate(container, key: .collectedAt)
         processCollectedAt = Self.decodeDate(container, key: .processCollectedAt)
         processStale = (try? container.decode(Bool.self, forKey: .processStale)) ?? (topProcesses == nil)
+        cpuTemperature = (try? container.decode(Thermal.self, forKey: .thermal))?.cpuTemp
+        zombieCount = try? container.decode(Int.self, forKey: .zombieCount)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -278,6 +305,8 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         try container.encodeIfPresent(topProcesses, forKey: .topProcesses)
         if let processCollectedAt { try container.encode(Self.dateString(processCollectedAt), forKey: .processCollectedAt) }
         try container.encode(processStale, forKey: .processStale)
+        if let cpuTemperature { try container.encode(Thermal(cpuTemp: cpuTemperature), forKey: .thermal) }
+        try container.encodeIfPresent(zombieCount, forKey: .zombieCount)
     }
 
     var networkTotal: NetworkTotal? {

@@ -22,6 +22,7 @@ final class DestructiveConfirmationFlow {
 struct DestructiveConfirmationView: View {
     let title: LocalizedStringKey
     let summary: LocalizedStringKey
+    var detail: String? = nil
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -31,6 +32,10 @@ struct DestructiveConfirmationView: View {
                 .font(.title)
             Text(summary)
                 .foregroundStyle(.secondary)
+            if let detail, !detail.isEmpty {
+                Text(verbatim: detail)
+                    .font(.system(size: 13, weight: .medium))
+            }
             HStack {
                 Button("action.cancel") {
                     onCancel()

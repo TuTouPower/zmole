@@ -1,0 +1,20 @@
+{
+  "tid": "t017",
+  "attempt": 1,
+  "execution_id": "13fe7c2d65b1473296f04359dda2d666",
+  "status": "done",
+  "branch": "t017_clean_trash_routing",
+  "base_sha": "0be6d3ef39d0e480ebff7e9a6e71d63cf2f51fb3",
+  "tests": "bash tests/integration/clean_trash_test.sh (8/8); pytest .repo_template/tests -q -m contract (147 passed); bash -n on modified shell scripts; md_format --changed",
+  "blackbox": "The bundled-lib integration test is the executable blackbox: it sources the real production lib and runs clean/safe_remove/safe_sudo_remove/clean_trash against a temporary HOME and Trash. GUI smoke not applicable to this task.",
+  "review": "full: review_code.md final verdict PASS (rounds 1-4) and review_test.md final verdict PASS (rounds 1-4); reviewed_scope 99868a61c555c686; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Resources/mole/lib/core/file_ops.sh _mole_clean_trash_path", "tests/integration/clean_trash_test.sh AC-001 cases (move into Trash, duplicate basenames unique)"],
+    "AC-002": ["src/zmole/Resources/mole/lib/core/file_ops.sh safe_remove clean branch (no rm fallback)", "tests/integration/clean_trash_test.sh AC-002 case"],
+    "AC-003": ["src/zmole/Resources/mole/lib/clean/user.sh clean_trash early return", "tests/integration/clean_trash_test.sh AC-003 case (runs real clean_trash)"],
+    "AC-004": ["src/zmole/Resources/mole/lib/clean/user.sh clean_trash early return", "tests/integration/clean_trash_test.sh AC-004 case"],
+    "AC-005": ["src/zmole/Resources/mole/lib/core/file_ops.sh safe_sudo_remove clean branch delegates to _mole_move_path_to_user_trash", "tests/integration/clean_trash_test.sh AC-005 cases (unprivileged failure, privileged delegation marker)"]
+  },
+  "pending": [],
+  "findings": []
+}
