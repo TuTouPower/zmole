@@ -55,6 +55,7 @@
 		98BD10C4B95BF5AA68707001 /* WhitelistOperationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC2C0BA051215FB0E465DB9 /* WhitelistOperationTests.swift */; };
 		9BA909784B55073617781DA1 /* CleanPreviewStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0EECB2840553CD0BF53693E /* CleanPreviewStoreTests.swift */; };
 		9D9ACAF2D6215B22B61C9437 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F155DB1A34BDD42384DD4A /* OverviewView.swift */; };
+		A16BD324EF1D18D53E361A2F /* CommandConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */; };
 		A769E569E65A070E26CF954F /* InstallerInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5A424E1EF896610C7E457D /* InstallerInterface.swift */; };
 		A9E3BC9E069984C4DC7AA35C /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2FF8C842174A39D87371 /* CommandPaletteView.swift */; };
 		AA08085E2058EECEEFFFDE49 /* UninstallMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217901BD849972859EAA0561 /* UninstallMetadata.swift */; };
@@ -68,6 +69,7 @@
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
 		BD30E5D75EF21A1E4DA2466A /* NavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD6E9DDA001E4C3C32A8A33 /* NavigationModel.swift */; };
+		C1A87725262A705552719985 /* MoleCommandLanes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE8F461882BFAAD473673459 /* MoleCommandLanes.swift */; };
 		C2ABA452E71B92CE32751D12 /* PurgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ABBAEAA755CD5E07B40A3D /* PurgeViewModel.swift */; };
 		C3FBC23FE50B6418C05BE1E9 /* StatusReadout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 361BF28522726FF34D23FF43 /* StatusReadout.swift */; };
 		C4270600BACA215C2B16EFDD /* BatchUninstallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6224A16B0D76BB1F6C4FBF /* BatchUninstallTests.swift */; };
@@ -188,6 +190,7 @@
 		AACED876BFD4FD95E9D889A9 /* SpaceMapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMapTests.swift; sourceTree = "<group>"; };
 		AE334F91E7FFB8672701E61E /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
 		B22A8D1ED5B34DF4188D0304 /* StatusStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusStreamTests.swift; sourceTree = "<group>"; };
+		B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandConcurrencyTests.swift; sourceTree = "<group>"; };
 		B76D4F97CC2D295465B4473E /* OverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewTests.swift; sourceTree = "<group>"; };
 		B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSnapshot.swift; sourceTree = "<group>"; };
 		BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallersPageTests.swift; sourceTree = "<group>"; };
@@ -212,6 +215,7 @@
 		EB2183B1B2CAC6D3EA0C4F5B /* CleanScanStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanScanStage.swift; sourceTree = "<group>"; };
 		EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallViewModel.swift; sourceTree = "<group>"; };
 		EC4C03475B2E6AEB22F223D5 /* DestructiveConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructiveConfirmation.swift; sourceTree = "<group>"; };
+		EE8F461882BFAAD473673459 /* MoleCommandLanes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleCommandLanes.swift; sourceTree = "<group>"; };
 		EFF06BD69D5E2DD87C328B82 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		F0F155DB1A34BDD42384DD4A /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeError.swift; sourceTree = "<group>"; };
@@ -316,6 +320,7 @@
 				E75D2F971AB0AF22C45A07EE /* CleanPageTests.swift */,
 				01C371A91DC8FACD70EFBBA7 /* CleanPresentationTests.swift */,
 				D0EECB2840553CD0BF53693E /* CleanPreviewStoreTests.swift */,
+				B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */,
 				6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */,
 				BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
@@ -418,6 +423,7 @@
 				8420B1435B244B9A28B385F9 /* AppLinks.swift */,
 				2BBBC813AB644453186DEC8B /* AppShellView.swift */,
 				A20B2FF8C842174A39D87371 /* CommandPaletteView.swift */,
+				EE8F461882BFAAD473673459 /* MoleCommandLanes.swift */,
 				AA8A8DE64794BD0226809316 /* MoleTheme.swift */,
 				3BD6E9DDA001E4C3C32A8A33 /* NavigationModel.swift */,
 				CDCCADC6AE01D10BCDE931BA /* SidebarView.swift */,
@@ -599,6 +605,7 @@
 				DB0049C989A19BE6B273902A /* CleanPageTests.swift in Sources */,
 				F9BB6CEA78E601B355B3FCF2 /* CleanPresentationTests.swift in Sources */,
 				9BA909784B55073617781DA1 /* CleanPreviewStoreTests.swift in Sources */,
+				A16BD324EF1D18D53E361A2F /* CommandConcurrencyTests.swift in Sources */,
 				B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */,
 				D0E6D7139D18476B9A0C4132 /* InstallersPageTests.swift in Sources */,
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
@@ -652,6 +659,7 @@
 				7BF6A401D3E7B57B1B85AB4F /* MaintenanceOutput.swift in Sources */,
 				E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */,
 				8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */,
+				C1A87725262A705552719985 /* MoleCommandLanes.swift in Sources */,
 				5148F5599EC94F0FE437FE7C /* MoleCommandResult.swift in Sources */,
 				B66DA1D990793C807317E6D5 /* MoleTheme.swift in Sources */,
 				BD30E5D75EF21A1E4DA2466A /* NavigationModel.swift in Sources */,
