@@ -75,6 +75,7 @@
 		B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */; };
 		B28C88FA484C36D26932DA23 /* PrewarmTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8959DBDEE031AFAD75B0E0B1 /* PrewarmTests.swift */; };
 		B66DA1D990793C807317E6D5 /* MoleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8A8DE64794BD0226809316 /* MoleTheme.swift */; };
+		B81EF9A19CD2FABA82222715 /* AppIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */; };
 		B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */; };
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
@@ -233,6 +234,7 @@
 		D509E460B4BF5E50857F5819 /* UtilityUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityUI.swift; sourceTree = "<group>"; };
 		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
 		D6BB5FB7D0FC87D1421A0B7D /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
+		DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconTests.swift; sourceTree = "<group>"; };
 		E40246A3663BB2BEB8EB3935 /* CleanPreviewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreviewModel.swift; sourceTree = "<group>"; };
 		E75D2F971AB0AF22C45A07EE /* CleanPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPageTests.swift; sourceTree = "<group>"; };
 		EB2183B1B2CAC6D3EA0C4F5B /* CleanScanStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanScanStage.swift; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 			isa = PBXGroup;
 			children = (
 				A76837A240FF7FE3F01BCD5F /* .gitkeep */,
+				DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */,
 				5D6224A16B0D76BB1F6C4FBF /* BatchUninstallTests.swift */,
 				E75D2F971AB0AF22C45A07EE /* CleanPageTests.swift */,
 				01C371A91DC8FACD70EFBBA7 /* CleanPresentationTests.swift */,
@@ -637,6 +640,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B81EF9A19CD2FABA82222715 /* AppIconTests.swift in Sources */,
 				C4270600BACA215C2B16EFDD /* BatchUninstallTests.swift in Sources */,
 				DB0049C989A19BE6B273902A /* CleanPageTests.swift in Sources */,
 				F9BB6CEA78E601B355B3FCF2 /* CleanPresentationTests.swift in Sources */,
