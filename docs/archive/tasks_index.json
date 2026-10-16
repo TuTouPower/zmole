@@ -386,6 +386,54 @@
             "conflicts_with": "",
             "note": "历史导出、登录项、两份白名单；不做菜单栏常驻。",
             "dir": "docs/archive/tasks/t024_history_settings"
+        },
+        {
+            "tid": "t025",
+            "slug": "command_concurrency_lanes",
+            "title": "命令并发通道按类型区分",
+            "status": "done",
+            "branch": "t025_command_concurrency_lanes",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "156c58d3f779f9e3562e1f727c0fe1e7c9d50127",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "只读命令可并发、写入串行、长驻流独立。来源 p006。",
+            "dir": "docs/archive/tasks/t025_command_concurrency_lanes"
+        },
+        {
+            "tid": "t026",
+            "slug": "overview_storage_estimate_cache",
+            "title": "概览磁盘估算缓存与后台刷新",
+            "status": "done",
+            "branch": "t026_overview_storage_estimate_cache",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "ec8bfbf37a782d1b3227cfd1aea7fca289fcd886",
+            "depends_on": "t025",
+            "conflicts_with": "",
+            "note": "开屏用缓存即时显示，后台刷新。来源 p007。",
+            "dir": "docs/archive/tasks/t026_overview_storage_estimate_cache"
+        },
+        {
+            "tid": "t027",
+            "slug": "recoverable_busy_state",
+            "title": "mole busy 降级为可恢复提示",
+            "status": "done",
+            "branch": "t027_recoverable_busy_state",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "97734278e417bd4b1f84f647e052b2f3ee35ef1c",
+            "depends_on": "t025",
+            "conflicts_with": "",
+            "note": "区分瞬时忙碌与真实失败。来源 p008。",
+            "dir": "docs/archive/tasks/t027_recoverable_busy_state"
         }
     ]
 }

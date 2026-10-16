@@ -6,6 +6,7 @@ final class UninstallViewModel: ObservableObject {
     @Published private(set) var apps: [UninstallApp] = []
     @Published private(set) var selectedIDs: Set<String> = []
     @Published private(set) var hasLoaded = false
+    @Published private(set) var showBusyNotice = false
     @Published private(set) var focusedAppID: String?
     @Published private(set) var metadataByID: [String: UninstallAppMetadata] = [:]
     @Published private(set) var relatedPathsByID: [String: [String]] = [:]
@@ -92,6 +93,11 @@ final class UninstallViewModel: ObservableObject {
             )
         } catch {
             guard listSession.accepts(operationID), !listSession.isCancelling(operationID) else { return }
+            if CommandBusy.isBusy(error) {
+                listSession.invalidate()
+                showBusyNotice = true
+                return
+            }
             apps = []
             hasLoaded = false
             listSession.fail(
@@ -230,15 +236,16 @@ final class UninstallViewModel: ObservableObject {
             setTransientError(error)
             return
         }
-        guard let operationID = session.beginPreview() else { return }
         guard let newLease = coordinator.acquire(.uninstall) else {
-            session.fail(
-                OperationResult(status: .failed, errorKey: "operation.error.busy"),
-                id: operationID
-            )
+            showBusyNotice = true
             return
         }
         lease = newLease
+        guard let operationID = session.beginPreview() else {
+            releaseLease()
+            return
+        }
+        showBusyNotice = false
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
@@ -277,6 +284,11 @@ final class UninstallViewModel: ObservableObject {
             releaseLease()
         } catch {
             guard session.accepts(operationID) else { return }
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                releaseLease()
+                return
+            }
             let summary = (error as? MoleBridgeError).flatMap { commandError -> String? in
                 if case let .commandFailed(result) = commandError { return outputSummary(result) }
                 return commandError.localizedDescription
@@ -305,13 +317,12 @@ final class UninstallViewModel: ObservableObject {
               let currentPreview = session.preview,
               let previewID = operationID(for: session.state) else { return }
         guard let newLease = coordinator.acquire(.uninstall) else {
-            session.fail(
-                OperationResult(status: .failed, errorKey: "operation.error.busy"),
-                id: previewID
-            )
+            showBusyNotice = true
+            session.cancelConfirmation()
             return
         }
         lease = newLease
+        showBusyNotice = false
         guard let execution = session.beginExecution() else {
             releaseLease()
             return
@@ -356,6 +367,12 @@ final class UninstallViewModel: ObservableObject {
             releaseLease()
         } catch {
             guard session.accepts(execution.id) else { return }
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                coordinator.invalidatePreviews()
+                releaseLease()
+                return
+            }
             let result: OperationResult
             if let commandError = error as? MoleBridgeError,
                case let .commandFailed(commandResult) = commandError {

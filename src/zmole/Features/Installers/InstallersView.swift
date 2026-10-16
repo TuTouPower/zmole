@@ -42,6 +42,9 @@ struct InstallersView: View {
                 UtilityNotice(title: "installers.trash_note", symbol: "trash")
                 listCard
                 failuresCard
+                if viewModel.showBusyNotice {
+                    RecoverableBusyNotice()
+                }
                 if let errorMessage = viewModel.errorMessage {
                     UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
                 }

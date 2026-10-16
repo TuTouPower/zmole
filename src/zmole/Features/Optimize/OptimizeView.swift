@@ -75,6 +75,9 @@ struct OptimizeView: View {
                         .frame(minHeight: 200)
                 }
 
+                if viewModel.showBusyNotice {
+                    RecoverableBusyNotice()
+                }
                 if let errorMessageKey = viewModel.errorMessageKey {
                     UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
                 } else if let errorMessage = viewModel.errorMessage {
