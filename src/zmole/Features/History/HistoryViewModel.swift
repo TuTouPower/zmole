@@ -53,6 +53,7 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var rawJSON: String?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var showBusyNotice = false
 
     private let loader: HistorySnapshotLoader?
     private let limit: Int
@@ -76,9 +77,12 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func refresh() async {
+        let previousSnapshot = snapshot
+        let previousRaw = rawJSON
         snapshot = nil
         rawJSON = nil
         errorMessage = nil
+        showBusyNotice = false
         isLoading = true
         defer { isLoading = false }
 
@@ -92,6 +96,12 @@ final class HistoryViewModel: ObservableObject {
             snapshot = try HistorySnapshotLoader.decode(raw)
             rawJSON = raw
         } catch {
+            if CommandBusy.isBusy(error) {
+                snapshot = previousSnapshot
+                rawJSON = previousRaw
+                showBusyNotice = true
+                return
+            }
             rawJSON = nil
             errorMessage = error.localizedDescription
         }

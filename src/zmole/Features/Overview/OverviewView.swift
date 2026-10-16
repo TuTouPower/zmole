@@ -5,12 +5,14 @@ struct OverviewView: View {
     @ObservedObject var statusViewModel: StatusViewModel
     @ObservedObject var viewModel: OverviewViewModel
     @ObservedObject var navigation: NavigationModel
-    @State private var didLoadEstimate = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if viewModel.showBusyNotice {
+                    RecoverableBusyNotice()
+                }
                 heroRow
                 quickCards
                 lowerRow
@@ -21,14 +23,17 @@ struct OverviewView: View {
         .navigationTitle("overview.title")
         .task {
             await viewModel.refreshHistory()
-            // One-shot commands share the command bridge, so the estimate is
-            // loaded only after history finishes and one used-space value is
-            // available. No per-tick trigger, so the four analyze calls never
-            // overlap each other or the history command.
+            // The estimate renders from cache immediately and only scans in the
+            // background (on its own lane) when the cache is missing or stale.
             for _ in 0..<120 where usedBytes == nil {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
-            await loadEstimateIfNeeded()
+            viewModel.primeEstimate(usedBytes: usedBytes)
+            await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes)
+        }
+        .onChange(of: viewModel.estimateInvalidated) { invalidated in
+            guard invalidated else { return }
+            Task { await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes) }
         }
     }
 
@@ -235,12 +240,6 @@ struct OverviewView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
-    }
-
-    private func loadEstimateIfNeeded() async {
-        guard !didLoadEstimate, let usedBytes else { return }
-        didLoadEstimate = true
-        await viewModel.loadEstimate(usedBytes: usedBytes)
     }
 
     private var usedBytes: Int64? {

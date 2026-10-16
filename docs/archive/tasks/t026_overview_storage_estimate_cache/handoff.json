@@ -1,0 +1,21 @@
+{
+  "tid": "t026",
+  "attempt": 1,
+  "execution_id": "ac9ae8f0a5474b1d9dd872e4f4b4d207",
+  "status": "done",
+  "branch": "t026_overview_storage_estimate_cache",
+  "base_sha": "ec8bfbf37a782d1b3227cfd1aea7fca289fcd886",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (193 pass incl. OverviewCacheTests 9); pytest .repo_template/tests -q -m contract (147 pass); bash integration suites",
+  "blackbox": "GUI environment-limited. Estimate cache/prime/refresh/invalidation verified with fake analyze loaders, a temp cache file and an injected clock.",
+  "review": "single: review_general.md PASS (rounds 1-2); reviewed_scope a1d3197121e9de5b; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Overview/OverviewViewModel.swift primeEstimate", "tests/unit/OverviewCacheTests.swift testPrimeRendersFromCacheWithoutRunningAnalyze"],
+    "AC-002": ["tests/unit/OverviewCacheTests.swift testNoCacheFallsBackToScan"],
+    "AC-003": ["tests/unit/OverviewCacheTests.swift testFreshCacheSkipsScan"],
+    "AC-004": ["tests/unit/OverviewCacheTests.swift testStaleCacheRefreshesInBackground / testCoordinatorInvalidationForcesRefresh / testInvalidationDuringScanKeepsEstimateStale"],
+    "AC-005": ["tests/unit/OverviewCacheTests.swift testFailedDirectoryLeavesPlaceholderAndSavesPartialCache"],
+    "AC-006": ["src/zmole/Features/Overview/StorageEstimateCache.swift schema/age checks", "tests/unit/OverviewCacheTests.swift testInvalidCacheIsIgnored"]
+  },
+  "pending": [],
+  "findings": []
+}

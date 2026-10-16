@@ -1,0 +1,18 @@
+{
+  "tid": "t027",
+  "attempt": 1,
+  "execution_id": "25612863d7a448b49aa77efe274104a7",
+  "status": "done",
+  "branch": "t027_recoverable_busy_state",
+  "base_sha": "97734278e417bd4b1f84f647e052b2f3ee35ef1c",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (198 pass incl. RecoverableBusyTests 5); pytest .repo_template/tests -q -m contract (147 pass)",
+  "blackbox": "GUI environment-limited. Busy vs failure distinguished with fake throwing processes, a coordinator lease hold, and stateful list/history fakes.",
+  "review": "single: review_general.md PASS (rounds 1-3); reviewed_scope 309069d87679f012; no unresolved findings",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Operations/CommandBusy.swift", "src/zmole/Features/UtilityUI.swift RecoverableBusyNotice", "tests/unit/RecoverableBusyTests.swift testBusyIsNotShownAsFailureAndKeepsData / testWriteBusyFromCoordinatorIsRecoverable / testInstallersScanBusyKeepsListAndClearsOnRetry / testHistoryBusyKeepsSnapshot"],
+    "AC-002": ["tests/unit/RecoverableBusyTests.swift testRealFailureStillShowsAsFailure"],
+    "AC-003": ["tests/unit/RecoverableBusyTests.swift testBusyIsNotShownAsFailureAndKeepsData (busy then success clears notice) / testInstallersScanBusyKeepsListAndClearsOnRetry"]
+  },
+  "pending": [],
+  "findings": []
+}

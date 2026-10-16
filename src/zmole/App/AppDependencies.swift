@@ -3,7 +3,7 @@ import Foundation
 
 /// Process implementation used when the bundled executable is unavailable.
 /// It keeps the app launchable and lets feature views render their failure state.
-private final class UnavailableMoleProcess: MoleProcessControlling, @unchecked Sendable {
+final class UnavailableMoleProcess: MoleProcessControlling, @unchecked Sendable {
     func run(
         _ arguments: [String],
         stdin: Data?,
@@ -15,7 +15,7 @@ private final class UnavailableMoleProcess: MoleProcessControlling, @unchecked S
     func cancel() async {}
 }
 
-private struct UnavailableMoleStreaming: MoleStreaming {
+struct UnavailableMoleStreaming: MoleStreaming {
     func stream(
         _ arguments: [String],
         stdin: Data?,
@@ -312,14 +312,12 @@ final class AppDependencies: ObservableObject {
     let overviewViewModel: OverviewViewModel
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
+    let lanes: MoleCommandLanes
 
     let demo: DemoConfiguration
 
     init(configuration: DemoConfiguration = DemoConfiguration()) {
         demo = configuration
-        let process: any MoleProcessControlling
-        let streaming: any MoleStreaming
-        let cleanStreaming: (any MoleStreaming)?
         let demoDirectory = configuration.dataRoot ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("zmole-demo-\(UUID().uuidString)", isDirectory: true)
         let demoCleanPreviewURL = configuration.isEnabled
@@ -334,27 +332,36 @@ final class AppDependencies: ObservableObject {
             )
         }
         let cleanPreviewURL = demoCleanPreviewURL ?? demoDirectory.appendingPathComponent("clean-list.txt")
+
         if configuration.isEnabled {
-            process = DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state)
-            streaming = DemoMoleStreaming(state: configuration.state)
-            cleanStreaming = nil
-        } else if let commandBridge = try? MoleBridge(),
+            lanes = .demo(
+                process: DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state),
+                streaming: DemoMoleStreaming(state: configuration.state)
+            )
+        } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                   let streamBridge = try? MoleBridge(),
-                  let cleanPreviewBridge = try? MoleBridge() {
-            // One bridge per long-lived stream: the status watch and the clean
-            // dry-run preview must not share an active-runner slot, and one-shot
-            // commands need a third so neither stream blocks them.
-            process = commandBridge
-            streaming = streamBridge
-            cleanStreaming = cleanPreviewBridge
+                  let cleanBridge = try? MoleBridge() {
+            // One bridge per one-shot consumer: a slow read (analyze) no longer
+            // rejects other pages as busy. Writes stay mutually exclusive via the
+            // coordinator lease, not the bridge.
+            lanes = MoleCommandLanes(
+                analyze: bridges[0],
+                history: bridges[1],
+                uninstall: bridges[2],
+                installer: bridges[3],
+                statusCommand: bridges[4],
+                cleanCommand: bridges[5],
+                optimize: bridges[6],
+                purge: bridges[7],
+                estimate: bridges[8],
+                statusStream: streamBridge,
+                cleanStream: cleanBridge
+            )
         } else {
-            process = UnavailableMoleProcess()
-            streaming = UnavailableMoleStreaming()
-            cleanStreaming = nil
+            lanes = .unavailable()
         }
 
         coordinator = OperationCoordinator()
-        let processBox = MoleProcessBox(process)
         let previewStore: CleanPreviewStore
         if configuration.isEnabled {
             previewStore = CleanPreviewStore(
@@ -364,14 +371,14 @@ final class AppDependencies: ObservableObject {
             previewStore = .live
         }
         cleanViewModel = CleanViewModel(
-            process: process,
+            process: lanes.cleanCommand,
             previewStore: previewStore,
             coordinator: coordinator,
-            streaming: cleanStreaming
+            streaming: lanes.cleanStream
         )
-        uninstallViewModel = UninstallViewModel(process: process, coordinator: coordinator)
-        optimizeViewModel = OptimizeViewModel(process: process, coordinator: coordinator)
-        purgeViewModel = PurgeViewModel(process: process, coordinator: coordinator)
+        uninstallViewModel = UninstallViewModel(process: lanes.uninstall, coordinator: coordinator)
+        optimizeViewModel = OptimizeViewModel(process: lanes.optimize, coordinator: coordinator)
+        purgeViewModel = PurgeViewModel(process: lanes.purge, coordinator: coordinator)
         let whitelistURL = configuration.isEnabled
             ? demoDirectory.appendingPathComponent("whitelist")
             : WhitelistStore.live.fileURL
@@ -396,29 +403,38 @@ final class AppDependencies: ObservableObject {
             coordinator: coordinator
         )
 
+        let analyzeBox = MoleProcessBox(lanes.analyze)
         let loader = AnalyzeSnapshotLoader { arguments in
-            try await processBox.process.run(arguments, stdin: nil, timeout: 120)
+            try await analyzeBox.process.run(arguments, stdin: nil, timeout: 120)
         }
         analyzeViewModel = AnalyzeViewModel(loader: loader)
 
+        let statusBox = MoleProcessBox(lanes.statusCommand)
         let statusLoader = StatusSnapshotLoader { arguments in
-            try await processBox.process.run(arguments, stdin: nil, timeout: 120)
+            try await statusBox.process.run(arguments, stdin: nil, timeout: 120)
         }
-        statusViewModel = StatusViewModel(streaming: streaming, loader: statusLoader)
+        statusViewModel = StatusViewModel(streaming: lanes.statusStream, loader: statusLoader)
 
+        let historyBox = MoleProcessBox(lanes.history)
         let historyLoader = HistorySnapshotLoader { arguments in
-            try await processBox.process.run(arguments, stdin: nil, timeout: 120)
+            try await historyBox.process.run(arguments, stdin: nil, timeout: 120)
         }
         historyViewModel = HistoryViewModel(loader: historyLoader)
         installersViewModel = InstallersViewModel(
-            interface: InstallerInterface(process: process),
+            interface: InstallerInterface(process: lanes.installer),
             coordinator: coordinator
         )
 
-        let storageLoader = StorageEstimateLoader(loader: loader)
+        let estimateBox = MoleProcessBox(lanes.estimate)
+        let estimateAnalyzeLoader = AnalyzeSnapshotLoader { arguments in
+            try await estimateBox.process.run(arguments, stdin: nil, timeout: 120)
+        }
+        let storageLoader = StorageEstimateLoader(loader: estimateAnalyzeLoader)
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,
-            historyLoader: historyLoader
+            historyLoader: historyLoader,
+            storageCache: configuration.isEnabled ? nil : .live,
+            coordinator: coordinator
         )
     }
 }

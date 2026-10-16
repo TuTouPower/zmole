@@ -77,17 +77,22 @@ class MaintenanceViewModel: ObservableObject {
         guard let result = session.result, result.errorKey == nil else { return nil }
         return result.summary
     }
+    @Published private(set) var showBusyNotice = false
 
     func previewMaintenance() async {
         guard !session.isBusy else { return }
         releaseLease()
         session.invalidate()
-        guard let operationID = session.beginPreview() else { return }
+        showBusyNotice = false
         guard let newLease = coordinator.acquire(kind.writeOperation) else {
-            session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: operationID)
+            showBusyNotice = true
             return
         }
         lease = newLease
+        guard let operationID = session.beginPreview() else {
+            releaseLease()
+            return
+        }
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
@@ -116,6 +121,11 @@ class MaintenanceViewModel: ObservableObject {
             releaseLease()
         } catch {
             guard session.accepts(operationID) else { return }
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                releaseLease()
+                return
+            }
             let summary: String?
             if case let MoleBridgeError.commandFailed(result) = error {
                 summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
@@ -150,9 +160,8 @@ class MaintenanceViewModel: ObservableObject {
     func confirmMaintenance() async {
         guard session.isConfirmationPresented, canConfirm else { return }
         guard let newLease = coordinator.acquire(kind.writeOperation) else {
-            if let id = operationID(for: session.state) {
-                session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: id)
-            }
+            showBusyNotice = true
+            session.cancelConfirmation()
             return
         }
         lease = newLease
@@ -160,6 +169,7 @@ class MaintenanceViewModel: ObservableObject {
             releaseLease()
             return
         }
+        showBusyNotice = false
         coordinator.invalidatePreviews()
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 

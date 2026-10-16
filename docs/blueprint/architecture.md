@@ -49,7 +49,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
-常驻 `status --watch` 与同页的一次性命令不能共用一条桥：`MoleBridge` 只允许一个 active runner。App 装配为流式命令（status watch）和一次性命令各持一条独立 `MoleBridge` 实例，避免 watch 占桥导致概览/状态的 analyze、history 被判 busy。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（analyze、history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。
 
 ## 捆绑与进程边界
 
@@ -71,6 +71,8 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
 
 磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用四次 `analyze` 目录求和：应用程序 `/Applications`、系统 `/System`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；其他 = status 已用减去前四段且不小于 0。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
+
+估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入时先用缓存即时渲染（“其他”用实时 status 已用现算），后台仅在缓存缺失、超过 TTL（6 小时）或收到写入失效信号时，经独立只读通道重算并回写；不提供手动计算按钮。缓存超过最大年龄（7 天）或 schema 不符即作废。
 
 最近操作复用 `history --json`。趋势只在采样点达到阈值时绘制，否则显示采样不足。
 

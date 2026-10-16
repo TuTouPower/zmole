@@ -101,6 +101,14 @@ struct UtilityNotice: View {
     }
 }
 
+/// Neutral, recoverable notice for transient command contention. Never rendered
+/// as a failure.
+struct RecoverableBusyNotice: View {
+    var body: some View {
+        UtilityNotice(title: "command.busy", symbol: "hourglass")
+    }
+}
+
 struct UtilityBadge: View {
     let title: LocalizedStringKey
     var symbol: String? = nil

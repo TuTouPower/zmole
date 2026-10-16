@@ -252,6 +252,9 @@ struct CleanView: View {
 
     @ViewBuilder
     private var resultNotices: some View {
+        if viewModel.showBusyNotice {
+            RecoverableBusyNotice()
+        }
         if let errorMessageKey = viewModel.errorMessageKey {
             UtilityNotice(
                 title: LocalizedStringKey(errorMessageKey),

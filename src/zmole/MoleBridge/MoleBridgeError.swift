@@ -37,4 +37,7 @@ public enum MoleBridgeError: Error, Equatable, LocalizedError, Sendable {
             return "mole 命令超时"
         }
     }
+
+    /// Transient lane contention, not a functional failure.
+    public var isBusy: Bool { self == .busy }
 }

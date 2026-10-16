@@ -14,6 +14,7 @@ final class CleanViewModel: ObservableObject {
 
     @Published private(set) var currentStage: CleanScanStage?
     @Published private(set) var lastReclaimBytes: Int64?
+    @Published private(set) var showBusyNotice = false
 
     init(
         process: any MoleProcessControlling,
@@ -68,16 +69,16 @@ final class CleanViewModel: ObservableObject {
         releaseLease()
         session.invalidate()
         currentStage = nil
-        guard let operationID = session.beginPreview() else { return }
+        showBusyNotice = false
         guard let newLease = coordinator.acquire(.clean) else {
-            session.fail(
-                OperationResult(status: .failed, errorKey: "operation.error.busy"),
-                id: operationID
-            )
-            lastReclaimBytes = nil
+            showBusyNotice = true
             return
         }
         lease = newLease
+        guard let operationID = session.beginPreview() else {
+            releaseLease()
+            return
+        }
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
@@ -106,6 +107,11 @@ final class CleanViewModel: ObservableObject {
             releaseLease()
         } catch {
             guard session.accepts(operationID) else { return }
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                releaseLease()
+                return
+            }
             let summary: String?
             let errorKey: String?
             if let previewError = error as? CleanPreviewStoreError {
@@ -200,7 +206,8 @@ final class CleanViewModel: ObservableObject {
             return
         }
         guard let newLease = coordinator.acquire(.clean) else {
-            session.fail(OperationResult(status: .failed, errorKey: "operation.error.busy"), id: previewID)
+            showBusyNotice = true
+            session.cancelConfirmation()
             return
         }
         lease = newLease
@@ -215,6 +222,7 @@ final class CleanViewModel: ObservableObject {
         do {
             let result = try await process.run(["clean"], stdin: nil, timeout: 600)
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
+            showBusyNotice = false
             let summary = outputSummary(result)
             let operationResult: OperationResult
             if result.exitCode == 0 {
@@ -239,6 +247,12 @@ final class CleanViewModel: ObservableObject {
             releaseLease()
         } catch {
             guard session.accepts(execution.id) else { return }
+            if CommandBusy.isBusy(error) {
+                showBusyNotice = true
+                coordinator.invalidatePreviews()
+                releaseLease()
+                return
+            }
             let summary = (error as? CleanPreviewStoreError)?.errorDescription
                 ?? error.localizedDescription
             session.fail(
