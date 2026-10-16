@@ -49,7 +49,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
-`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（analyze、history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
 
 ## 捆绑与进程边界
 
@@ -75,6 +75,10 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入时先用缓存即时渲染（“其他”用实时 status 已用现算），后台仅在缓存缺失、超过 TTL（6 小时）或收到写入失效信号时，经独立只读通道重算并回写；不提供手动计算按钮。缓存超过最大年龄（7 天）或 schema 不符即作废。
 
 最近操作复用 `history --json`。趋势只在采样点达到阈值时绘制，否则显示采样不足。
+
+## 磁盘页扫描
+
+磁盘页不调用 mole：生产扫描根是 `/`，`LiveDiskScanner` 在应用内只读遍历目录（`lstat`）。文件大小取 `st_blocks × 512`；符号链接只计链接自身；同一扫描内指向同一文件的硬链接只计一次（行仍显示自身分配块，父扫描已计入的文件其子目录层合计不再重复计入）；与父目录设备号不同的子目录不计入父合计，进入后单独计算。进入目录先列出直接子项与直接文件大小，子目录大小在后台逐个补上；扫描完成的层级保留在 `AnalyzeViewModel` 的会话缓存中，再次进入不再读盘，只有「重新分析」重扫当前目录及其子树并替换结果。大小未知的目录显示计算中、不显示为 0、不计入合计与面积图；无法读取的目录显示未扫描。demo 模式注入内存目录源，不读真实文件系统。概览五段估算仍走 `analyze`，与本路径无关。
 
 ## Demo 装配边界
 

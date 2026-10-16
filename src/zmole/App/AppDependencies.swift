@@ -294,6 +294,138 @@ enum DemoAppearance: String, Sendable {
     case dark
 }
 
+/// Deterministic in-memory directory source for the disk page in demo mode.
+/// It never reads the file system and never spawns the bundled executable.
+struct DemoDiskScanner: DiskScanning {
+    static let root = "/Users/demo"
+
+    let state: DemoState
+
+    func listDirectory(_ path: String) async throws -> [DiskEntry] {
+        if state == .error {
+            throw DiskScanError.unreadable(path)
+        }
+        if state == .empty {
+            guard path == Self.root else { throw DiskScanError.unreadable(path) }
+            return []
+        }
+        guard let level = Self.levels[path] else {
+            throw DiskScanError.unreadable(path)
+        }
+        return level.entries.map { entry in
+            var listed = entry
+            if listed.isDirectory {
+                listed.value = .computing
+            }
+            return listed
+        }
+    }
+
+    func measureSubtree(_ path: String, deduplicator: HardLinkDeduplicator) async -> DiskScanResult {
+        if state == .partial, path == Self.child(Self.root, "Library") {
+            // Keep one subtree computing so the pending state stays visible.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_600_000_000_000)
+            }
+        }
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        guard let level = Self.levels[path] else {
+            return DiskScanResult(path: path, totalSize: 0, isReadable: false, levels: [:])
+        }
+        let prefix = LiveDiskScanner.directoryPrefix(path)
+        let subtree = Self.levels.filter { $0.key == path || $0.key.hasPrefix(prefix) }
+        return DiskScanResult(path: path, totalSize: level.totalSize, isReadable: true, levels: subtree)
+    }
+
+    private static func child(_ parent: String, _ name: String) -> String {
+        LiveDiskScanner.childPath(parent, name)
+    }
+
+    private static func file(_ name: String, _ bytes: Int64, in parent: String) -> DiskEntry {
+        DiskEntry(name: name, path: child(parent, name), isDirectory: false, value: .size(bytes))
+    }
+
+    private static func directory(_ name: String, _ bytes: Int64, in parent: String) -> DiskEntry {
+        DiskEntry(name: name, path: child(parent, name), isDirectory: true, value: .size(bytes))
+    }
+
+    private static func level(_ parent: String, _ entries: [DiskEntry], total: Int64) -> (String, DiskLevel) {
+        (parent, DiskLevel(entries: entries, totalSize: total))
+    }
+
+    private static let levels: [String: DiskLevel] = {
+        let root = Self.root
+        let applications = child(root, "Applications")
+        let library = child(root, "Library")
+        let projects = child(root, "Projects")
+        let downloads = child(root, "Downloads with a very long name")
+        let developer = child(root, "Developer SDKs")
+        let media = child(root, "Media Archive")
+        let config = child(root, ".config")
+        let emptyFolder = child(root, "empty-folder")
+        let zmoleProject = child(projects, "zmole")
+        let derivedData = child(zmoleProject, "DerivedData")
+        let source = child(zmoleProject, "Source")
+        let xcode = child(applications, "Xcode.app")
+        let docker = child(applications, "Docker.app")
+        let caches = child(library, "Caches")
+        let containers = child(library, "Containers")
+        let clips = child(media, "Clips")
+
+        let pairs: [(String, DiskLevel)] = [
+            level(root, [
+                file("notes.md", 18_304, in: root),
+                file("tiny.log", 96, in: root),
+                directory("Applications", 34_000_000_000, in: root),
+                directory("Library", 18_123_968_512, in: root),
+                directory("Projects", 12_900_270_080, in: root),
+                directory("Downloads with a very long name", 5_800_038_400, in: root),
+                directory("Developer SDKs", 4_200_000_000, in: root),
+                directory("Media Archive", 2_100_000_000, in: root),
+                directory(".config", 930_000_000, in: root),
+                directory("empty-folder", 0, in: root)
+            ], total: 78_054_295_392),
+            level(applications, [
+                directory("Xcode.app", 22_000_000_000, in: applications),
+                directory("Docker.app", 12_000_000_000, in: applications)
+            ], total: 34_000_000_000),
+            level(xcode, [directory("Contents", 22_000_000_000, in: xcode)], total: 22_000_000_000),
+            level(docker, [directory("Contents", 12_000_000_000, in: docker)], total: 12_000_000_000),
+            level(library, [
+                directory("Caches", 9_000_000_000, in: library),
+                directory("Containers", 9_123_968_512, in: library)
+            ], total: 18_123_968_512),
+            level(caches, [file("com.demo.cache", 9_000_000_000, in: caches)], total: 9_000_000_000),
+            level(containers, [file("com.demo.container", 9_123_968_512, in: containers)], total: 9_123_968_512),
+            level(projects, [directory("zmole", 12_900_270_080, in: projects)], total: 12_900_270_080),
+            level(zmoleProject, [
+                directory("DerivedData", 12_000_000_000, in: zmoleProject),
+                directory("Source", 900_270_080, in: zmoleProject)
+            ], total: 12_900_270_080),
+            level(derivedData, [file("Build.db", 12_000_000_000, in: derivedData)], total: 12_000_000_000),
+            level(source, [file("main.swift", 900_270_080, in: source)], total: 900_270_080),
+            level(downloads, [
+                file("Android Studio.dmg", 1_210_000_000, in: downloads),
+                file("Figma.pkg", 640_000_000, in: downloads),
+                file("VSCode.zip", 310_000_000, in: downloads),
+                file("Old Installer.dmg", 3_640_038_400, in: downloads)
+            ], total: 5_800_038_400),
+            level(developer, [
+                file("Xcode.xip", 2_400_000_000, in: developer),
+                file("CoreSimulator.dmg", 1_800_000_000, in: developer)
+            ], total: 4_200_000_000),
+            level(media, [directory("Clips", 2_100_000_000, in: media)], total: 2_100_000_000),
+            level(clips, [
+                file("Footage.mov", 2_000_000_000, in: clips),
+                file("Archive.zip", 100_000_000, in: clips)
+            ], total: 2_100_000_000),
+            level(config, [file("settings.json", 930_000_000, in: config)], total: 930_000_000),
+            level(emptyFolder, [], total: 0)
+        ]
+        return Dictionary(uniqueKeysWithValues: pairs)
+    }()
+}
+
 @MainActor
 final class AppDependencies: ObservableObject {
     let coordinator: OperationCoordinator
@@ -341,19 +473,18 @@ final class AppDependencies: ObservableObject {
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                   let streamBridge = try? MoleBridge(),
                   let cleanBridge = try? MoleBridge() {
-            // One bridge per one-shot consumer: a slow read (analyze) no longer
-            // rejects other pages as busy. Writes stay mutually exclusive via the
+            // One bridge per one-shot consumer: a slow read no longer rejects
+            // other pages as busy. Writes stay mutually exclusive via the
             // coordinator lease, not the bridge.
             lanes = MoleCommandLanes(
-                analyze: bridges[0],
-                history: bridges[1],
-                uninstall: bridges[2],
-                installer: bridges[3],
-                statusCommand: bridges[4],
-                cleanCommand: bridges[5],
-                optimize: bridges[6],
-                purge: bridges[7],
-                estimate: bridges[8],
+                history: bridges[0],
+                uninstall: bridges[1],
+                installer: bridges[2],
+                statusCommand: bridges[3],
+                cleanCommand: bridges[4],
+                optimize: bridges[5],
+                purge: bridges[6],
+                estimate: bridges[7],
                 statusStream: streamBridge,
                 cleanStream: cleanBridge
             )
@@ -403,11 +534,14 @@ final class AppDependencies: ObservableObject {
             coordinator: coordinator
         )
 
-        let analyzeBox = MoleProcessBox(lanes.analyze)
-        let loader = AnalyzeSnapshotLoader { arguments in
-            try await analyzeBox.process.run(arguments, stdin: nil, timeout: 120)
+        if configuration.isEnabled {
+            analyzeViewModel = AnalyzeViewModel(
+                scanner: DemoDiskScanner(state: configuration.state),
+                root: DemoDiskScanner.root
+            )
+        } else {
+            analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
         }
-        analyzeViewModel = AnalyzeViewModel(loader: loader)
 
         let statusBox = MoleProcessBox(lanes.statusCommand)
         let statusLoader = StatusSnapshotLoader { arguments in

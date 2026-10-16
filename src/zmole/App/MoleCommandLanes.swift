@@ -1,12 +1,11 @@
 import Foundation
 
 /// Named execution lanes for the bundled mole CLI. One-shot read commands get
-/// independent lanes so a slow scan (for example `analyze`) cannot reject other
-/// pages as busy. Writes are still mutually exclusive through the shared
-/// `OperationCoordinator` lease, and long-lived streams keep their own lanes.
+/// independent lanes so a slow scan cannot reject other pages as busy. Writes
+/// are still mutually exclusive through the shared `OperationCoordinator`
+/// lease, and long-lived streams keep their own lanes.
 @MainActor
 final class MoleCommandLanes {
-    let analyze: any MoleProcessControlling
     let history: any MoleProcessControlling
     let uninstall: any MoleProcessControlling
     let installer: any MoleProcessControlling
@@ -19,7 +18,6 @@ final class MoleCommandLanes {
     let cleanStream: (any MoleStreaming)?
 
     init(
-        analyze: any MoleProcessControlling,
         history: any MoleProcessControlling,
         uninstall: any MoleProcessControlling,
         installer: any MoleProcessControlling,
@@ -31,7 +29,6 @@ final class MoleCommandLanes {
         statusStream: any MoleStreaming,
         cleanStream: (any MoleStreaming)?
     ) {
-        self.analyze = analyze
         self.history = history
         self.uninstall = uninstall
         self.installer = installer
@@ -45,7 +42,7 @@ final class MoleCommandLanes {
     }
 
     /// One-shot lanes, in the order the `init` expects them.
-    static let commandLaneCount = 9
+    nonisolated static let commandLaneCount = 8
 
     static func makeCommandBridges(count: Int = commandLaneCount) -> [any MoleProcessControlling]? {
         var bridges: [any MoleProcessControlling] = []
@@ -58,7 +55,7 @@ final class MoleCommandLanes {
 
     static func demo(process: any MoleProcessControlling, streaming: any MoleStreaming) -> MoleCommandLanes {
         MoleCommandLanes(
-            analyze: process, history: process, uninstall: process, installer: process,
+            history: process, uninstall: process, installer: process,
             statusCommand: process, cleanCommand: process, optimize: process, purge: process,
             estimate: process,
             statusStream: streaming,
@@ -69,7 +66,7 @@ final class MoleCommandLanes {
     static func unavailable() -> MoleCommandLanes {
         let process = UnavailableMoleProcess()
         return MoleCommandLanes(
-            analyze: process, history: process, uninstall: process, installer: process,
+            history: process, uninstall: process, installer: process,
             statusCommand: process, cleanCommand: process, optimize: process, purge: process,
             estimate: process,
             statusStream: UnavailableMoleStreaming(),

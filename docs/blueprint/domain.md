@@ -12,7 +12,7 @@
 |清理|clean|清缓存、日志、已卸 App 残留；删除移入废纸篓，且同一次不再清空废纸篓；不能按界面勾选子集执行|
 |卸载|uninstall|移除 App 及关联文件；默认进废纸篓|
 |优化|optimize|有限维护（DNS、Spotlight 等）；其中删除保持永久删除|
-|磁盘分析|analyze|只读浏览占用；第一版不在浏览结果上删除|
+|磁盘分析|disk|只读浏览占用；应用内扫描，不调用 mole；文件按 `st_blocks × 512`，硬链接同一扫描只计一次，符号链接只计自身，跨设备子目录不计入父合计；会话内保留已扫描层级；第一版不在浏览结果上删除|
 |状态|status|只读健康快照（非 live watch）|
 |工程产物清理|purge|删除可重建构建产物；非 TTY 执行必须 `--yes`|
 |安装包|installer|扫描下载中的安装包；非交互列出后按路径移入废纸篓|
@@ -21,7 +21,7 @@
 
 ## 第一版非目标
 
-- analyze 删除、嵌终端、代按键驱动 TUI
+- analyze/磁盘页删除、嵌终端、代按键驱动 TUI
 - 捆绑 mole 的 self-update / remove
 - 把 `zmo`/`mo` 装进 PATH
 - Sparkle、Apple 公证、Mac App Store、遥测
