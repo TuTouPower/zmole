@@ -26,7 +26,7 @@
 ## 图标源与生成
 
 - 应用图标源为矢量 SVG：`assets/app_icon_source.svg`（彩色主版，唯一构建源）与 `assets/app_icon_source_mono.svg`（黑白备用，不入构建）。
-- `src/zmole/Resources/AppIcon.icns` 是生成产物；改源后运行 `scripts/build_app_icon.sh` 重新生成并随源一起提交（同一源渲染可复现）。构建引用为 `project.yml` 的资源项与 `Info.plist` 的 `CFBundleIconFile=AppIcon.icns`。
+- `src/zmole/Resources/AppIcon.icns` 是生成产物；改源后运行 `scripts/build_app_icon.sh` 重新生成并随源一起提交（同一源渲染可复现）。SVG 经系统 SVG 支持（`scripts/svg_to_png.swift`，ImageIO/AppKit）输出透明背景 PNG；不得使用 `qlmanage -t`（白底文档预览会破坏图标透明度）。构建引用为 `project.yml` 的资源项与 `Info.plist` 的 `CFBundleIconFile=AppIcon.icns`。
 - 运行期侧栏图标经 `NSApp.applicationIconImage` 读取 bundle 图标，不单独维护图片资源。
 
 ## schema 类型落点

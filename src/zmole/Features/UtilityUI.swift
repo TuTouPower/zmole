@@ -2,10 +2,11 @@ import AppKit
 import SwiftUI
 
 enum UtilityStyle {
+    /// Accent family matches the app icon's blue gradients (see MoleTheme).
     static let accent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.33, green: 0.84, blue: 0.70, alpha: 1)
-            : NSColor(srgbRed: 0.04, green: 0.50, blue: 0.41, alpha: 1)
+            ? NSColor(srgbRed: 0.31, green: 0.675, blue: 0.996, alpha: 1)
+            : NSColor(srgbRed: 0.0, green: 0.447, blue: 1.0, alpha: 1)
     })
     static let surface = Color(nsColor: .textBackgroundColor)
     static let background = Color(nsColor: .windowBackgroundColor)
@@ -24,13 +25,13 @@ enum UtilityStyle {
 struct MolePageHead<Actions: View>: View {
     let eyebrow: LocalizedStringKey
     let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
+    var subtitle: LocalizedStringKey? = nil
     @ViewBuilder let actions: () -> Actions
 
     init(
         eyebrow: LocalizedStringKey,
         title: LocalizedStringKey,
-        subtitle: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         @ViewBuilder actions: @escaping () -> Actions
     ) {
         self.eyebrow = eyebrow
@@ -49,9 +50,11 @@ struct MolePageHead<Actions: View>: View {
                     .foregroundStyle(MoleTheme.accentStrong)
                 Text(title)
                     .font(.system(size: 30, weight: .bold))
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(MoleTheme.muted)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(MoleTheme.muted)
+                }
             }
             Spacer(minLength: 12)
             HStack(spacing: 8) {
@@ -62,7 +65,7 @@ struct MolePageHead<Actions: View>: View {
 }
 
 extension MolePageHead where Actions == EmptyView {
-    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey, subtitle: LocalizedStringKey) {
+    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey, subtitle: LocalizedStringKey? = nil) {
         self.init(eyebrow: eyebrow, title: title, subtitle: subtitle) { EmptyView() }
     }
 }
