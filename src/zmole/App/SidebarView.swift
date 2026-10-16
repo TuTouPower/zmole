@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct SidebarView: View {
     @ObservedObject var navigation: NavigationModel
+    @ObservedObject var statusViewModel: StatusViewModel
     @State private var showingAbout = false
 
     var body: some View {
@@ -70,6 +71,12 @@ struct SidebarView: View {
                 Text(destination.titleKey)
                     .font(.system(size: 13))
                 Spacer(minLength: 0)
+                if destination == .status, statusViewModel.isSampling {
+                    Circle()
+                        .fill(MoleTheme.accent)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
             }
             .foregroundStyle(MoleTheme.text)
             .padding(.horizontal, 10)

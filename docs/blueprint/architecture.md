@@ -45,6 +45,8 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
+常驻 `status --watch` 与同页的一次性命令不能共用一条桥：`MoleBridge` 只允许一个 active runner。App 装配为流式命令（status watch）和一次性命令各持一条独立 `MoleBridge` 实例，避免 watch 占桥导致概览/状态的 analyze、history 被判 busy。
+
 ## 捆绑与进程边界
 
 - 钉死版本的 mole 安装树放在 `Contents/Resources/mole/`，入口为 `Contents/Resources/mole/mole`，Go helper 为 `Contents/Resources/mole/bin/analyze-go` 与 `Contents/Resources/mole/bin/status-go`。入口用绝对路径，**不**搜 PATH、**不**调用 brew `mo`、**不**把命令装进 `/usr/local/bin`。
@@ -59,6 +61,14 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 ## 状态流
 
 `StatusWatchService` 以单个 `mole status --watch --interval 1s` 流为源，按订阅者 fan-out `StatusWatchUpdate`，维护有界趋势序列。StatusViewModel 负责 start/pause/stop/retry 与页面生命周期；离页或无订阅者时停止流。首帧慢字段缺失、磁盘 I/O 首次基线和陈旧进程数据均以显式状态展示，不把初始化零值伪装成真实速率。
+
+## 概览与磁盘估算
+
+概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
+
+磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用四次 `analyze` 目录求和：应用程序 `/Applications`、系统 `/System`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；其他 = status 已用减去前四段且不小于 0。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
+
+最近操作复用 `history --json`。趋势只在采样点达到阈值时绘制，否则显示采样不足。
 
 ## Demo 装配边界
 

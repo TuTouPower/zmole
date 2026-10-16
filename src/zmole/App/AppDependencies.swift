@@ -72,7 +72,11 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
             if state == .error {
                 return MoleCommandResult(stdout: "", stderr: "Demo analyze failed", exitCode: 7)
             }
-            return MoleCommandResult(stdout: state == .empty ? Self.emptyAnalyzeFixture : Self.analyzeFixture, stderr: "", exitCode: 0)
+            if state == .empty {
+                return MoleCommandResult(stdout: Self.emptyAnalyzeFixture, stderr: "", exitCode: 0)
+            }
+            let path = arguments.last.flatMap { $0.hasPrefix("/") || $0.hasPrefix("~") ? $0 : nil }
+            return MoleCommandResult(stdout: Self.analyzeFixture(path: path), stderr: "", exitCode: 0)
         case "status":
             return MoleCommandResult(stdout: Self.statusFixture(stale: state == .stale, includeDetails: state != .partial), stderr: "", exitCode: 0)
         case "history":
@@ -104,7 +108,18 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
 
     func cancel() async {}
 
-    private static let analyzeFixture = """
+    private static func analyzeFixture(path: String?) -> String {
+        guard let path else { return defaultAnalyzeFixture }
+        if path.hasSuffix("/Library/Developer") { return developerAnalyzeFixture }
+        switch path {
+        case "/Applications": return applicationsAnalyzeFixture
+        case "/System": return systemAnalyzeFixture
+        case "/Users": return usersAnalyzeFixture
+        default: return defaultAnalyzeFixture
+        }
+    }
+
+    private static let defaultAnalyzeFixture = """
     {"path":"/Users/demo","overview":true,"entries":[
       {"name":"Applications","path":"/Users/demo/Applications","size":34400550912,"is_dir":true},
       {"name":"Library","path":"/Users/demo/Library","size":18123968512,"is_dir":true},
@@ -119,12 +134,40 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     ]}
     """
 
+    private static let applicationsAnalyzeFixture = """
+    {"path":"/Applications","overview":false,"entries":[
+      {"name":"Xcode.app","path":"/Applications/Xcode.app","size":22000000000,"is_dir":true},
+      {"name":"Docker.app","path":"/Applications/Docker.app","size":12000000000,"is_dir":true},
+      {"name":"Other","path":"/Applications/Other","size":6000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let systemAnalyzeFixture = """
+    {"path":"/System","overview":false,"entries":[
+      {"name":"Library","path":"/System/Library","size":18000000000,"is_dir":true},
+      {"name":"Frameworks","path":"/System/Library/Frameworks","size":7000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let developerAnalyzeFixture = """
+    {"path":"~/Library/Developer","overview":false,"entries":[
+      {"name":"Xcode","path":"~/Library/Developer/Xcode","size":24000000000,"is_dir":true},
+      {"name":"CoreSimulator","path":"~/Library/Developer/CoreSimulator","size":6000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let usersAnalyzeFixture = """
+    {"path":"/Users","overview":false,"entries":[
+      {"name":"demo","path":"/Users/demo","size":90000000000,"is_dir":true}
+    ]}
+    """
+
     private static let emptyAnalyzeFixture = """
     {"path":"/Users/demo","overview":true,"entries":[]}
     """
 
     private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ]" : ""
+        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
         return """
         {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
         """
@@ -191,7 +234,7 @@ private struct DemoMoleStreaming: MoleStreaming {
     }
 
     private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ]" : ""
+        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
         return """
         {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
         """
@@ -250,6 +293,7 @@ final class AppDependencies: ObservableObject {
     let analyzeViewModel: AnalyzeViewModel
     let statusViewModel: StatusViewModel
     let historyViewModel: HistoryViewModel
+    let overviewViewModel: OverviewViewModel
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
 
@@ -276,9 +320,13 @@ final class AppDependencies: ObservableObject {
         if configuration.isEnabled {
             process = DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state)
             streaming = DemoMoleStreaming(state: configuration.state)
-        } else if let bridge = try? MoleBridge() {
-            process = bridge
-            streaming = bridge
+        } else if let commandBridge = try? MoleBridge(),
+                  let streamBridge = try? MoleBridge() {
+            // A long-running status watch owns its bridge for the whole time the
+            // overview or status page is visible. One-shot commands use a second
+            // bridge so they are not rejected as busy while the watch runs.
+            process = commandBridge
+            streaming = streamBridge
         } else {
             process = UnavailableMoleProcess()
             streaming = UnavailableMoleStreaming()
@@ -324,5 +372,11 @@ final class AppDependencies: ObservableObject {
             try await processBox.process.run(arguments, stdin: nil, timeout: 120)
         }
         historyViewModel = HistoryViewModel(loader: historyLoader)
+
+        let storageLoader = StorageEstimateLoader(loader: loader)
+        overviewViewModel = OverviewViewModel(
+            storageLoader: storageLoader,
+            historyLoader: historyLoader
+        )
     }
 }

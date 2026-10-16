@@ -8,7 +8,7 @@ struct AppShellView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(navigation: navigation)
+            SidebarView(navigation: navigation, statusViewModel: dependencies.statusViewModel)
             NavigationStack {
                 destinationView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -20,6 +20,8 @@ struct AppShellView: View {
         .preferredColorScheme(preferredColorScheme)
         .environment(\.locale, resolvedLocale)
         .animation(.easeInOut(duration: 0.18), value: navigation.destination)
+        .onAppear { updateStatusWatch() }
+        .onChange(of: navigation.destination) { _ in updateStatusWatch() }
         .overlay {
             if navigation.isCommandPalettePresented {
                 CommandPaletteView(navigation: navigation)
@@ -41,7 +43,11 @@ struct AppShellView: View {
     private var destinationView: some View {
         switch navigation.destination {
         case .overview:
-            OverviewView()
+            OverviewView(
+                statusViewModel: dependencies.statusViewModel,
+                viewModel: dependencies.overviewViewModel,
+                navigation: navigation
+            )
         case .clean:
             CleanView(viewModel: dependencies.cleanViewModel)
         case .uninstall:
@@ -81,6 +87,17 @@ struct AppShellView: View {
         case .light: return .light
         case .dark: return .dark
         case nil: return nil
+        }
+    }
+
+    /// The status watch runs only while the overview or status page is visible.
+    /// Navigating away stops the shared process, satisfying the leave-page rule.
+    private func updateStatusWatch() {
+        switch navigation.destination {
+        case .overview, .status:
+            dependencies.statusViewModel.start()
+        default:
+            Task { await dependencies.statusViewModel.stop() }
         }
     }
 }
