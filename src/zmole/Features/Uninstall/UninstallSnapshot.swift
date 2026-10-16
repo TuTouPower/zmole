@@ -20,6 +20,13 @@ struct UninstallApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         UninstallSizeParser.bytes(from: size)
     }
 
+    /// Normalized size text, or nil when the size cannot be parsed (shown as
+    /// "unknown" instead of a raw or zero value).
+    var sizeText: String? {
+        guard let sizeBytes else { return nil }
+        return ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
+    }
+
     enum CodingKeys: String, CodingKey {
         case name
         case bundleID = "bundle_id"
@@ -135,6 +142,21 @@ enum UninstallListDecoder {
         } catch {
             throw UninstallViewModelError.invalidList
         }
+    }
+}
+
+enum UninstallListFilter {
+    /// Row visibility only. It never touches the selection set, so hiding a row
+    /// by search keeps it selected.
+    static func visible(_ apps: [UninstallApp], search: String, source: String) -> [UninstallApp] {
+        apps
+            .filter { source == "all" || $0.source == source }
+            .filter {
+                search.isEmpty
+                    || $0.name.localizedCaseInsensitiveContains(search)
+                    || $0.bundleID.localizedCaseInsensitiveContains(search)
+                    || $0.path.localizedCaseInsensitiveContains(search)
+            }
     }
 }
 
