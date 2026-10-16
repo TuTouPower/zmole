@@ -43,3 +43,6 @@ net.auto.*.plist
 .DS_Store
 *.swp
 *~.nib
+
+# 同步自模板（repo-template-sync）
+.repo_template/sync_state.json
