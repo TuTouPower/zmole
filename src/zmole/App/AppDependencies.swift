@@ -200,7 +200,7 @@ private struct DemoMoleStreaming: MoleStreaming {
 
 struct DemoConfiguration: Equatable, Sendable {
     let isEnabled: Bool
-    let page: AppMode
+    let page: AppDestination
     let state: DemoState
     let dataRoot: URL?
     let language: AppLanguage?
@@ -208,7 +208,8 @@ struct DemoConfiguration: Equatable, Sendable {
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         isEnabled = arguments.contains("--demo")
-        page = Self.value(after: "--demo-page", in: arguments).flatMap(AppMode.init(rawValue:)) ?? .analyze
+        page = Self.value(after: "--demo-page", in: arguments)
+            .flatMap(AppDestination.init(demoValue:)) ?? .overview
         state = Self.value(after: "--demo-state", in: arguments).flatMap(DemoState.init(rawValue:)) ?? .populated
         let root = Self.value(after: "--demo-data-root", in: arguments).map { URL(fileURLWithPath: $0, isDirectory: true) }
         dataRoot = isEnabled ? root : nil
