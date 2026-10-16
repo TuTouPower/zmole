@@ -8,12 +8,16 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 |模块|职责|边界|
 |---|---|---|
-|`App`|窗口、五模式导航、本地化、设置、依赖装配|不直接 `Process`|
+|`App`|窗口、侧边栏十页导航、本地化、设置、依赖装配|不直接 `Process`|
 |`Features/*`|Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Whitelist|用户意图 → Bridge API + UI 状态|
 |`MoleBridge`|定位 bundle 内 mole、拼参数、跑 `Process`、读 stdout/stderr、解析退出码与 JSON|唯一允许 spawn mole 的层|
 |`Models`|命令结果、预览条目、白名单行等值类型|与 UI 解耦|
 
-顶部主导航固定五模式：Clean、Software、Optimize、Analyze、Status。Software 内含 Uninstall/Protection rules；Optimize 内含 Maintenance/Purge；Status 内含 Live/History。第一版不出现：installer、analyze 删除、update、remove。
+侧边栏主导航为十个目的地：概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。设置从系统菜单升为正式页面，系统菜单的设置命令选中该页。⌘K 命令面板只做页面跳转，不承载删除或执行动作。自定义窗口壳只替换导航；各页面继续呈现既有功能，破坏性语义留在各自的页面 task。优化与项目清理是两个独立页面：任务/产物行只读，计划来自本次 dry-run，执行范围由 mole 决定；两者的删除保持永久删除，白名单与扫描目录分别在设置与项目清理页编辑。
+
+安装包不使用上游全屏菜单：捆绑 installer 增加非交互接口 `--list-json`（列出绝对路径、字节大小、来源、身份）与 `--remove <path>`（只接受本次列出的路径、核对身份与大小、`MOLE_DELETE_MODE=trash` 移入废纸篓，失败保留原文件）。扫描规则仍由捆绑脚本负责，界面（t023）只消费该接口。
+
+设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理预览失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
 
 ## App 装配与共享协调
 
@@ -45,6 +49,8 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
+常驻 `status --watch` 与同页的一次性命令不能共用一条桥：`MoleBridge` 只允许一个 active runner。App 装配为流式命令（status watch）和一次性命令各持一条独立 `MoleBridge` 实例，避免 watch 占桥导致概览/状态的 analyze、history 被判 busy。
+
 ## 捆绑与进程边界
 
 - 钉死版本的 mole 安装树放在 `Contents/Resources/mole/`，入口为 `Contents/Resources/mole/mole`，Go helper 为 `Contents/Resources/mole/bin/analyze-go` 与 `Contents/Resources/mole/bin/status-go`。入口用绝对路径，**不**搜 PATH、**不**调用 brew `mo`、**不**把命令装进 `/usr/local/bin`。
@@ -59,6 +65,14 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 ## 状态流
 
 `StatusWatchService` 以单个 `mole status --watch --interval 1s` 流为源，按订阅者 fan-out `StatusWatchUpdate`，维护有界趋势序列。StatusViewModel 负责 start/pause/stop/retry 与页面生命周期；离页或无订阅者时停止流。首帧慢字段缺失、磁盘 I/O 首次基线和陈旧进程数据均以显式状态展示，不把初始化零值伪装成真实速率。
+
+## 概览与磁盘估算
+
+概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
+
+磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用四次 `analyze` 目录求和：应用程序 `/Applications`、系统 `/System`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；其他 = status 已用减去前四段且不小于 0。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
+
+最近操作复用 `history --json`。趋势只在采样点达到阈值时绘制，否则显示采样不足。
 
 ## Demo 装配边界
 

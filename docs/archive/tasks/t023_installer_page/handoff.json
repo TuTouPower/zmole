@@ -1,0 +1,21 @@
+{
+  "tid": "t023",
+  "attempt": 1,
+  "execution_id": "f38bfab5206a4c5eb4d4f21bce8d9256",
+  "status": "done",
+  "branch": "t023_installer_page",
+  "base_sha": "8c35388de81115ebafabe95b9a5520bab481e3e1",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (170 pass incl. InstallersPageTests 8); pytest .repo_template/tests -q -m contract (147 pass); md_format --changed",
+  "blackbox": "GUI environment-limited (recorded in t015). Installer page covered by an injected InstallerInterface: list-only argv, no removal before confirmation, selected-and-listed removal argv, rescan invalidation, retained failures, count detail, trash wording.",
+  "review": "full: review_code.md PASS (rounds 1-2), review_test.md PASS (rounds 1-2); reviewed_scope 8ecd6bbf180521cc; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Installers/InstallerInterface.swift list()", "src/zmole/Features/Installers/InstallersView.swift scan button", "tests/unit/InstallersPageTests.swift testScanUsesOnlyNonInteractiveListing"],
+    "AC-002": ["src/zmole/Features/Installers/InstallersViewModel.swift requestConfirmation gate", "tests/unit/InstallersPageTests.swift testNoRemovalBeforeConfirmation / testRemovalRequiresFreshConfirmationAfterCancel"],
+    "AC-003": ["src/zmole/Features/Installers/InstallersViewModel.swift confirmRemoval uses selectedCandidates", "tests/unit/InstallersPageTests.swift testConfirmRemovalUsesOnlySelectedListedPaths"],
+    "AC-004": ["src/zmole/Features/Installers/InstallersViewModel.swift scan() clears selection/confirmation", "tests/unit/InstallersPageTests.swift testNewScanInvalidatesSelectionAndConfirmation / testRemovalRequiresFreshConfirmationAfterCancel"],
+    "AC-005": ["src/zmole/Features/Installers/InstallersViewModel.swift failures", "src/zmole/Features/Installers/InstallersView.swift failuresCard", "tests/unit/InstallersPageTests.swift testRejectedPathsAreKeptWithReason"],
+    "AC-006": ["src/zmole/Resources/Localizable.xcstrings installers.trash_note / installers.confirm_summary", "src/zmole/Features/Installers/InstallersView.swift", "tests/unit/InstallersPageTests.swift testTrashWordingIsPresent"]
+  },
+  "pending": [],
+  "findings": []
+}

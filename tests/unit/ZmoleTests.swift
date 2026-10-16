@@ -2,19 +2,11 @@ import XCTest
 @testable import Zmole
 
 final class ZmoleTests: XCTestCase {
-    func testTopModeContainsFivePrimaryWorkModes() {
-        XCTAssertEqual(
-            AppMode.allCases.map(\.rawValue),
-            ["clean", "software", "optimize", "analyze", "status"]
-        )
-    }
-
-    func testTopModeDoesNotExposeSecondaryOrUnsupportedCommands() {
-        let forbidden = ["history", "whitelist", "purge", "installer", "update", "remove"]
-        XCTAssertTrue(
-            Set(AppMode.allCases.map(\.rawValue)).isDisjoint(with: forbidden)
-        )
-    }
+    // The former `testTopModeContainsFivePrimaryWorkModes` and
+    // `testTopModeDoesNotExposeSecondaryOrUnsupportedCommands` asserted the
+    // retired top five-mode bar. The sidebar shell replaces that navigation, so
+    // those tests are removed and their intent is re-covered by
+    // `NavigationTests` against the ten-destination model.
 
     func testDemoConfigurationSelectsPageLanguageAndAppearance() {
         let configuration = DemoConfiguration(arguments: [
@@ -24,7 +16,7 @@ final class ZmoleTests: XCTestCase {
         ])
 
         XCTAssertTrue(configuration.isEnabled)
-        XCTAssertEqual(configuration.page, .analyze)
+        XCTAssertEqual(configuration.page, .disk)
         XCTAssertEqual(configuration.state, .partial)
         XCTAssertEqual(configuration.language, .simplifiedChinese)
         XCTAssertEqual(configuration.appearance, .light)

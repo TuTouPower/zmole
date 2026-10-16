@@ -39,14 +39,7 @@ struct StatusView: View {
             Divider()
             content
         }
-        .navigationTitle("mode.status")
-        .task {
-            guard viewModel.snapshot == nil, !viewModel.isSampling else { return }
-            viewModel.start()
-        }
-        .onDisappear {
-            Task { await viewModel.stop() }
-        }
+        .navigationTitle("sidebar.status")
     }
 
     @ViewBuilder
@@ -106,6 +99,8 @@ private struct StatusSnapshotContent: View {
                     ioPanel
                     networkPanel
                 }
+
+                thermalPanel
 
                 processPanel
             }
@@ -172,6 +167,26 @@ private struct StatusSnapshotContent: View {
         }
     }
 
+    private var thermalPanel: some View {
+        UtilityPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("status.thermal").font(.system(size: 14, weight: .semibold))
+                metricLine("status.temperature", value: temperatureText)
+                metricLine("status.zombies", value: zombieText)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var temperatureText: String {
+        StatusReadout.temperature(snapshot.cpuTemperature)
+    }
+
+    private var zombieText: String {
+        StatusReadout.count(snapshot.zombieCount)
+    }
+
     private var processPanel: some View {
         UtilityPanel {
             VStack(alignment: .leading, spacing: 0) {
@@ -211,6 +226,6 @@ private struct StatusSnapshotContent: View {
     }
 
     private func percent(_ value: Double) -> String { String(format: "%.1f%%", value) }
-    private func rate(_ value: Double?) -> String { value.map { String(format: "%.2f MB/s", $0) } ?? "—" }
+    private func rate(_ value: Double?) -> String { StatusReadout.rate(value) }
     private func bytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
 }

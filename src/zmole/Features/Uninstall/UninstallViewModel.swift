@@ -6,9 +6,15 @@ final class UninstallViewModel: ObservableObject {
     @Published private(set) var apps: [UninstallApp] = []
     @Published private(set) var selectedIDs: Set<String> = []
     @Published private(set) var hasLoaded = false
+    @Published private(set) var focusedAppID: String?
+    @Published private(set) var metadataByID: [String: UninstallAppMetadata] = [:]
+    @Published private(set) var relatedPathsByID: [String: [String]] = [:]
 
     private let process: any MoleProcessControlling
     private let coordinator: OperationCoordinator
+    private let metadataProvider: UninstallMetadataProviding
+    private let revealer: FileRevealing
+    private var relatedLoadedIDs: Set<String> = []
     private let session = OperationSession<UninstallPreviewSnapshot>()
     private let listSession = OperationSession<UninstallListSnapshot>()
     private var lease: OperationLease?
@@ -17,9 +23,16 @@ final class UninstallViewModel: ObservableObject {
     private var transientErrorKey: String?
     private var coordinatorSubscription: AnyCancellable?
 
-    init(process: any MoleProcessControlling, coordinator: OperationCoordinator) {
+    init(
+        process: any MoleProcessControlling,
+        coordinator: OperationCoordinator,
+        metadataProvider: UninstallMetadataProviding = LiveUninstallMetadataProvider(),
+        revealer: FileRevealing = LiveFileRevealer()
+    ) {
         self.process = process
         self.coordinator = coordinator
+        self.metadataProvider = metadataProvider
+        self.revealer = revealer
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         listSession.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
@@ -66,7 +79,12 @@ final class UninstallViewModel: ObservableObject {
             apps = snapshot.apps
             listGeneration = snapshot.generation
             hasLoaded = true
+            focusedAppID = apps.first?.id
+            metadataByID = [:]
+            relatedPathsByID = [:]
+            relatedLoadedIDs = []
             listSession.invalidate()
+            Task { [weak self] in await self?.loadAllMetadata() }
         } catch let error as MoleBridgeError where error == .cancelled {
             listSession.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
@@ -128,6 +146,76 @@ final class UninstallViewModel: ObservableObject {
         releaseLease()
         session.invalidate()
         clearTransientError()
+    }
+
+    var focusedApp: UninstallApp? {
+        guard let focusedAppID else { return nil }
+        return apps.first { $0.id == focusedAppID }
+    }
+
+    func focus(_ app: UninstallApp) {
+        focusedAppID = app.id
+    }
+
+    func metadata(for app: UninstallApp) -> UninstallAppMetadata? {
+        metadataByID[app.id]
+    }
+
+    /// nil until that app's own dry-run has run; empty means the dry-run found
+    /// no related paths. Related files are never inferred from the list JSON.
+    func relatedPaths(for app: UninstallApp) -> [String]? {
+        relatedLoadedIDs.contains(app.id) ? (relatedPathsByID[app.id] ?? []) : nil
+    }
+
+    func loadDetail(for app: UninstallApp) async {
+        if metadataByID[app.id] == nil {
+            let metadata = await metadataProvider.metadata(forAppAt: app.path)
+            metadataByID[app.id] = metadata
+        }
+    }
+
+    func revealInFinder(_ app: UninstallApp) {
+        Task { await revealer.reveal(path: app.path) }
+    }
+
+    private func loadAllMetadata() async {
+        for app in apps where metadataByID[app.id] == nil {
+            let metadata = await metadataProvider.metadata(forAppAt: app.path)
+            metadataByID[app.id] = metadata
+        }
+    }
+
+    /// Runs the related-files dry-run on demand. It holds the uninstall lease so
+    /// it cannot run concurrently with a batch preview/execution on the shared
+    /// single-slot command bridge.
+    func loadRelatedFiles(for app: UninstallApp) async {
+        guard !relatedLoadedIDs.contains(app.id), !session.isBusy, !isListing else { return }
+        guard (try? UninstallSelectionValidator.batch(selectedIDs: [app.id], apps: apps)) != nil else {
+            relatedLoadedIDs.insert(app.id)
+            relatedPathsByID[app.id] = []
+            return
+        }
+        guard let lease = coordinator.acquire(.uninstall) else { return }
+        defer { lease.release() }
+
+        // Leave the app unmarked on failure so the detail can retry rather than
+        // permanently reporting "no related files" after a transient busy error.
+        guard let result = try? await process.run(
+            ["uninstall", "--dry-run", app.uninstallName],
+            stdin: Self.confirmationInput,
+            timeout: 120
+        ), result.exitCode == 0 else {
+            return
+        }
+        relatedLoadedIDs.insert(app.id)
+        relatedPathsByID[app.id] = Self.relatedPaths(from: result.stdout)
+    }
+
+    static func relatedPaths(from output: String) -> [String] {
+        output
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasPrefix("/") || $0.hasPrefix("~/") }
     }
 
     func previewUninstall() async {

@@ -24,6 +24,13 @@ struct WhitelistStore: Sendable {
         return WhitelistStore(fileURL: fileURL)
     }
 
+    /// Optimize whitelist is a separate file whose lines are task ids.
+    static var optimize: WhitelistStore {
+        let fileURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/mole/whitelist_optimize")
+        return WhitelistStore(fileURL: fileURL)
+    }
+
     func load() throws -> WhitelistDocument {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return WhitelistDocument(lines: WhitelistDocument.defaultHeader)

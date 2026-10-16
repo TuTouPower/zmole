@@ -7,6 +7,8 @@ enum CleanViewCopy {
 @MainActor
 struct CleanView: View {
     @ObservedObject var viewModel: CleanViewModel
+    @ObservedObject var whitelistViewModel: WhitelistViewModel
+    var onOpenWhitelist: () -> Void = {}
 
     var body: some View {
         Group {
@@ -21,9 +23,40 @@ struct CleanView: View {
                 content
             }
         }
-        .navigationTitle("mode.clean")
-        .toolbar {
-            ToolbarItem {
+        .navigationTitle("sidebar.clean")
+        .task {
+            if whitelistViewModel.document == nil { whitelistViewModel.load() }
+        }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                head
+                statStrip
+                HStack(alignment: .top, spacing: 14) {
+                    listCard
+                    protectionCard
+                }
+                resultNotices
+            }
+            .padding(24)
+        }
+        .background(MoleTheme.background)
+    }
+
+    private var head: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("clean.eyebrow")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(MoleTheme.accentStrong)
+                .textCase(.uppercase)
+            Text("clean.title")
+                .font(.system(size: 30, weight: .bold))
+            Text("clean.subtitle")
+                .font(.system(size: 12))
+                .foregroundStyle(MoleTheme.muted)
+            HStack(spacing: 8) {
                 if viewModel.isPreviewing {
                     Button("clean.cancel") { Task { await viewModel.cancelPreview() } }
                 } else if viewModel.isExecuting {
@@ -32,124 +65,210 @@ struct CleanView: View {
                     Button {
                         Task { await viewModel.previewClean() }
                     } label: {
-                        Label("clean.preview", systemImage: "eye")
+                        Label("clean.preview", systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(UtilityStyle.accent)
+                    .tint(MoleTheme.accent)
                     .disabled(viewModel.isConfirmationPresented)
                 }
             }
+            .padding(.top, 6)
         }
+    }
+
+    private var statStrip: some View {
+        HStack(spacing: 10) {
+            statTile("clean.stat.reclaimable", viewModel.preview?.reclaimText ?? "—")
+            statTile("clean.stat.categories", "\(viewModel.preview?.sections.count ?? 0)")
+            statTile("clean.stat.items", "\(viewModel.preview?.entries.count ?? 0)")
+            statTile("clean.stat.destination", String(localized: "clean.stat.trash"))
+        }
+    }
+
+    private func statTile(_ title: LocalizedStringKey, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(verbatim: value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.system(size: 10))
+                .foregroundStyle(MoleTheme.muted)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
+        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusMD).strokeBorder(MoleTheme.line))
+    }
+
+    private var listCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("clean.list.title").font(.system(size: 13, weight: .semibold))
+                    Text("clean.list.subtitle").font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
+                }
+                Spacer()
+            }
+            .padding(16)
+            Divider()
+
+            if viewModel.isPreviewing {
+                scanningState
+            } else if viewModel.isExecuting {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("clean.executing").foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 200)
+            } else if let preview = viewModel.preview {
+                ForEach(preview.sections) { section in
+                    sectionHeader(section)
+                    ForEach(section.entries) { entry in
+                        entryRow(entry)
+                    }
+                }
+            } else {
+                UtilityEmptyState(symbol: "sparkles", title: "clean.empty", message: "clean.preview_hint")
+                    .frame(minHeight: 200)
+            }
+
+            if let preview = viewModel.preview, !viewModel.isPreviewing {
+                Divider()
+                HStack {
+                    Text("clean.action.footer").font(.system(size: 11)).foregroundStyle(MoleTheme.muted)
+                    Spacer()
+                    Button("clean.execute") { viewModel.requestConfirmation() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(MoleTheme.accent)
+                        .disabled(!viewModel.canConfirm)
+                }
+                .padding(14)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
+        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
+    }
+
+    private var scanningState: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("clean.scanning").font(.system(size: 13, weight: .semibold))
+            }
+            HStack(spacing: 7) {
+                Text("clean.stage.current").font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
+                if let stage = viewModel.currentStage {
+                    if let key = stage.localizedKey {
+                        Text(LocalizedStringKey(key)).font(.system(size: 12, weight: .medium))
+                    } else {
+                        Text(verbatim: stage.raw).font(.system(size: 12, weight: .medium))
+                    }
+                } else {
+                    Text("clean.stage.unknown").font(.system(size: 12)).foregroundStyle(MoleTheme.subtle)
+                }
+            }
+            Text("clean.scan_hint").font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+    }
+
+    private func sectionHeader(_ section: CleanPreviewSection) -> some View {
+        HStack {
+            Text(verbatim: section.name)
+                .font(.system(size: 10, weight: .semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(MoleTheme.subtle)
+            Spacer()
+            Text(verbatim: section.reclaimText)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(MoleTheme.subtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+        .background(MoleTheme.surface2)
+    }
+
+    private func entryRow(_ entry: CleanPreviewEntry) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: entry.itemNote == nil ? "doc" : "folder")
+                    .font(.system(size: 13))
+                    .foregroundStyle(MoleTheme.muted)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: entry.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let note = entry.itemNote {
+                        Text(verbatim: note).font(.system(size: 9)).foregroundStyle(MoleTheme.subtle)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text(verbatim: entry.sizeText ?? String(localized: "status.unknown"))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                Button {
+                    protect(entry)
+                } label: {
+                    Label("clean.protect", systemImage: "shield")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("clean.protect")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            Divider().padding(.leading, 16)
+        }
+    }
+
+    private var protectionCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("clean.protection.title").font(.system(size: 13, weight: .semibold))
+            Text("clean.protection.body")
+                .font(.system(size: 11))
+                .foregroundStyle(MoleTheme.muted)
+            Divider()
+            HStack {
+                Text("clean.protection.count").font(.system(size: 11)).foregroundStyle(MoleTheme.muted)
+                Spacer()
+                Text(verbatim: "\(whitelistViewModel.patterns.count)")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            }
+            Button("clean.protection.manage") { onOpenWhitelist() }
+            Divider()
+            Text(LocalizedStringKey(CleanViewCopy.executionNoteKey))
+                .font(.system(size: 10))
+                .foregroundStyle(MoleTheme.subtle)
+        }
+        .padding(18)
+        .frame(width: 300, alignment: .topLeading)
+        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
+        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
 
     @ViewBuilder
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(UtilityStyle.accent)
-                Text(LocalizedStringKey(CleanViewCopy.executionNoteKey))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(UtilityStyle.selection, in: RoundedRectangle(cornerRadius: 8))
-            if viewModel.isPreviewing {
-                UtilityPanel {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("clean.previewing").foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 180)
-                }
-            } else if viewModel.isExecuting {
-                UtilityPanel {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("clean.executing").foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 180)
-                }
-            } else if let preview = viewModel.preview {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("clean.preview_title").font(.system(size: 16, weight: .semibold))
-                            Text("clean.preview_scope").font(.system(size: 12)).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        UtilityBadge(title: "clean.preview_ready", symbol: "checkmark")
-                    }
-                    HStack(spacing: 4) {
-                        Text(verbatim: "\(preview.entries.count)")
-                            .monospacedDigit()
-                        Text("clean.preview_count")
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    List {
-                        ForEach(previewGroups) { group in
-                            Section(group.category) {
-                                ForEach(group.entries, id: \.self) { entry in
-                                    Label {
-                                        Text(entry).font(.system(size: 12, design: .monospaced))
-                                            .textSelection(.enabled)
-                                    } icon: {
-                                        Image(systemName: "doc.text")
-                                            .foregroundStyle(UtilityStyle.accent)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .listStyle(.inset)
-                    .frame(minHeight: 260)
-                    HStack {
-                        Spacer()
-                        Button("clean.execute", role: .destructive) { viewModel.requestConfirmation() }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
-                            .disabled(!viewModel.canConfirm)
-                    }
-                }
-                .padding(16)
-                .background(UtilityStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(UtilityStyle.separator))
-            } else {
-                UtilityEmptyState(symbol: "sparkles", title: "clean.empty", message: "clean.preview_hint")
-            }
-
-            if let errorMessageKey = viewModel.errorMessageKey {
-                UtilityNotice(
-                    title: LocalizedStringKey(errorMessageKey),
-                    detail: viewModel.executionSummary,
-                    isError: true
-                )
-            } else if let errorMessage = viewModel.errorMessage {
-                UtilityNotice(title: "clean.error_title", detail: errorMessage, isError: true)
-            }
-            if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
-                UtilityNotice(title: "clean.result", detail: executionSummary, symbol: "checkmark.circle")
-            }
+    private var resultNotices: some View {
+        if let errorMessageKey = viewModel.errorMessageKey {
+            UtilityNotice(
+                title: LocalizedStringKey(errorMessageKey),
+                detail: viewModel.executionSummary,
+                isError: true
+            )
+        } else if let errorMessage = viewModel.errorMessage {
+            UtilityNotice(title: "clean.error_title", detail: errorMessage, isError: true)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(UtilityStyle.background)
+        if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+            UtilityNotice(title: "clean.result", detail: executionSummary, symbol: "checkmark.circle")
+        }
     }
 
-    private var previewGroups: [CleanPreviewGroup] {
-        let grouped = Dictionary(grouping: viewModel.preview?.entries ?? []) { entry in
-            let components = entry.split(separator: "/").map(String.init)
-            if components.contains(where: { $0.localizedCaseInsensitiveContains("cache") }) { return "Caches" }
-            if components.contains(where: { $0.localizedCaseInsensitiveContains("log") }) { return "Logs" }
-            return "Other paths"
-        }
-        return grouped.keys.sorted().map { CleanPreviewGroup(category: $0, entries: grouped[$0] ?? []) }
+    private func protect(_ entry: CleanPreviewEntry) {
+        whitelistViewModel.newPattern = entry.path
+        whitelistViewModel.addPattern()
+        whitelistViewModel.save()
     }
-}
-
-private struct CleanPreviewGroup: Identifiable {
-    let category: String
-    let entries: [String]
-    var id: String { category }
 }

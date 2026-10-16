@@ -42,6 +42,15 @@ struct CleanPreviewSnapshot: Equatable, Sendable {
     let generation: CleanPreviewGeneration
     let contents: String
     let entries: [String]
+    let sections: [CleanPreviewSection]
+
+    var reclaimBytes: Int64 {
+        sections.reduce(0) { $0 + $1.reclaimBytes }
+    }
+
+    var reclaimText: String {
+        ByteCountFormatter.string(fromByteCount: reclaimBytes, countStyle: .file)
+    }
 }
 
 struct CleanPreviewStore: Sendable {
@@ -97,7 +106,8 @@ struct CleanPreviewStore: Sendable {
         return CleanPreviewSnapshot(
             generation: generation,
             contents: contents,
-            entries: entries
+            entries: entries,
+            sections: CleanPreviewParser.sections(from: contents)
         )
     }
 

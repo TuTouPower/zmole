@@ -6,19 +6,25 @@ final class CleanViewModel: ObservableObject {
     private let process: any MoleProcessControlling
     private let previewStore: CleanPreviewStore
     private let coordinator: OperationCoordinator
+    private let streaming: (any MoleStreaming)?
     private let session = OperationSession<CleanPreviewSnapshot>()
     private var lease: OperationLease?
     private var previewCoordinatorGeneration: UInt64?
     private var coordinatorSubscription: AnyCancellable?
 
+    @Published private(set) var currentStage: CleanScanStage?
+    @Published private(set) var lastReclaimBytes: Int64?
+
     init(
         process: any MoleProcessControlling,
         previewStore: CleanPreviewStore,
-        coordinator: OperationCoordinator
+        coordinator: OperationCoordinator,
+        streaming: (any MoleStreaming)? = nil
     ) {
         self.process = process
         self.previewStore = previewStore
         self.coordinator = coordinator
+        self.streaming = streaming
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
             guard let self,
@@ -27,6 +33,7 @@ final class CleanViewModel: ObservableObject {
                   self.session.preview != nil else { return }
             self.session.expirePreview(errorKey: "operation.error.stale_preview")
             self.previewCoordinatorGeneration = nil
+            self.lastReclaimBytes = nil
         }
     }
 
@@ -60,12 +67,14 @@ final class CleanViewModel: ObservableObject {
         guard !session.isBusy else { return }
         releaseLease()
         session.invalidate()
+        currentStage = nil
         guard let operationID = session.beginPreview() else { return }
         guard let newLease = coordinator.acquire(.clean) else {
             session.fail(
                 OperationResult(status: .failed, errorKey: "operation.error.busy"),
                 id: operationID
             )
+            lastReclaimBytes = nil
             return
         }
         lease = newLease
@@ -73,30 +82,27 @@ final class CleanViewModel: ObservableObject {
 
         do {
             let generation = try previewStore.begin()
-            let result = try await process.run(
-                ["clean", "--dry-run"],
-                stdin: nil,
-                timeout: 120
-            )
+            try await runDryRun(operationID: operationID)
             guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
             guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
                 session.fail(
                     OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
                     id: operationID
                 )
+                lastReclaimBytes = nil
                 releaseLease()
                 return
             }
-            guard result.exitCode == 0 else {
-                throw MoleBridgeError.commandFailed(result)
-            }
-            session.acceptPreview(try previewStore.read(generation), id: operationID)
+            let snapshot = try previewStore.read(generation)
+            session.acceptPreview(snapshot, id: operationID)
+            lastReclaimBytes = snapshot.reclaimBytes
             releaseLease(clearPreviewGeneration: false)
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
                 id: operationID
             )
+            lastReclaimBytes = nil
             releaseLease()
         } catch {
             guard session.accepts(operationID) else { return }
@@ -116,17 +122,51 @@ final class CleanViewModel: ObservableObject {
                 OperationResult(status: .failed, summary: summary, errorKey: errorKey),
                 id: operationID
             )
+            lastReclaimBytes = nil
             releaseLease()
+        }
+    }
+
+    /// Runs `clean --dry-run`, preferring a live stream so the page can show the
+    /// current scan stage. Falls back to the one-shot command path when no
+    /// stream is injected (tests, demo).
+    private func runDryRun(operationID: UUID) async throws {
+        guard let streaming else {
+            let result = try await process.run(["clean", "--dry-run"], stdin: nil, timeout: 120)
+            guard result.exitCode == 0 else {
+                throw MoleBridgeError.commandFailed(result)
+            }
+            currentStage = CleanStageCatalog.lastStage(in: result.stdout)
+            return
+        }
+
+        let stream = await streaming.stream(["clean", "--dry-run"], stdin: nil, timeout: 300)
+        do {
+            for try await event in stream {
+                guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
+                if case let .stdoutLine(data) = event,
+                   let line = String(data: data, encoding: .utf8),
+                   let stage = CleanStageCatalog.stage(fromLine: line) {
+                    currentStage = stage
+                }
+            }
+        } catch is CancellationError {
+            throw MoleBridgeError.cancelled
         }
     }
 
     func cancelPreview() async {
         guard let operationID = session.beginPreviewCancellation() else { return }
-        await process.cancel()
+        if let streaming {
+            await streaming.cancel()
+        } else {
+            await process.cancel()
+        }
         session.finishCancelled(
             OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
             id: operationID
         )
+        lastReclaimBytes = nil
         releaseLease()
     }
 
@@ -138,6 +178,7 @@ final class CleanViewModel: ObservableObject {
     func cancelConfirmation() {
         guard session.isConfirmationPresented else { return }
         session.cancelConfirmation()
+        lastReclaimBytes = nil
         releaseLease()
     }
 
@@ -169,6 +210,7 @@ final class CleanViewModel: ObservableObject {
         }
         coordinator.invalidatePreviews()
         previewCoordinatorGeneration = coordinator.invalidationGeneration
+        lastReclaimBytes = nil
 
         do {
             let result = try await process.run(["clean"], stdin: nil, timeout: 600)
