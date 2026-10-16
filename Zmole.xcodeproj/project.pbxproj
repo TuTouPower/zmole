@@ -24,6 +24,7 @@
 		2F9D1C4077890780BF9ECA44 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */; };
 		31587C8AEB4320A470AB5AB9 /* UninstallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3D3C0620A4462EFB67EC75 /* UninstallViewModel.swift */; };
 		3288B3A44875B5C14B9850EB /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19456FFB028A34FE9AA2561B /* WhitelistStore.swift */; };
+		38CC4781E75D11597DDFA923 /* StatusChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4EC0BA1A66350D43709911 /* StatusChart.swift */; };
 		394D419B90C7A69DF483E71D /* LoginItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE617F4156ACC6BE9515D494 /* LoginItem.swift */; };
 		40BCA1129503E8CBE3AA3338 /* AppAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68DF34EE2CF39B9814D0F4D /* AppAppearance.swift */; };
 		435B4606233322EEAD6A02CE /* OperationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDB92923A4F9E7A86C4525A /* OperationSession.swift */; };
@@ -98,6 +99,7 @@
 		E2783DDFAABCEE64712BA702 /* CleanPreviewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40246A3663BB2BEB8EB3935 /* CleanPreviewModel.swift */; };
 		E8A8D37CD2ED8337535B60C2 /* OverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76D4F97CC2D295465B4473E /* OverviewTests.swift */; };
 		E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */; };
+		EAACD30EFE7EC87C6933A0CF /* UiAlignmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */; };
 		EC42409FF166D2F145E7FF7E /* UninstallDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B730F405584390AA384CFB6 /* UninstallDetailTests.swift */; };
 		ECD29516D58AB8BE61CC1B19 /* OperationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF4C16E0DACA5FCB6797FE0 /* OperationCoordinator.swift */; };
 		EEB116237FF383331647B21D /* PermissionGuidanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353D1BCA02DA4E3873DA3DC7 /* PermissionGuidanceView.swift */; };
@@ -169,6 +171,7 @@
 		481E9C001CEBBE2F61993BE8 /* RecoverableBusyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoverableBusyTests.swift; sourceTree = "<group>"; };
 		48607F0DEEEC774ED4A9A9EF /* StatusWatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusWatchService.swift; sourceTree = "<group>"; };
 		49669EE0AB0105F766BE1182 /* OptimizePurgePageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizePurgePageTests.swift; sourceTree = "<group>"; };
+		4B4EC0BA1A66350D43709911 /* StatusChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusChart.swift; sourceTree = "<group>"; };
 		4E2A3EB57EF98F5A4F9801C4 /* MoleStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleStreamTests.swift; sourceTree = "<group>"; };
 		56167B2A007E95E2E8750641 /* AnalyzeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeSnapshot.swift; sourceTree = "<group>"; };
 		5724403826635CB3BE44298D /* StorageEstimate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageEstimate.swift; sourceTree = "<group>"; };
@@ -231,6 +234,7 @@
 		D0EECB2840553CD0BF53693E /* CleanPreviewStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreviewStoreTests.swift; sourceTree = "<group>"; };
 		D2E6B8699AE90081585C812D /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		D3909A9F9948552E8947D86D /* UninstallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallTests.swift; sourceTree = "<group>"; };
+		D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UiAlignmentTests.swift; sourceTree = "<group>"; };
 		D509E460B4BF5E50857F5819 /* UtilityUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityUI.swift; sourceTree = "<group>"; };
 		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
 		D6BB5FB7D0FC87D1421A0B7D /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
@@ -366,6 +370,7 @@
 				0391D87DF3F9EA9DF705E4A1 /* SettingsHistoryTests.swift */,
 				AACED876BFD4FD95E9D889A9 /* SpaceMapTests.swift */,
 				B22A8D1ED5B34DF4188D0304 /* StatusStreamTests.swift */,
+				D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */,
 				5B730F405584390AA384CFB6 /* UninstallDetailTests.swift */,
 				97FDB94D6FF5B64C4FC810DB /* UninstallStreamTests.swift */,
 				85FA0BA2B2FDEE2AEA4FA9AC /* UninstallTargetCheckerTests.swift */,
@@ -380,6 +385,7 @@
 		421ED564581DEB0557B13B8D /* Status */ = {
 			isa = PBXGroup;
 			children = (
+				4B4EC0BA1A66350D43709911 /* StatusChart.swift */,
 				361BF28522726FF34D23FF43 /* StatusReadout.swift */,
 				B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */,
 				D2E6B8699AE90081585C812D /* StatusView.swift */,
@@ -663,6 +669,7 @@
 				F47BF9624D37B2C3B64BDB9C /* SettingsHistoryTests.swift in Sources */,
 				441AA6BA031C74AF4BBC9174 /* SpaceMapTests.swift in Sources */,
 				86DA45463C3C50F94EA74705 /* StatusStreamTests.swift in Sources */,
+				EAACD30EFE7EC87C6933A0CF /* UiAlignmentTests.swift in Sources */,
 				EC42409FF166D2F145E7FF7E /* UninstallDetailTests.swift in Sources */,
 				5BC879CA1125434D19C191D5 /* UninstallStreamTests.swift in Sources */,
 				2D3C6CCC525E7A7F2B0B1669 /* UninstallTargetCheckerTests.swift in Sources */,
@@ -730,6 +737,7 @@
 				B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */,
 				FFEB25E285D453B446E27BED /* SidebarView.swift in Sources */,
 				59FAD2E5A55804FC12F71BB4 /* SpaceMapLayout.swift in Sources */,
+				38CC4781E75D11597DDFA923 /* StatusChart.swift in Sources */,
 				C3FBC23FE50B6418C05BE1E9 /* StatusReadout.swift in Sources */,
 				AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */,
 				107D2C5BFBF4A324DCC99490 /* StatusView.swift in Sources */,

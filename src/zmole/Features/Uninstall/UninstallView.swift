@@ -64,6 +64,16 @@ struct UninstallView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
+            MolePageHead(
+                eyebrow: "uninstall.eyebrow",
+                title: "uninstall.title",
+                subtitle: "uninstall.subtitle"
+            ) {
+                listActionButton
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
             controls
             if !viewModel.selectedIDs.isEmpty {
                 selectionShelf
@@ -71,18 +81,25 @@ struct UninstallView: View {
             Divider()
             content
         }
-        .toolbar {
-            ToolbarItem {
-                if viewModel.isListing {
-                    Button("uninstall.cancel") { Task { await viewModel.cancelList() } }
-                } else if viewModel.isPreviewing {
-                    Button("uninstall.cancel") { Task { await viewModel.cancelPreview() } }
-                } else if viewModel.isExecuting {
-                    Button("uninstall.cancel") { Task { await viewModel.cancelExecution() } }
-                } else {
-                    Button("uninstall.refresh") { Task { await viewModel.loadList() } }
-                }
+    }
+
+    /// Page action: re-list, or cancel whatever the page is currently doing.
+    @ViewBuilder
+    private var listActionButton: some View {
+        if viewModel.isListing {
+            Button("uninstall.cancel") { Task { await viewModel.cancelList() } }
+        } else if viewModel.isPreviewing {
+            Button("uninstall.cancel") { Task { await viewModel.cancelPreview() } }
+        } else if viewModel.isExecuting {
+            Button("uninstall.cancel") { Task { await viewModel.cancelExecution() } }
+        } else {
+            Button {
+                Task { await viewModel.loadList() }
+            } label: {
+                Label("uninstall.refresh_list", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.borderedProminent)
+            .tint(MoleTheme.accent)
         }
     }
 

@@ -27,6 +27,78 @@ enum HistoryDisplayState: Equatable, Sendable {
     case content(sessions: [HistorySessionDisplay], deletions: [HistoryDeletionDisplay])
 }
 
+/// One row of the aligned history table (demo `.history-row` semantics).
+struct HistoryTableRow: Equatable, Identifiable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case session
+        case deletion
+    }
+
+    /// Status text resolves in the view's locale: sessions always report
+    /// completion, deletions carry the raw command status.
+    enum Status: Equatable, Sendable {
+        case done
+        case verbatim(String)
+    }
+
+    let id: String
+    let kind: Kind
+    let date: String
+    let action: String
+    let result: String
+    let status: Status
+    /// Deletion rows keep the full path for the hover tooltip.
+    let fullPath: String?
+}
+
+enum HistoryTable {
+    /// Sessions first, then deletions; both kinds share the four columns
+    /// 日期 / 操作 / 结果 / 状态.
+    static func rows(from state: HistoryDisplayState) -> [HistoryTableRow] {
+        switch state {
+        case .empty:
+            return []
+        case let .content(sessions, deletions):
+            let sessionRows = sessions.enumerated().map { index, session in
+                HistoryTableRow(
+                    id: "session-\(index)",
+                    kind: .session,
+                    date: session.dateText.isEmpty ? "—" : session.dateText,
+                    action: session.command,
+                    result: resultText(items: session.items, size: session.size),
+                    status: .done,
+                    fullPath: nil
+                )
+            }
+            let deletionRows = deletions.enumerated().map { index, deletion in
+                HistoryTableRow(
+                    id: "deletion-\(index)",
+                    kind: .deletion,
+                    date: deletion.timestamp.isEmpty ? "—" : deletion.timestamp,
+                    action: deletion.path,
+                    result: deletion.sizeKB.map {
+                        ByteCountFormatter.string(fromByteCount: $0 * 1024, countStyle: .file)
+                    } ?? "—",
+                    status: .verbatim(deletion.status),
+                    fullPath: deletion.path
+                )
+            }
+            return sessionRows + deletionRows
+        }
+    }
+
+    private static func resultText(items: Int?, size: String?) -> String {
+        var parts: [String] = []
+        if let items {
+            parts.append("\(items)")
+        }
+        if let size, !size.isEmpty {
+            parts.append(size)
+        }
+        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    }
+}
+
 struct HistorySessionDisplay: Equatable, Sendable {
     let command: String
     let dateText: String
