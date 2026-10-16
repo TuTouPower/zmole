@@ -1,4 +1,23 @@
+import AppKit
 import SwiftUI
+
+enum DiskSplitLayout {
+    static let minimumPaneWidth: CGFloat = 320
+    static let handleWidth: CGFloat = 11
+
+    static func defaultListWidth(total: CGFloat) -> CGFloat {
+        clamped(total * 0.45, total: total)
+    }
+
+    static func clamped(_ width: CGFloat, total: CGFloat) -> CGFloat {
+        let maximum = max(minimumPaneWidth, total - minimumPaneWidth)
+        return min(max(width, minimumPaneWidth), maximum)
+    }
+
+    static func resized(start: CGFloat, translation: CGFloat, total: CGFloat) -> CGFloat {
+        clamped(start + translation, total: total)
+    }
+}
 
 @MainActor
 struct AnalyzeView: View {
@@ -6,116 +25,139 @@ struct AnalyzeView: View {
     @State private var selectedPath: String?
     @State private var search = ""
     @State private var sort: AnalyzeSort = .size
+    @State private var storedListWidth: CGFloat?
+    @State private var dragStartWidth: CGFloat?
 
     init(viewModel: AnalyzeViewModel? = nil) {
-        _viewModel = StateObject(wrappedValue: viewModel ?? AnalyzeViewModel())
+        _viewModel = StateObject(wrappedValue: viewModel ?? AnalyzeViewModel(scanner: LiveDiskScanner()))
     }
 
-    private var entries: [AnalyzeEntry] { viewModel.snapshot?.entries ?? [] }
-    private var selected: AnalyzeEntry? { entries.first { $0.path == selectedPath } }
-    private var visibleEntries: [AnalyzeEntry] {
+    private var entries: [DiskEntry] { viewModel.level?.entries ?? [] }
+    private var selected: DiskEntry? { entries.first { $0.path == selectedPath } }
+    private var visibleEntries: [DiskEntry] {
         let filtered = entries.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
         return AnalyzeListOrder.sorted(filtered, by: sort)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            UtilityToolbar(title: "analyze.title", subtitle: "analyze.read_only") {
-                UtilityBadge(title: "analyze.read_only", symbol: "lock")
-                Picker("analyze.sort", selection: $sort) {
-                    Text("analyze.sort_size").tag(AnalyzeSort.size)
-                    Text("analyze.sort_name").tag(AnalyzeSort.name)
-                }
-                .frame(width: 120)
+            MolePageHead(
+                eyebrow: "analyze.eyebrow",
+                title: "analyze.title",
+                subtitle: "analyze.read_only"
+            ) {
+                Button("analyze.back") { Task { await viewModel.goBack() } }
+                    .disabled(!viewModel.canGoBack)
                 Button {
                     Task { await viewModel.refreshCurrent() }
-                } label: { Label("analyze.refresh", systemImage: "arrow.clockwise") }
-                .disabled(viewModel.isLoading)
+                } label: {
+                    Label("analyze.rescan", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MoleTheme.accent)
+                .disabled(viewModel.isListing || viewModel.level == nil)
             }
-            if viewModel.isLoading {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("analyze.loading").foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = viewModel.errorMessage {
-                VStack(spacing: 18) {
-                    UtilityNotice(title: "analyze.error_title", detail: error, isError: true)
-                    if viewModel.canGoBack {
-                        Button("analyze.back") { Task { await viewModel.goBack() } }
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            } else if viewModel.snapshot != nil {
-                HStack(spacing: 0) {
-                    directoryPane.frame(minWidth: 340)
-                    Divider()
-                    mapPane
-                }
-            } else {
-                UtilityEmptyState(symbol: "internaldrive", title: "analyze.title", message: "analyze.start")
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+            content
         }
         .background(MoleTheme.background)
         .navigationTitle("sidebar.disk")
-        .overlay(alignment: .top) {
-            if viewModel.showBusyNotice {
-                RecoverableBusyNotice().padding(16)
-            }
-        }
         .task {
-            if viewModel.snapshot == nil, !viewModel.isLoading { await viewModel.loadOverview() }
+            if viewModel.level == nil, !viewModel.isListing { await viewModel.loadOverview() }
         }
-        .onChange(of: viewModel.snapshot?.path) { _ in
+        .onChange(of: viewModel.currentPath) { _ in
             selectedPath = nil
             search = ""
         }
     }
 
-    private var crumbs: [(label: String, path: String)] {
-        guard let path = viewModel.snapshot?.path else { return [] }
-        let components = path.split(separator: "/").map(String.init)
-        var result: [(String, String)] = [("analyze.root", "/")]
-        var accumulated = ""
-        for component in components {
-            accumulated += "/" + component
-            result.append((component, accumulated))
-        }
-        return result
-    }
-
-    private var directoryPane: some View {
-        VStack(spacing: 0) {
-            breadcrumb
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("analyze.filter", text: $search).textFieldStyle(.plain)
+    @ViewBuilder
+    private var content: some View {
+        if let level = viewModel.level {
+            splitPanes(level: level)
+        } else if viewModel.isListing {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("analyze.loading").foregroundStyle(.secondary)
             }
-            .padding(8)
-            .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 6))
-            .padding(.horizontal, 10)
-            .padding(.bottom, 6)
-            List(selection: $selectedPath) {
-                ForEach(visibleEntries) { entry in
-                    entryRow(entry, depth: 0)
-                    if entry.isDirectory, viewModel.isExpanded(entry), let children = viewModel.children(of: entry) {
-                        ForEach(AnalyzeListOrder.sorted(children, by: sort)) { child in
-                            entryRow(child, depth: 1)
-                        }
-                    }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = viewModel.errorMessage {
+            VStack(spacing: 18) {
+                UtilityNotice(title: "analyze.error_title", detail: error, isError: true)
+                if viewModel.canGoBack {
+                    Button("analyze.back") { Task { await viewModel.goBack() } }
                 }
             }
-            .listStyle(.sidebar)
-            Divider()
-            HStack {
-                Text("analyze.current_total").foregroundStyle(.secondary)
-                Spacer()
-                Text(UtilityStyle.bytes(totalSize)).monospacedDigit()
-            }
-            .font(.system(size: 11)).padding(12)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        } else {
+            UtilityEmptyState(symbol: "internaldrive", title: "analyze.title", message: "analyze.start")
         }
-        .background(MoleTheme.background)
+    }
+
+    private func splitPanes(level: AnalyzeViewModel.LevelState) -> some View {
+        GeometryReader { proxy in
+            let listWidth = DiskSplitLayout.clamped(
+                storedListWidth ?? DiskSplitLayout.defaultListWidth(total: proxy.size.width),
+                total: proxy.size.width
+            )
+            HStack(spacing: 0) {
+                directoryPane(level: level).frame(width: listWidth)
+                resizeHandle(total: proxy.size.width, current: listWidth)
+                mapPane(level: level).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func resizeHandle(total: CGFloat, current: CGFloat) -> some View {
+        ZStack {
+            Color.clear
+            Rectangle().fill(UtilityStyle.separator).frame(width: 1)
+        }
+        .frame(width: DiskSplitLayout.handleWidth)
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let start = dragStartWidth ?? current
+                    if dragStartWidth == nil { dragStartWidth = start }
+                    storedListWidth = DiskSplitLayout.resized(
+                        start: start,
+                        translation: value.translation.width,
+                        total: total
+                    )
+                }
+                .onEnded { _ in dragStartWidth = nil }
+        )
+        .onHover { hovering in
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .accessibilityLabel(Text("analyze.resize"))
+    }
+
+    private var crumbs: [(label: String, path: String)] {
+        guard let path = viewModel.level?.path else { return [] }
+        let root = viewModel.rootPath
+        var result: [(String, String)] = [("analyze.root", root)]
+        guard path != root else { return result }
+        let remainder = path.hasPrefix(root)
+            ? String(path.dropFirst(root == "/" ? 1 : root.count))
+            : path
+        var accumulated = root
+        for component in remainder.split(separator: "/") {
+            accumulated = accumulated == "/"
+                ? "/" + component
+                : accumulated + "/" + component
+            result.append((String(component), accumulated))
+        }
+        return result
     }
 
     private var breadcrumb: some View {
@@ -129,7 +171,7 @@ struct AnalyzeView: View {
                 .help("analyze.back")
                 ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in
                     Button {
-                        Task { await open(crumb.path) }
+                        Task { await viewModel.open(path: crumb.path) }
                     } label: {
                         if crumb.label == "analyze.root" {
                             Text("analyze.root").font(.system(size: 11, design: .monospaced))
@@ -149,57 +191,121 @@ struct AnalyzeView: View {
         }
     }
 
-    private func open(_ path: String) async {
-        if path == "/" {
-            await viewModel.loadOverview()
-        } else {
-            await viewModel.open(path: path)
+    private func directoryPane(level: AnalyzeViewModel.LevelState) -> some View {
+        VStack(spacing: 0) {
+            breadcrumb
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("analyze.filter", text: $search).textFieldStyle(.plain)
+                Picker("analyze.sort", selection: $sort) {
+                    Text("analyze.sort_size").tag(AnalyzeSort.size)
+                    Text("analyze.sort_name").tag(AnalyzeSort.name)
+                }
+                .frame(width: 110)
+                .controlSize(.small)
+            }
+            .padding(8)
+            .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+            columnHeader
+            List(selection: $selectedPath) {
+                ForEach(visibleEntries) { entry in
+                    entryRow(entry, total: level.totalSize)
+                }
+            }
+            .listStyle(.sidebar)
+            Divider()
+            HStack(spacing: 8) {
+                Text("analyze.current_total").foregroundStyle(.secondary)
+                if level.entries.contains(where: { $0.value == .computing }) {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                Text(UtilityStyle.bytes(level.totalSize)).monospacedDigit()
+            }
+            .font(.system(size: 11)).padding(12)
         }
+        .background(MoleTheme.background)
     }
 
-    private func entryRow(_ entry: AnalyzeEntry, depth: Int) -> some View {
-        HStack(spacing: 9) {
-            if entry.isDirectory {
-                Button {
-                    Task { await viewModel.toggleExpanded(entry) }
-                } label: {
-                    Image(systemName: viewModel.isExpanded(entry) ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .buttonStyle(.borderless)
-                .help("analyze.expand")
-            } else {
-                Color.clear.frame(width: 12, height: 1)
-            }
+    private var columnHeader: some View {
+        HStack(spacing: 8) {
+            Text("analyze.sort_name")
+            Spacer(minLength: 8)
+            Text("analyze.column_share").frame(width: 108, alignment: .trailing)
+        }
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 4)
+    }
+
+    private func entryRow(_ entry: DiskEntry, total: Int64) -> some View {
+        HStack(spacing: 8) {
             Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
-                .font(.system(size: 16))
+                .font(.system(size: 15))
                 .foregroundStyle(entry.isDirectory ? Color.blue.opacity(0.75) : .secondary)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: entry.name).fontWeight(.medium).lineLimit(1)
-                Text(UtilityStyle.bytes(max(0, entry.size)))
-                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            if entry.isDirectory {
-                Button { openDirectory(entry) } label: { Image(systemName: "arrow.right.circle") }
-                    .buttonStyle(.borderless)
-                    .help("analyze.open_directory")
-            }
+            Text(verbatim: entry.name).fontWeight(.medium).lineLimit(1)
+            sizeText(for: entry)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .layoutPriority(1)
+            Spacer(minLength: 8)
+            percentCell(entry, total: total)
+                .frame(width: 108, alignment: .trailing)
         }
-        .padding(.leading, CGFloat(depth) * 16)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .tag(entry.path)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { openDirectory(entry) }
     }
 
-    private var totalSize: Int64 {
-        let total = entries.reduce(0.0) { $0 + Double(max(0, $1.size)) }
-        return total >= Double(Int64.max) ? .max : Int64(total)
+    private func sizeText(for entry: DiskEntry) -> Text {
+        switch entry.value {
+        case .size(let bytes):
+            return Text(UtilityStyle.bytes(max(0, bytes))).monospacedDigit()
+        case .computing:
+            return Text("analyze.computing")
+        case .unreadable:
+            return Text("analyze.unscanned")
+        case .otherDevice:
+            return Text("analyze.other_volume")
+        }
     }
 
-    private var mapPane: some View {
+    @ViewBuilder
+    private func percentCell(_ entry: DiskEntry, total: Int64) -> some View {
+        if let share = AnalyzeArea.share(of: entry.knownSize, total: total) {
+            let fraction = AnalyzeArea.barFraction(share)
+            HStack(spacing: 6) {
+                Capsule()
+                    .fill(UtilityStyle.selection)
+                    .frame(width: 52, height: 5)
+                    .overlay(alignment: .leading) {
+                        if fraction > 0 {
+                            Capsule()
+                                .fill(UtilityStyle.accent)
+                                .frame(width: 52 * CGFloat(fraction))
+                        }
+                    }
+                    .accessibilityHidden(true)
+                Text(String(format: "%.1f%%", share * 100))
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, alignment: .trailing)
+            }
+        } else {
+            Text(verbatim: "—")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private func mapPane(level: AnalyzeViewModel.LevelState) -> some View {
         VStack(spacing: 0) {
             HStack {
                 Text("analyze.space_map").fontWeight(.semibold)
@@ -208,9 +314,12 @@ struct AnalyzeView: View {
             }
             .padding(14)
             Divider()
-            if entries.contains(where: { $0.size > 0 }) {
+            let drawable = level.entries.filter { ($0.knownSize ?? 0) > 0 }
+            if drawable.isEmpty {
+                UtilityEmptyState(symbol: "folder", title: "analyze.no_sizes", message: "analyze.no_sizes_detail")
+            } else {
                 GeometryReader { proxy in
-                    let tiles = SpaceMapLayout.tiles(entries: entries, in: CGRect(origin: .zero, size: proxy.size))
+                    let tiles = SpaceMapLayout.tiles(entries: level.entries, in: CGRect(origin: .zero, size: proxy.size))
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                             mapTile(tile, index: index)
@@ -220,11 +329,9 @@ struct AnalyzeView: View {
                     }
                 }
                 .padding(10)
-            } else {
-                UtilityEmptyState(symbol: "folder", title: "analyze.no_sizes", message: "analyze.no_sizes_detail")
             }
             Divider()
-            inspector
+            inspector(level: level)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(MoleTheme.background.opacity(0.5))
@@ -236,31 +343,31 @@ struct AnalyzeView: View {
                                Color(red: 0.41, green: 0.46, blue: 0.51),
                                Color(red: 0.55, green: 0.40, blue: 0.31),
                                Color(red: 0.42, green: 0.35, blue: 0.56)]
-        return Button {
-            selectedPath = tile.entry.path
-        } label: {
-            ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 6).fill(colors[index % colors.count])
-                if tile.rect.width > 80, tile.rect.height > 48 {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: tile.entry.name).font(.system(size: 12, weight: .semibold))
-                        Text(UtilityStyle.bytes(tile.entry.size)).font(.system(size: 11)).opacity(0.8)
+        return ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 6).fill(colors[index % colors.count])
+            if tile.rect.width > 80, tile.rect.height > 48 {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: tile.entry.name).font(.system(size: 12, weight: .semibold))
+                    if let size = tile.entry.knownSize {
+                        Text(UtilityStyle.bytes(size)).font(.system(size: 11)).opacity(0.8)
                     }
-                    .lineLimit(1).foregroundStyle(.white).padding(12)
                 }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(.white.opacity(selectedPath == tile.entry.path ? 0.95 : 0.12),
-                                  lineWidth: selectedPath == tile.entry.path ? 3 : 1)
+                .lineLimit(1).foregroundStyle(.white).padding(12)
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(verbatim: tile.entry.name + ", " + UtilityStyle.bytes(tile.entry.size)))
-        .help(tile.entry.path + " · " + UtilityStyle.bytes(tile.entry.size))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(.white.opacity(selectedPath == tile.entry.path ? 0.95 : 0.12),
+                              lineWidth: selectedPath == tile.entry.path ? 3 : 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+        .onTapGesture(count: 2) { openDirectory(tile.entry) }
+        .onTapGesture(count: 1) { selectedPath = tile.entry.path }
+        .accessibilityLabel(Text(verbatim: tile.entry.name + ", " + UtilityStyle.bytes(tile.entry.knownSize ?? 0)))
+        .help(tile.entry.path + " · " + UtilityStyle.bytes(tile.entry.knownSize ?? 0))
     }
 
-    private var inspector: some View {
+    private func inspector(level: AnalyzeViewModel.LevelState) -> some View {
         HStack(alignment: .center, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: selected?.name ?? "—").font(.system(size: 14, weight: .semibold))
@@ -275,8 +382,9 @@ struct AnalyzeView: View {
             Spacer(minLength: 0)
             if let selected {
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text(UtilityStyle.bytes(max(0, selected.size))).fontWeight(.semibold).monospacedDigit()
-                    Text(shareText(for: selected)).font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
+                    sizeText(for: selected).fontWeight(.semibold)
+                    Text(shareText(for: selected, total: level.totalSize))
+                        .font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
                 }
                 if selected.isDirectory {
                     Button("analyze.open_directory") { openDirectory(selected) }
@@ -289,12 +397,12 @@ struct AnalyzeView: View {
         .background(MoleTheme.surface)
     }
 
-    private func shareText(for entry: AnalyzeEntry) -> String {
-        guard let share = AnalyzeArea.share(of: entry.size, total: totalSize) else { return "—" }
+    private func shareText(for entry: DiskEntry, total: Int64) -> String {
+        guard let share = AnalyzeArea.share(of: entry.knownSize, total: total) else { return "—" }
         return String(format: "%.1f%%", share * 100)
     }
 
-    private func openDirectory(_ entry: AnalyzeEntry) {
+    private func openDirectory(_ entry: DiskEntry) {
         guard entry.isDirectory else { return }
         Task { await viewModel.openDirectory(entry) }
     }

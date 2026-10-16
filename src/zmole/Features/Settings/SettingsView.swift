@@ -26,6 +26,20 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MolePageHead(
+                eyebrow: "settings.eyebrow",
+                title: "settings.title",
+                subtitle: "settings.subtitle"
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 10)
+            settingsForm
+        }
+    }
+
+    private var settingsForm: some View {
         Form {
             Section("settings.language.title") {
                 Picker("settings.language.label", selection: selectedLanguage) {

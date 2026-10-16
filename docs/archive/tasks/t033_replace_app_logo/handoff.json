@@ -1,0 +1,19 @@
+{
+  "tid": "t033",
+  "attempt": 1,
+  "execution_id": "67ef582c874941268fdb6ebe5872397f",
+  "status": "done",
+  "branch": "t033_replace_app_logo",
+  "base_sha": "03580b8fd999c141509e07e30ecbee17deb051a5",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (241 pass incl. AppIconTests 5); pytest .repo_template/tests -q -m contract (147 pass); bash tests/integration/{clean_trash,installer_interface,uninstall_stream}_test.sh (pass)",
+  "blackbox": "Built Debug app bundles the regenerated icns (sha 122ae945... equals a fresh render of assets/app_icon_source.svg); demo launch screenshot shows the sidebar brand icon as the new blue-cyan gradient Z. Finder/Dock rendering left to visual confirmation per the [deploy] AC.",
+  "review": "single: review_general.md PASS (rounds 1-2, 1 minor fixed); reviewed_scope 52d8c267f2b2c157; no unresolved findings",
+  "ac_evidence": {
+    "AC-001": ["assets/app_icon_source.svg", "assets/app_icon_source_mono.svg", "tests/unit/AppIconTests.swift testIconSourcesLiveInAssets"],
+    "AC-002": ["src/zmole/Resources/AppIcon.icns (old 3e5608ef... -> new 122ae945...)", "tests/unit/AppIconTests.swift testAppIconIsRegenerableFromTheTrackedSource / testAppIconCarriesAllRequiredSizes", "scripts/build_app_icon.sh"],
+    "AC-003": ["built product Contents/Resources/AppIcon.icns sha equals fresh render", "demo sidebar screenshot", "tests/unit/AppIconTests.swift testSidebarShowsTheBundleApplicationIcon"],
+    "AC-004": ["tests/unit/AppIconTests.swift testNoStaleIconSourceReferences (assets/app_icon_source.png removed, no references in project.yml/scripts/Info.plist)"]
+  },
+  "pending": [],
+  "findings": []
+}

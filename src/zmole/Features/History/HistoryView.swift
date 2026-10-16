@@ -12,43 +12,59 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        Group {
-            if viewModel.isLoading && viewModel.snapshot == nil {
-                ProgressView("history.loading")
-            } else if let errorMessage = viewModel.errorMessage {
-                VStack(spacing: 12) {
-                    Text("history.error_title")
-                        .font(.title)
-                    Text(errorMessage)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                MolePageHead(
+                    eyebrow: "history.eyebrow",
+                    title: "history.title",
+                    subtitle: "history.subtitle"
+                ) {
+                    Button {
+                        exportJSON()
+                    } label: {
+                        Label("history.export", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(viewModel.rawJSON == nil)
+                    Button("history.refresh") {
+                        Task { await viewModel.refresh() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(MoleTheme.accent)
+                    .disabled(viewModel.isLoading)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let snapshot = viewModel.snapshot {
-                HistorySnapshotContent(snapshot: snapshot)
-            } else {
-                ProgressView("history.loading")
+                .padding(.bottom, 10)
+
+                if viewModel.isLoading && viewModel.snapshot == nil {
+                    ProgressView("history.loading")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 80)
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(spacing: 12) {
+                        UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
+                    }
+                    .frame(maxWidth: 560, alignment: .leading)
+                } else if let snapshot = viewModel.snapshot {
+                    HistorySnapshotContent(snapshot: snapshot)
+                    UtilityNotice(title: "history.info_note", symbol: "shield", isInfo: true)
+                } else {
+                    ProgressView("history.loading")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 80)
+                }
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 32)
+            .frame(maxWidth: 1180, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(MoleTheme.background)
         .overlay(alignment: .top) {
             if viewModel.showBusyNotice {
                 RecoverableBusyNotice().padding(16)
             }
         }
         .navigationTitle("sidebar.history")
-        .toolbar {
-            ToolbarItem {
-                Button("history.export") { exportJSON() }
-                    .disabled(viewModel.rawJSON == nil)
-            }
-            ToolbarItem {
-                Button("history.refresh") {
-                    Task { await viewModel.refresh() }
-                }
-                .disabled(viewModel.isLoading)
-            }
-        }
         .task {
             guard viewModel.snapshot == nil, !viewModel.isLoading else { return }
             await viewModel.refresh()
@@ -69,8 +85,8 @@ private struct HistorySnapshotContent: View {
     let snapshot: HistorySnapshot
 
     var body: some View {
-        switch snapshot.displayState {
-        case .empty:
+        let rows = HistoryTable.rows(from: snapshot.displayState)
+        if rows.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.largeTitle)
@@ -80,74 +96,83 @@ private struct HistorySnapshotContent: View {
                 Text("history.empty_summary")
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case let .content(sessions, deletions):
-            List {
-                if !sessions.isEmpty {
-                    Section("history.sessions") {
-                        ForEach(Array(sessions.enumerated()), id: \.offset) {
-                            _, session in
-                            HistorySessionRow(session: session)
-                        }
-                    }
-                }
-
-                if !deletions.isEmpty {
-                    Section("history.deletions") {
-                        ForEach(Array(deletions.enumerated()), id: \.offset) {
-                            _, deletion in
-                            HistoryDeletionRow(deletion: deletion)
-                        }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 60)
+        } else {
+            UtilityPanel {
+                VStack(spacing: 0) {
+                    headerRow
+                    ForEach(rows) { row in
+                        tableRow(row)
                     }
                 }
             }
         }
     }
-}
 
-private struct HistorySessionRow: View {
-    let session: HistorySessionDisplay
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(session.command)
-                .font(.headline)
-            Text(session.dateText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 16) {
-                if let items = session.items {
-                    LabeledContent("history.items") {
-                        Text("\(items)")
-                    }
-                }
-                if let size = session.size {
-                    LabeledContent("history.size") {
-                        Text(size)
-                    }
-                }
-            }
+    private var headerRow: some View {
+        HStack(spacing: 12) {
+            Text("history.column_date").frame(width: 200, alignment: .leading)
+            Text("history.column_action").frame(maxWidth: .infinity, alignment: .leading)
+            Text("history.column_result").frame(width: 110, alignment: .trailing)
+            Text("history.column_status").frame(width: 90, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .font(.system(size: 10))
+        .foregroundStyle(MoleTheme.subtle)
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
-}
 
-private struct HistoryDeletionRow: View {
-    let deletion: HistoryDeletionDisplay
+    private func tableRow(_ row: HistoryTableRow) -> some View {
+        HStack(spacing: 12) {
+            Text(verbatim: row.date)
+                .frame(width: 200, alignment: .leading)
+                .font(.system(size: 11, design: .monospaced))
+                .lineLimit(1)
+                .foregroundStyle(MoleTheme.muted)
+            actionCell(row)
+            Text(verbatim: row.result)
+                .frame(width: 110, alignment: .trailing)
+                .monospacedDigit()
+            statusCell(row)
+                .frame(width: 90, alignment: .trailing)
+                .foregroundStyle(MoleTheme.accentStrong)
+        }
+        .font(.system(size: 11))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(deletion.path)
-                .font(.headline)
+    @ViewBuilder
+    private func statusCell(_ row: HistoryTableRow) -> some View {
+        switch row.status {
+        case .done:
+            Text("history.status_done")
+        case let .verbatim(status):
+            Text(verbatim: status)
+        }
+    }
+
+    @ViewBuilder
+    private func actionCell(_ row: HistoryTableRow) -> some View {
+        switch row.kind {
+        case .session:
+            Text(verbatim: row.action)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .deletion:
+            Text(verbatim: row.action)
+                .font(.system(size: 11, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .textSelection(.enabled)
-            Text("\(deletion.timestamp) · \(deletion.mode) · \(deletion.status)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if let sizeKB = deletion.sizeKB {
-                Text(ByteCountFormatter.string(fromByteCount: sizeKB * 1024, countStyle: .file))
-                    .font(.caption)
-            }
+                .help(row.fullPath ?? row.action)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 4)
     }
 }

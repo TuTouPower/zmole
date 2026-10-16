@@ -23,6 +23,12 @@
 - **GitHub Releases URL**：`https://github.com/TuTouPower/zmole/releases`（与 origin 一致，禁止占位符交付）
 - **文件名**：Swift 类型文件用 UpperCamelCase（生态惯例，优先于全局 snake_case 目录规则中的「普通文件」条款）；目录名仍用 snake_case 或与 Feature 名一致的 UpperCamelCase 模块文件夹
 
+## 图标源与生成
+
+- 应用图标源为矢量 SVG：`assets/app_icon_source.svg`（彩色主版，唯一构建源）与 `assets/app_icon_source_mono.svg`（黑白备用，不入构建）。
+- `src/zmole/Resources/AppIcon.icns` 是生成产物；改源后运行 `scripts/build_app_icon.sh` 重新生成并随源一起提交（同一源渲染可复现）。构建引用为 `project.yml` 的资源项与 `Info.plist` 的 `CFBundleIconFile=AppIcon.icns`。
+- 运行期侧栏图标经 `NSApp.applicationIconImage` 读取 bundle 图标，不单独维护图片资源。
+
 ## schema 类型落点
 
 按消费方决定落点，`schemas/` 只放跨服务契约。

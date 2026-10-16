@@ -1,5 +1,42 @@
 import Foundation
 
+struct AnalyzeSnapshotLoader: Sendable {
+    typealias RunCommand = @Sendable ([String]) async throws -> MoleCommandResult
+
+    private let runCommand: RunCommand
+
+    init(bridge: MoleBridge, timeout: TimeInterval = 120) {
+        runCommand = { arguments in
+            try await bridge.run(arguments, timeout: timeout)
+        }
+    }
+
+    init(runCommand: @escaping RunCommand) {
+        self.runCommand = runCommand
+    }
+
+    func load(path: String? = nil) async throws -> AnalyzeSnapshot {
+        var arguments = ["analyze", "--json"]
+        if let path {
+            arguments.append(path)
+        }
+
+        let result = try await runCommand(arguments)
+        guard result.exitCode == 0 else {
+            throw MoleBridgeError.commandFailed(result)
+        }
+        guard let data = result.stdout.data(using: .utf8) else {
+            throw AnalyzeSnapshotError.invalidJSON
+        }
+
+        do {
+            return try JSONDecoder().decode(AnalyzeSnapshot.self, from: data)
+        } catch {
+            throw AnalyzeSnapshotError.invalidJSON
+        }
+    }
+}
+
 struct AnalyzeSnapshot: Decodable, Equatable, Sendable {
     let path: String
     let overview: Bool
