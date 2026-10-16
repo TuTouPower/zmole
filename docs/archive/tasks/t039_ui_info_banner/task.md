@@ -1,8 +1,8 @@
 ---
-tid: "t038"
-slug: "ui_history_table"
-title: "历史页改为对齐表格"
-status: "backlog"
+tid: "t039"
+slug: "ui_info_banner"
+title: "说明条统一 demo info-banner 样式"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "single"
@@ -10,8 +10,8 @@ review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
-conflicts_with: "t035,t039"
-note: "4 列对齐表格（日期/操作/结果/状态）对齐 demo。来源：2026-10-17 用户批准 UI 级别2 修复。"
+conflicts_with: ""
+note: "optimize/purge/history 说明条改蓝色 info-banner。来源：2026-10-17 用户批准 UI 级别2 修复。; dropped: 合并进 t035（UI 对齐批次）"
 ---
 
 # Task 过程总账

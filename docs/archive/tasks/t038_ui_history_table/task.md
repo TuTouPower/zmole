@@ -1,17 +1,17 @@
 ---
-tid: "t031"
-slug: "idle_readonly_prefetch"
-title: "空闲预跑只读扫描"
-status: "backlog"
+tid: "t038"
+slug: "ui_history_table"
+title: "历史页改为对齐表格"
+status: "dropped"
 branch: ""
 worktree: ""
-review_level: "full"
+review_level: "single"
 review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
-depends_on: "t028,t029,t030"
+depends_on: ""
 conflicts_with: ""
-note: "用户 2026-10-17 批准。空闲时预跑只读扫描，不自动执行删除。"
+note: "4 列对齐表格（日期/操作/结果/状态）对齐 demo。来源：2026-10-17 用户批准 UI 级别2 修复。; dropped: 合并进 t035（UI 对齐批次）"
 ---
 
 # Task 过程总账

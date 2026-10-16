@@ -1,7 +1,7 @@
 ---
 tid: "t036"
 slug: "ui_overview_align"
-title: "概览页按 demo 重排"
+title: "概览页重排与存储估算修复"
 status: "backlog"
 branch: ""
 worktree: ""
@@ -10,8 +10,8 @@ review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
-conflicts_with: "t034"
-note: "健康环+文案、存储大数字+分段条、下半区最近活动+系统状态四宫格、页头动作；删除快捷卡。来源：2026-10-17 用户批准 UI 级别2 修复。"
+conflicts_with: ""
+note: "用户 2026-10-17 批准（原 t036；合并 t034 的估算修复，系统段只计只读系统卷）。"
 ---
 
 # Task 过程总账

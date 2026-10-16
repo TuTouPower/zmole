@@ -2,18 +2,22 @@
 
 ## 背景
 
-UI 对齐修复第一阶段。2026-10-17 用户批准：当前 app 与设计稿视觉权威的页面骨架偏离，级别 2 全部修复（本次评估来源：对 demo HTML 与已合并 UI 任务产出的逐页对照，记录见本批 t035–t039 note）。
+UI 对齐修复。2026-10-17 用户批准：当前 app 与设计稿视觉权威的页面骨架偏离，级别 2 全部修复（评估来源：对 demo HTML 与已合并 UI 任务产出的逐页对照；原 t037/t038/t039 已并入本 task，其创建 note 见归档）。本 task 为合并后的整体交付面：统一页头 + 状态页指标条与负载图 + 历史页对齐表格 + 说明条 info-banner 样式。
 
 **参考 demo 在哪里：**
 
 - 视觉权威：`docs/design/mole_desktop_demo_cn_final.html`（单文件交互原型，git 当前版本行号）。
-    - 本 task 涉及页面的渲染函数：`renderUninstall` 第 974 行、`renderDisk` 第 996 行、`renderStatus` 第 1131 行、`renderHistory` 第 1178 行、`renderSettings` 第 1192 行；统一页头结构 `page-head` 见任意渲染函数首部与 CSS 第 99–105 行（`.page-head`、`.eyebrow`、`h1`、`.page-subtitle`、`.page-actions`）。
+    - 本 task 涉及页面的渲染函数：`renderUninstall` 第 974 行、`renderDisk` 第 996 行、`renderStatus` 第 1131 行、`renderHistory` 第 1178 行、`renderSettings` 第 1192 行、`renderOptimize` 第 1115 行、`renderPurge` 第 1153 行；统一页头结构 `page-head` 见任意渲染函数首部与 CSS 第 99–105 行（`.page-head`、`.eyebrow`、`h1`、`.page-subtitle`、`.page-actions`）。
+    - 状态页相关 CSS：`.stat-strip`/`.stat-tile`（第 220 行附近）、`.line-chart`/`.chart-svg`/`.chart-card`、`.lower-grid`、`.process-row`。
+    - 历史页相关 CSS：`.history-row`/`.history-row.header`、`.history-size`、`.history-status`。
+    - 说明条 `.info-banner`：CSS 第 338 行；颜色 token：浅色 `--blue-soft:#eaf1ff`、文字 `#355b99`；深色 `--blue-soft:rgba(53,120,229,.16)`（第 399 行 `@media (prefers-color-scheme:dark)`，注意该媒体查询未覆盖 `.info-banner` 的文字色，实现时深色文字需取可辨的蓝色系）。
     - 对照方法：浏览器直接打开该 HTML；强制深浅色可用 headless Chrome `--blink-settings=preferredColorScheme=1`（浅）/`=2`（深）截图。
     - app 侧对照入口：`Zmole --demo --demo-page <page> --demo-state populated --demo-language zh-Hans --demo-appearance dark|light --demo-data-root <dir>`（见 `docs/design/demo_launch.md`）。
 - 操作与数据语义基线：`docs/design/ui_contract.md`。其中「页工具栏位于目的地内容内；预览、取消、确认或批量选择条固定在工作区上方」与 demo 页头动作按钮的冲突已由用户 2026-10-17 裁定：动作按钮统一放页头右侧，本 task 负责同步更新该文档相应条目。
-- 设计 token 已对齐（`src/zmole/App/MoleTheme.swift`），本 task 不需要改 token。
+- 设计 token 已对齐（`src/zmole/App/MoleTheme.swift`），页头与状态/历史部分不需要改 token；说明条部分需增加蓝色系语义 token。
+- 数据结构（`src/zmole/Features/History/HistorySnapshot.swift`）：session 含 command/dateText/items/size；deletion 含 timestamp/mode/status/sizeKB/path。
 
-现状：10 个目的地中只有概览、清理、优化、项目清理、安装包 5 页有大页头；卸载、磁盘、状态、历史、设置 5 页缺失，动作按钮分散在窗口工具栏或页内工具条。
+现状：10 个目的地中只有概览、清理、优化、项目清理、安装包 5 页有大页头；卸载、磁盘、状态、历史、设置 5 页缺失，动作按钮分散在窗口工具栏或页内工具条。状态页无折线图，指标结构也与 demo 不同。历史页为 `List` 双 Section 堆叠。说明条用绿色 accent 或红色通用 notice，与 demo 蓝色信息条不一致。
 
 ## 契约区
 
@@ -27,13 +31,29 @@ UI 对齐修复第一阶段。2026-10-17 用户批准：当前 app 与设计稿�
     - 历史：导出 JSON、刷新。
     - 设置：无动作按钮。
 - 原位于窗口工具栏或页内工具条中、与上述重复的页面动作入口移除（进行中状态的取消按钮可保留在就近位置，不与页头按钮重复）。
+- 状态页指标区改为 4 格 stat-strip：CPU、内存、磁盘写入、温度；数值来自现有 watch 采样，字段缺失显示占位（demo 中「CPU · 8 核心」的核心数若现有数据源没有则省略该注记）。
+- 状态页新增系统负载折线图卡：展示最近 60 秒 CPU 与内存两条序列（复用现有 `series` 数据）；采样不足时显示等待说明，不画假线。
+- 状态页保留：网络面板（下载/上传）、进程列表（只读快照，不结束进程）、暂停/恢复与离页停止行为、陈旧进程数据标记。
+- 状态页布局顺序对齐 demo：页头 → 指标条 → 负载图与网络卡并排 → 进程表。
+- 历史页记录区改为对齐表格：列语义为 日期 / 操作 / 结果 / 状态（对齐 demo `.history-row.header`）。
+    - session 行：日期=记录时间；操作=命令名；结果=条目数与容量（有则显示）；状态=已完成。
+    - deletion 行：日期=时间戳；操作=被删路径（中部截断+完整路径可悬停/可选）；结果=容量（有则显示）；状态=现有 status 字段。
+- 历史页列宽对齐、表头样式与行分隔线参照 demo；窗口 1100×700 下不产生水平滚动。空记录保留空状态展示。导出 JSON 行为不变（入口位置以页头统一后的位置为准）。
+- `MoleTheme` 增加蓝色系语义 token（blue / blueSoft / 可辨文字色），取值对齐 demo 浅深两套。
+- 新增或改造信息条组件：蓝底、蓝色系文字、圆角与内边距对齐 demo `.info-banner`（可复用现有 `UtilityNotice` 增加 info 风格变体；错误与警告样式不变）。
+- 应用位置：优化页说明条、项目清理页说明条、历史页说明条改为蓝色 info-banner 样式。
+- 错误（红）与危险提示样式保持不变；`RecoverableBusyNotice` 语义不变。
 - 更新 `docs/design/ui_contract.md`：页工具栏条目改为「页面动作位于页头右侧，进行中取消按钮可留在就近位置」。
 
 ### 非范围
 
-- 不改各页内容区布局（状态页图表见 t037，历史页表格见 t038，磁盘列表见 t032）。
+- 不改各页数据区布局中不属于本批的部分；磁盘页列表与交互属 t028。
 - 不改窗口标题栏与交通灯。
 - 不改概览、清理、优化、项目清理、安装包 5 页的既有页头。
+- 不新增进程结束动作（保持只读，符合 ui_contract「不结束进程」语义）。
+- 不改 watch 采样与断流逻辑本身。
+- 导出文件格式与 `history --json` 取数逻辑不变。
+- 不清洗其它 notice 文案；不改错误/警告 notice 的颜色与语义。
 
 ### 验收标准
 
@@ -50,6 +70,23 @@ UI 对齐修复第一阶段。2026-10-17 用户批准：当前 app 与设计稿�
 - [ ] AC-005：设置页顶部显示同结构页头（无动作按钮）。
 - [ ] AC-006：五个页面的上述动作按钮不再重复出现在窗口工具栏。
 - [ ] AC-007：浅色/深色、简中/繁中/英文、1200×780 与 1100×700 窗口下页头主要动作可见、不重叠、不裁切。
+- [ ] AC-008：状态页指标区为 4 格（CPU、内存、磁盘写入、温度）；各格数值来自真实采样，不可用字段显示占位符。
+- [ ] AC-009：状态页系统负载图显示 CPU 与内存两条序列，数据来自最近 60 秒采样。
+- [ ] AC-010：采样点不足时负载图显示等待说明，不绘制伪造趋势。
+- [ ] AC-011：状态页网络面板显示下载/上传速率；首帧或 warming 阶段显示采样中说明。
+- [ ] AC-012：状态页进程列表保持只读（无结束进程入口），陈旧数据仍显式标记。
+- [ ] AC-013：状态页暂停/恢复与离页停止行为不变。
+- [ ] AC-014：浅色/深色下状态页图表与占位状态可辨；1200×780 与 1100×700 无裁切。
+- [ ] AC-015：历史页有记录时以对齐表格显示，表头为日期/操作/结果/状态四列，列对齐关系稳定。
+- [ ] AC-016：session 与 deletion 两类记录都出现在表格中；deletion 行显示被删路径。
+- [ ] AC-017：历史页空记录显示空状态（不与表头空白混淆）。
+- [ ] AC-018：导出 JSON 仍把本次 `history --json` 原文写入用户选择的文件，内容不变。
+- [ ] AC-019：浅色/深色、简中/繁中/英文下历史表格可读；1100×700 无水平裁切。
+- [ ] AC-020：优化页说明条为蓝底蓝色系文字样式，与 demo `.info-banner` 一致。
+- [ ] AC-021：项目清理页说明条同款样式。
+- [ ] AC-022：历史页说明条同款样式。
+- [ ] AC-023：错误（红）与其它 notice 视觉不受影响。
+- [ ] AC-024：浅色/深色下信息条文字可辨；三语文本不溢出、不裁切。
 
 ### 可测试性声明
 
@@ -60,18 +97,29 @@ UI 对齐修复第一阶段。2026-10-17 用户批准：当前 app 与设计稿�
 <!-- /规范 -->
 
 - AC-001～AC-007：SwiftUI 视觉布局与截图对照无法用单测断言。替代验证：`--demo` 模式逐页截图（5 页 × 浅深 × 1200×780/1100×700），与 demo HTML 同视口渲染对照；三语由 `--demo-language` 切换截图。按钮行为中可自动化的部分（如取消/导出触发路径）沿用现有单测。
+- AC-008～AC-011、AC-014：视觉与截图对照验证；替代验证：`--demo` 各状态截图（populated/empty/busy/stale）+ 与 demo HTML 同视口渲染对照。
+- AC-012、AC-013：可部分自动化——沿用/补充 `StatusStreamTests` 与 StatusViewModel 单测断言暂停、恢复、离页停止与陈旧标记路径。
+- AC-015、AC-019：视觉对照验证。替代验证：`--demo` 模式截图与 demo HTML 同视口渲染对照。
+- AC-016～AC-018：可自动化——沿用现有 HistoryViewModel/HistorySnapshot 单测断言两类记录映射与导出原文一致。
+- AC-020～AC-024：颜色与布局为视觉对照项，不可单测断言。替代验证：`--demo` 模式三页截图（浅深×三语）与 demo HTML 同视口渲染对照；token 取值可在构建产物中人工核对。
 
 ## 上下文区
 
-- 来源：2026-10-17 用户批准「UI 级别 2 修复」（本会话评估报告 b/a 项）；demo 行号以当前 git 版本为准。
+- 来源：2026-10-17 用户批准「UI 级别 2 修复」（评估报告 b–e 项）；demo 行号以当前 git 版本为准。
 
 ### 有意不测
 
 - 像素级间距差异：属于设计近似，不作为失败条件，人工目测参照 demo 即可。
+- 图表曲线的具体形状：由采样驱动，不做像素断言；只验证两条序列存在与数据来源。
+- 历史列宽的具体像素值：设计近似。
+- 蓝色具体色值误差：在 demo token 值附近即视为一致，不设数值断言。
 
 ### 测试策略
 
 - SwiftUI Preview 或 `--demo` 入口构建各页截图；与 demo HTML 渲染并排比对；主流程按钮点击走既有 ViewModel 单测（无回归）。
+- 复用 `StatusStreamTests` 夹具验证首帧渐进、暂停/恢复、断流；新增图表数据准备逻辑（如有）走组件级单测；截图对照 demo。
+- 历史数据映射（session/deletion → 表格行）逻辑放 ViewModel 或可测 helper，补单测；视觉部分截图对照。
+- 说明条：如引入枚举式 notice 风格（info/warning/error），对风格→颜色映射补简单单测；其余截图对照。
 
 ### 未知契约清单
 
@@ -86,14 +134,18 @@ UI 对齐修复第一阶段。2026-10-17 用户批准：当前 app 与设计稿�
 ### 风险与回退
 
 - 风险：五个页面状态机不同（listing/previewing/executing），页头按钮需正确映射现有状态；设置页在 demo 中无动作按钮，需确认不引入空动作区占位视觉问题。
+- 风险：折线图与现有 `series` 数据结构的对接（采样间隔、点数上限）；60 秒窗口的裁剪逻辑需明确。
+- 风险：历史页双 Section 改单表后，两类记录区分度下降；用状态或行语义保持可辨识。
+- 风险：`UtilityNotice` 被多页复用，改造需保持错误与忙碌提示视觉不变；深色下文字对比度需实测。
 - 回退：单 commit 还原；页头组件与各页接入同 commit，回退不残留。
 
 ### 依赖与约束
 
-- 与 t037、t038、t039、t032 改同一批页面文件，需串行执行（conflicts_with 已标）。
-- 保留 `docs/design/ui_contract.md` 的数据与操作语义（不勾选子集、不显示百分比等），仅更新页头条目。
+- 与 t028 改同一批页面文件（磁盘页），需串行（已声明 conflicts_with）。
+- 保留 `docs/design/ui_contract.md` 的数据与操作语义（不勾选子集、不显示百分比等），仅更新页头、状态、历史与说明条相关条目。
+- 保持 ui_contract 的「采样不足不伪造趋势」「旧数据显式标记」语义。
 
 ### Finalization 时更新的 blueprint
 
 - `docs/blueprint/conventions.md`：如含 UI 结构约定，补「页面动作位于页头右侧」。
-- `docs/design/ui_contract.md`：页工具栏条目（本 task 范围内直接更新）。
+- `docs/design/ui_contract.md`：页工具栏条目、「状态」与「历史」行如与实现描述有出入则同步。

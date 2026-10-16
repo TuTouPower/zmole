@@ -1,8 +1,8 @@
 ---
-tid: "t034"
-slug: "overview_estimate_partial_scan"
-title: "概览存储估算不完整结果与系统段口径修复"
-status: "backlog"
+tid: "t032"
+slug: "analyze_list_layout_percent"
+title: "Analyze 页列表布局、双击下钻与占父目录百分比列"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "single"
@@ -10,8 +10,8 @@ review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
-conflicts_with: ""
-note: "用户 2026-10-17 批准（来源 p012 核实）：系统段只计只读系统卷。"
+conflicts_with: "t028"
+note: "用户 2026-10-17 批准（来源 p010 核实）；与 t028 同改 Analyze 视图文件。; dropped: 合并进 t028（磁盘页扫描与交互同一交付面）"
 ---
 
 # Task 过程总账

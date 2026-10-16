@@ -2,7 +2,7 @@
 tid: "t037"
 slug: "ui_status_align"
 title: "状态页指标条与系统负载图"
-status: "backlog"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "single"
@@ -10,8 +10,8 @@ review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
-conflicts_with: "t035"
-note: "4 格 stat-strip 与 60 秒 CPU/内存折线图对齐 demo。来源：2026-10-17 用户批准 UI 级别2 修复。"
+conflicts_with: ""
+note: "4 格 stat-strip 与 60 秒 CPU/内存折线图对齐 demo。来源：2026-10-17 用户批准 UI 级别2 修复。; dropped: 合并进 t035（UI 对齐批次）"
 ---
 
 # Task 过程总账

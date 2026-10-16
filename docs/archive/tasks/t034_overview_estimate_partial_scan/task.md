@@ -1,17 +1,17 @@
 ---
-tid: "t030"
-slug: "installer_remove_reuse"
-title: "安装包删除复用当前名单"
-status: "backlog"
+tid: "t034"
+slug: "overview_estimate_partial_scan"
+title: "概览存储估算不完整结果与系统段口径修复"
+status: "dropped"
 branch: ""
 worktree: ""
-review_level: "full"
+review_level: "single"
 review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: "用户 2026-10-17 批准。删除只复核目标文件，不逐个重扫目录。"
+note: "用户 2026-10-17 批准（来源 p012 核实）：系统段只计只读系统卷。; dropped: 合并进 t036（概览页重排与估算修复同一交付面）"
 ---
 
 # Task 过程总账

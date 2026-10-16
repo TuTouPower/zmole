@@ -1,17 +1,17 @@
 ---
-tid: "t039"
-slug: "ui_info_banner"
-title: "说明条统一 demo info-banner 样式"
-status: "backlog"
+tid: "t031"
+slug: "idle_readonly_prefetch"
+title: "空闲预跑只读扫描"
+status: "dropped"
 branch: ""
 worktree: ""
-review_level: "single"
+review_level: "full"
 review_limit: "5"
 verify_limit: "5"
 diff_anchor: ""
-depends_on: ""
-conflicts_with: "t035,t038"
-note: "optimize/purge/history 说明条改蓝色 info-banner。来源：2026-10-17 用户批准 UI 级别2 修复。"
+depends_on: "t028,t029,t030"
+conflicts_with: ""
+note: "用户 2026-10-17 批准。空闲时预跑只读扫描，不自动执行删除。; dropped: 合并进 t029（空闲预跑）"
 ---
 
 # Task 过程总账

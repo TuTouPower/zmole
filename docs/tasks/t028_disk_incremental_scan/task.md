@@ -1,7 +1,7 @@
 ---
 tid: "t028"
 slug: "disk_incremental_scan"
-title: "磁盘页增量扫描与会话缓存"
+title: "磁盘页增量扫描与交互改造"
 status: "backlog"
 branch: ""
 worktree: ""
@@ -11,7 +11,7 @@ verify_limit: "5"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: "用户 2026-10-17 批准：下钻不再每次调用 analyze-go，进程内保留已扫层级。"
+note: "用户 2026-10-17 批准（原 t028；合并 t032 的交互/百分比列）。"
 ---
 
 # Task 过程总账
