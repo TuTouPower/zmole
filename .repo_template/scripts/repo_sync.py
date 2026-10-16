@@ -174,6 +174,12 @@ def _file_differs(a: Path, b: Path) -> bool:
     return a.read_bytes() != b.read_bytes()
 
 
+def _reject_dir_target(dst: Path, reason: str) -> None:
+    """目标须能承载文件：shutil.copy2 遇到同名目录会把文件静默写进目录内部。"""
+    if dst.is_dir() and not dst.is_symlink():
+        raise SyncError(f"{_rel(dst)} 是目录：{reason}。请人工处理该目录后重跑 apply")
+
+
 # ---------------------------------------------------------------------------
 # sync_state.json 读写（字段级原子更新纪律）
 # ---------------------------------------------------------------------------
@@ -522,6 +528,48 @@ def force_migrate_workflow_tasks(changed: set[Path]) -> list[str]:
     return reports
 
 
+CONVENTIONS_PATH = CONSUMER / "docs/blueprint/conventions.md"
+
+
+def _migrate_conventions_text(text: str) -> str:
+    # 替换旧导入语句
+    text = re.sub(
+        r"from\s+task\s+import\s+(_atomic_write_text|atomic_write_text)(?:（[^）\n]*）)?",
+        "from repo_task.documents import atomic_write_text",
+        text,
+    )
+    # 替换 helper 归属描述
+    text = re.sub(
+        r"([`'\"\(]?(?:\.repo_template/)?(?:scripts/)?task\.py\s*(?:的)?\s*)(_atomic_write_text|atomic_write_text)",
+        r"repo_task.documents 的 atomic_write_text",
+        text,
+    )
+    return text
+
+
+def conventions_migration_status() -> list[str]:
+    if not CONVENTIONS_PATH.is_file():
+        return []
+    before = CONVENTIONS_PATH.read_text(encoding="utf-8")
+    after = _migrate_conventions_text(before)
+    if after != before:
+        return [_rel(CONVENTIONS_PATH)]
+    return []
+
+
+def migrate_conventions(changed: set[Path]) -> list[str]:
+    if not CONVENTIONS_PATH.is_file():
+        return []
+    before = CONVENTIONS_PATH.read_text(encoding="utf-8")
+    after = _migrate_conventions_text(before)
+    if after != before:
+        _stage_rollback(CONVENTIONS_PATH)
+        CONVENTIONS_PATH.write_text(after, encoding="utf-8")
+        changed.add(CONVENTIONS_PATH)
+        return [f"{_rel(CONVENTIONS_PATH)} 已自动迁移原子写约定为 from repo_task.documents import atomic_write_text（保留消费仓自定义内容）"]
+    return []
+
+
 # ---------------------------------------------------------------------------
 # 硬同步（树对树 / 单文件）
 # ---------------------------------------------------------------------------
@@ -530,6 +578,11 @@ def sync_dir(src_dir: Path, dst_dir: Path, changed: set[Path]) -> None:
     """树对树同步：src 全量复制（含覆盖），dst 中 src 没有的非噪声条目删除。"""
     if not dst_dir.exists():
         dst_dir.mkdir(parents=True)
+    elif not dst_dir.is_dir():
+        raise SyncError(
+            f"{_rel(dst_dir)} 是文件/软链，模板源是目录；类型不符，停止。"
+            "请人工处理该路径后重跑 apply"
+        )
     for entry in src_dir.iterdir():
         if _is_noise(entry.name):
             continue
@@ -537,6 +590,7 @@ def sync_dir(src_dir: Path, dst_dir: Path, changed: set[Path]) -> None:
         if entry.is_dir():
             sync_dir(entry, target, changed)
         else:
+            _reject_dir_target(target, "模板源是文件，拒绝写入目录内部")
             if not target.exists() or _file_differs(entry, target):
                 _stage_rollback(target)
                 shutil.copy2(entry, target)
@@ -559,6 +613,11 @@ def sync_dir_oneway(src_dir: Path, dst_dir: Path, changed: set[Path]) -> None:
         return
     if not dst_dir.exists():
         dst_dir.mkdir(parents=True)
+    elif not dst_dir.is_dir():
+        raise SyncError(
+            f"{_rel(dst_dir)} 是文件/软链，模板源是目录；类型不符，停止。"
+            "请人工处理该路径后重跑 apply"
+        )
     for entry in src_dir.iterdir():
         if _is_noise(entry.name):
             continue
@@ -566,6 +625,7 @@ def sync_dir_oneway(src_dir: Path, dst_dir: Path, changed: set[Path]) -> None:
         if entry.is_dir():
             sync_dir_oneway(entry, target, changed)
         else:
+            _reject_dir_target(target, "模板源是文件，拒绝写入目录内部")
             if not target.exists() or _file_differs(entry, target):
                 _stage_rollback(target)
                 shutil.copy2(entry, target)
@@ -576,10 +636,12 @@ def sync_file(src: Path, dst: Path, changed: set[Path]) -> None:
     """单文件：src 有 → 拷贝（相同则不动）；src 无 → 删 dst。"""
     if not src.exists():
         if dst.exists():
+            _reject_dir_target(dst, "模板已无此文件，拒绝删除同名目录")
             _stage_rollback(dst)
             dst.unlink()
             changed.add(dst)
         return
+    _reject_dir_target(dst, "模板源是文件，拒绝写入目录内部")
     if not dst.exists() or _file_differs(src, dst):
         dst.parent.mkdir(parents=True, exist_ok=True)
         _stage_rollback(dst)
@@ -595,6 +657,11 @@ def sync_skill(src_skill: Path, dst_skill: Path, changed: set[Path]) -> None:
     """整 skill 目录覆盖（含 front matter），保护 sync_state.json，不做 --delete。"""
     if not dst_skill.exists():
         dst_skill.mkdir(parents=True)
+    elif not dst_skill.is_dir():
+        raise SyncError(
+            f"{_rel(dst_skill)} 是文件/软链，模板源是目录；类型不符，停止。"
+            "请人工处理该路径后重跑 apply"
+        )
     for entry in src_skill.iterdir():
         if entry.name == "sync_state.json":
             continue
@@ -602,6 +669,7 @@ def sync_skill(src_skill: Path, dst_skill: Path, changed: set[Path]) -> None:
         if entry.is_dir():
             sync_dir(entry, target, changed)
         else:
+            _reject_dir_target(target, "模板源是文件，拒绝写入目录内部")
             if not target.exists() or _file_differs(entry, target):
                 _stage_rollback(target)
                 shutil.copy2(entry, target)
@@ -916,7 +984,7 @@ def shared_class(src_path: Path, dst_path: Path) -> str:
 
 
 def shared_status(src: Path) -> list[dict]:
-    """裁定单元分类（AGENTS.md 处理 CLAUDE.md 软链实体）。"""
+    """裁定单元分类（AGENTS.md 目的地为软链时解引用实体再比对）。"""
     out: list[dict] = []
     for unit in SHARED_FILES:
         s = src / unit
@@ -1264,6 +1332,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     for item in shared_status(src):
         print(f"  {item['cls']:14s} {item['unit']}")
     migrations, worktrees, migration_errors = workflow_migration_status(src)
+    conv_migrations = conventions_migration_status()
     print("\nworkflow schema 强制迁移:")
     if migration_errors:
         for error in migration_errors:
@@ -1273,7 +1342,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     if migrations:
         for path in migrations:
             print(f"  migrate {path}")
-    if not migration_errors and not worktrees and not migrations:
+    if conv_migrations:
+        for path in conv_migrations:
+            print(f"  migrate {path}（原子写约定）")
+    if not migration_errors and not worktrees and not migrations and not conv_migrations:
         print("  无")
     print("\nformat 豁免 (.prettierignore):")
     dst = CONSUMER / ".prettierignore"
@@ -1382,6 +1454,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
     print("\n### workflow schema 强制迁移")
     migrations, worktrees, migration_errors = workflow_migration_status(src)
+    conv_migrations = conventions_migration_status()
     if migration_errors:
         print("BLOCKED：以下文档无法自动迁移：")
         for error in migration_errors:
@@ -1393,7 +1466,10 @@ def cmd_plan(args: argparse.Namespace) -> int:
     if migrations:
         for path in migrations:
             print(f"- {path}")
-    if not migration_errors and not worktrees and not migrations:
+    if conv_migrations:
+        for path in conv_migrations:
+            print(f"- {path}（更新原子写约定为 repo_task.documents.atomic_write_text，保留自定义内容）")
+    if not migration_errors and not worktrees and not migrations and not conv_migrations:
         print("无")
 
     print("\n### state 推进预期")
@@ -1418,6 +1494,8 @@ def _apply_sync_write(src: Path, decisions: dict[str, str], changed: set[Path], 
         sync_file(src / rel, CONSUMER / rel, changed)
 
     for report in force_migrate_workflow_tasks(changed):
+        print(f"提示: {report}")
+    for report in migrate_conventions(changed):
         print(f"提示: {report}")
     reports = repair_symlinks(changed)
     for r in reports:
@@ -1445,6 +1523,14 @@ def _apply_sync_write(src: Path, decisions: dict[str, str], changed: set[Path], 
         _apply_shared_unit(unit, decision, src, changed)
 
 
+def _print_changed(paths: set[Path], header: str) -> None:
+    print(header)
+    for path in sorted(paths, key=str):
+        print(_rel(path))
+    if not paths:
+        print("（无改动）")
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     state = read_state()
     if not state:
@@ -1463,8 +1549,14 @@ def cmd_apply(args: argparse.Namespace) -> int:
 
     if not args.skip_tests:
         if not _run_tests(CONSUMER):
-            print("pytest .repo_template/tests/ -m contract 失败，不推进 state", file=sys.stderr)
-            _cleanup_rollback()
+            _print_changed(changed, "\n=== 本次写入清单（失败，已回滚，仅供排查）===")
+            _rollback_changes()
+            print(
+                "错误: 契约测试失败（pytest .repo_template/tests/ -q -m contract）；"
+                "已完整回滚本次写入，last_synced_commit 未推进；"
+                "回滚备份保留在 .scratch/repo_sync_rollback。修复后重跑 apply",
+                file=sys.stderr,
+            )
             return 1
     else:
         print("跳过测试验证（--skip-tests）")
@@ -1476,11 +1568,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
     state["last_synced_at"] = _now_iso()
     write_state(state)
 
-    print("\n=== 改动路径清单（commit 门禁点名 add）===")
-    for path in sorted(changed, key=str):
-        print(_rel(path))
-    if not changed:
-        print("（无改动）")
+    _print_changed(changed, "\n=== 改动路径清单（commit 门禁点名 add）===")
     print(f"\nstate 推进：last_synced_commit={'已更新' if not dirty else 'SRC dirty，未推进'}, "
           f"last_synced_at={state['last_synced_at']}")
     _cleanup_rollback()
