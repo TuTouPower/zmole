@@ -3,67 +3,37 @@ import SwiftUI
 @main
 struct ZmoleApp: App {
     @StateObject private var dependencies: AppDependencies
-    @AppStorage(AppLanguage.storageKey) private var languageOverride = AppLanguage.system.rawValue
+    @StateObject private var navigation: NavigationModel
 
     init() {
-        _dependencies = StateObject(
-            wrappedValue: AppDependencies(configuration: DemoConfiguration())
+        let dependencies = AppDependencies(configuration: DemoConfiguration())
+        _dependencies = StateObject(wrappedValue: dependencies)
+        _navigation = StateObject(
+            wrappedValue: NavigationModel(
+                initial: dependencies.demo.isEnabled ? dependencies.demo.page : .overview
+            )
         )
     }
 
     var body: some Scene {
         WindowGroup("app.name") {
-            AppShellView(dependencies: dependencies)
+            AppShellView(dependencies: dependencies, navigation: navigation)
         }
-        .defaultSize(width: 1200, height: 760)
-        .windowResizability(.contentSize)
-
-        Settings {
-            SettingsView(demoLanguage: dependencies.demo.language)
-                .environment(\.locale, resolvedLocale)
-                .preferredColorScheme(preferredColorScheme)
+        .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
+        .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("settings.open") {
+                    navigation.select(.settings)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+            CommandGroup(after: .toolbar) {
+                Button("palette.open") {
+                    navigation.presentCommandPalette()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+            }
         }
-    }
-
-    private var resolvedLocale: Locale {
-        if let language = dependencies.demo.language {
-            return language.locale
-        }
-        guard let language = AppLanguage(rawValue: languageOverride), language != .system else {
-            return .current
-        }
-        return language.locale
-    }
-
-    private var preferredColorScheme: ColorScheme? {
-        switch dependencies.demo.appearance {
-        case .light: return .light
-        case .dark: return .dark
-        case nil: return nil
-        }
-    }
-}
-
-struct AppShellView: View {
-    @ObservedObject var dependencies: AppDependencies
-    @AppStorage(AppLanguage.storageKey) private var languageOverride = AppLanguage.system.rawValue
-
-    init(dependencies: AppDependencies) {
-        self.dependencies = dependencies
-    }
-
-    var body: some View {
-        ContentView(dependencies: dependencies)
-            .environment(\.locale, resolvedLocale)
-    }
-
-    private var resolvedLocale: Locale {
-        if let demoLanguage = dependencies.demo.language {
-            return demoLanguage.locale
-        }
-        guard let language = AppLanguage(rawValue: languageOverride), language != .system else {
-            return .current
-        }
-        return language.locale
     }
 }

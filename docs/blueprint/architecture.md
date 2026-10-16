@@ -8,12 +8,12 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 |模块|职责|边界|
 |---|---|---|
-|`App`|窗口、五模式导航、本地化、设置、依赖装配|不直接 `Process`|
+|`App`|窗口、侧边栏十页导航、本地化、设置、依赖装配|不直接 `Process`|
 |`Features/*`|Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Whitelist|用户意图 → Bridge API + UI 状态|
 |`MoleBridge`|定位 bundle 内 mole、拼参数、跑 `Process`、读 stdout/stderr、解析退出码与 JSON|唯一允许 spawn mole 的层|
 |`Models`|命令结果、预览条目、白名单行等值类型|与 UI 解耦|
 
-顶部主导航固定五模式：Clean、Software、Optimize、Analyze、Status。Software 内含 Uninstall/Protection rules；Optimize 内含 Maintenance/Purge；Status 内含 Live/History。第一版不出现：installer、analyze 删除、update、remove。
+侧边栏主导航为十个目的地：概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。设置从系统菜单升为正式页面，系统菜单的设置命令选中该页。⌘K 命令面板只做页面跳转，不承载删除或执行动作。自定义窗口壳只替换导航；各页面继续呈现既有功能，破坏性语义留在各自的页面 task。
 
 ## App 装配与共享协调
 
