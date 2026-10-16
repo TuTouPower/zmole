@@ -53,6 +53,30 @@ struct StorageBreakdown: Equatable, Sendable {
     }
 }
 
+/// Raw directory sums behind the five-segment estimate. These are the values
+/// worth caching; the final segments (including "other") are derived with the
+/// live status used-space value.
+struct StorageSums: Equatable, Codable, Sendable {
+    var applications: Int64?
+    var system: Int64?
+    var developer: Int64?
+    var users: Int64?
+
+    var isComplete: Bool {
+        applications != nil && system != nil && developer != nil && users != nil
+    }
+
+    func breakdown(usedBytes: Int64?) -> StorageBreakdown {
+        StorageBreakdown.make(
+            applications: applications,
+            system: system,
+            developer: developer,
+            users: users,
+            usedBytes: usedBytes
+        )
+    }
+}
+
 struct StorageEstimateLoader: Sendable {
     typealias DirectorySize = @Sendable (String) async -> Int64?
 
@@ -72,19 +96,21 @@ struct StorageEstimateLoader: Sendable {
         }
     }
 
-    func load(usedBytes: Int64?) async -> StorageBreakdown {
-        // The command bridge allows one in-flight process, so the four directory
-        // probes run sequentially instead of concurrently.
+    /// Runs the four directory probes sequentially on this lane's bridge.
+    func loadSums() async -> StorageSums {
         let applications = await directorySize("/Applications")
         let system = await directorySize("/System")
         let developer = await directorySize("~/Library/Developer")
         let users = await directorySize("/Users")
-        return StorageBreakdown.make(
+        return StorageSums(
             applications: applications,
             system: system,
             developer: developer,
-            users: users,
-            usedBytes: usedBytes
+            users: users
         )
+    }
+
+    func load(usedBytes: Int64?) async -> StorageBreakdown {
+        await loadSums().breakdown(usedBytes: usedBytes)
     }
 }

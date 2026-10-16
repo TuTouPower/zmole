@@ -432,7 +432,9 @@ final class AppDependencies: ObservableObject {
         let storageLoader = StorageEstimateLoader(loader: estimateAnalyzeLoader)
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,
-            historyLoader: historyLoader
+            historyLoader: historyLoader,
+            storageCache: configuration.isEnabled ? nil : .live,
+            coordinator: coordinator
         )
     }
 }
