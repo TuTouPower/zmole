@@ -92,7 +92,11 @@ final class ZmoleTests: XCTestCase {
         XCTAssertTrue(viewModel.isPaused)
     }
 
-    func testStatusMetricDetailKeysHaveLocalizedValues() throws {
+    // Renamed and re-keyed in t035: the status rebuild retired the old
+    // metric-detail cards, and these are the metric labels the page renders
+    // now. Same intent: every status metric label is localized in three
+    // languages.
+    func testStatusStatKeysHaveLocalizedValues() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -101,7 +105,7 @@ final class ZmoleTests: XCTestCase {
         let data = try Data(contentsOf: sourceURL)
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(root["strings"] as? [String: Any])
-        for key in ["status.health_detail", "status.cpu.detail", "status.memory.detail"] {
+        for key in ["status.stat.cpu", "status.stat.memory", "status.stat.disk_write", "status.stat.temperature"] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
             for locale in ["en", "zh-Hans", "zh-Hant"] {

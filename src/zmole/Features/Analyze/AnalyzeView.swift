@@ -41,18 +41,25 @@ struct AnalyzeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            UtilityToolbar(title: "analyze.title", subtitle: "analyze.read_only") {
-                UtilityBadge(title: "analyze.read_only", symbol: "lock")
-                Picker("analyze.sort", selection: $sort) {
-                    Text("analyze.sort_size").tag(AnalyzeSort.size)
-                    Text("analyze.sort_name").tag(AnalyzeSort.name)
-                }
-                .frame(width: 120)
+            MolePageHead(
+                eyebrow: "analyze.eyebrow",
+                title: "analyze.title",
+                subtitle: "analyze.read_only"
+            ) {
+                Button("analyze.back") { Task { await viewModel.goBack() } }
+                    .disabled(!viewModel.canGoBack)
                 Button {
                     Task { await viewModel.refreshCurrent() }
-                } label: { Label("analyze.refresh", systemImage: "arrow.clockwise") }
+                } label: {
+                    Label("analyze.rescan", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MoleTheme.accent)
                 .disabled(viewModel.isListing || viewModel.level == nil)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
             content
         }
         .background(MoleTheme.background)
@@ -190,6 +197,12 @@ struct AnalyzeView: View {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("analyze.filter", text: $search).textFieldStyle(.plain)
+                Picker("analyze.sort", selection: $sort) {
+                    Text("analyze.sort_size").tag(AnalyzeSort.size)
+                    Text("analyze.sort_name").tag(AnalyzeSort.name)
+                }
+                .frame(width: 110)
+                .controlSize(.small)
             }
             .padding(8)
             .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 6))

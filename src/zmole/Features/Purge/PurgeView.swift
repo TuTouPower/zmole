@@ -62,7 +62,7 @@ struct PurgeView: View {
                 }
 
                 UtilityNotice(title: "purge.permanent_note", symbol: "exclamationmark.triangle", isError: true)
-                UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath")
+                UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
 
                 HStack(spacing: 8) {
                     Button("purge.paths.edit") { showingPathsEditor = true }

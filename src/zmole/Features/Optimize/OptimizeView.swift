@@ -62,7 +62,7 @@ struct OptimizeView: View {
                 }
 
                 UtilityNotice(title: "optimize.permanent_note", symbol: "exclamationmark.triangle", isError: true)
-                UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath")
+                UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
 
                 HStack {
                     Button("optimize.whitelist") { onOpenSettings() }

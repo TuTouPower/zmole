@@ -15,6 +15,11 @@ enum MoleTheme {
     static let accent = adaptive(light: 0x2F8F68, dark: 0x58B889)
     static let accentStrong = adaptive(light: 0x237554, dark: 0x73C69D)
     static let accentSoft = adaptive(light: 0xE8F4EE, dark: 0x23342C)
+    /// Demo `.info-banner` tokens: soft blue background with a readable blue
+    /// that stays legible on the dark surface (the demo media query does not
+    /// override the banner text color).
+    static let blueSoft = adaptive(light: 0xEAF1FF, dark: 0x2C364A)
+    static let blue = adaptive(light: 0x355B99, dark: 0x9CC1FF)
     static let sidebar = adaptive(light: 0xF5F5F7, dark: 0x1C1C1E).opacity(0.82)
     static let selection = adaptive(light: 0xE2E2E6, dark: 0x3A3A3E)
 
