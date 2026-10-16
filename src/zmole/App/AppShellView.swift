@@ -63,11 +63,18 @@ struct AppShellView: View {
         case .disk:
             AnalyzeView(viewModel: dependencies.analyzeViewModel)
         case .optimize:
-            OptimizeView(viewModel: dependencies.optimizeViewModel)
+            OptimizeView(
+                viewModel: dependencies.optimizeViewModel,
+                onOpenSettings: { navigation.select(.settings) }
+            )
         case .status:
             StatusView(viewModel: dependencies.statusViewModel)
         case .purge:
-            PurgeView(viewModel: dependencies.purgeViewModel)
+            PurgeView(
+                viewModel: dependencies.purgeViewModel,
+                pathsViewModel: dependencies.purgePathsViewModel,
+                onOpenSettings: { navigation.select(.settings) }
+            )
         case .installers:
             InstallersView()
         case .history:

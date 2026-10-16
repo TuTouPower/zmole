@@ -3,6 +3,9 @@ import SwiftUI
 @MainActor
 struct PurgeView: View {
     @ObservedObject var viewModel: PurgeViewModel
+    @ObservedObject var pathsViewModel: PurgePathsViewModel
+    var onOpenSettings: () -> Void = {}
+    @State private var showingPathsEditor = false
 
     var body: some View {
         Group {
@@ -17,7 +20,7 @@ struct PurgeView: View {
                 content
             }
         }
-        .navigationTitle("optimize.purge")
+        .navigationTitle("sidebar.purge")
         .toolbar {
             ToolbarItem {
                 if viewModel.isPreviewing {
@@ -31,48 +34,69 @@ struct PurgeView: View {
                         Label("purge.preview", systemImage: "eye")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(UtilityStyle.accent)
+                    .tint(MoleTheme.accent)
                 }
             }
         }
+        .sheet(isPresented: $showingPathsEditor) {
+            PurgePathsEditorView(viewModel: pathsViewModel) { showingPathsEditor = false }
+        }
     }
 
-    @ViewBuilder
     private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath")
-            if viewModel.isPreviewing {
-                busyState(title: "purge.previewing")
-            } else if viewModel.isExecuting {
-                busyState(title: "purge.executing")
-            } else if let preview = viewModel.preview {
-                outputPanel(output: preview.output)
-            } else {
-                UtilityEmptyState(symbol: "trash.slash", title: "optimize.purge", message: "purge.preview_hint")
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("purge.eyebrow")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(MoleTheme.accentStrong)
+                        .textCase(.uppercase)
+                    Text("purge.title").font(.system(size: 30, weight: .bold))
+                    Text("purge.page_subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                }
 
-            if let errorMessageKey = viewModel.errorMessageKey {
-                UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
-            } else if let errorMessage = viewModel.errorMessage {
-                UtilityNotice(title: "purge.error_title", detail: errorMessage, isError: true)
+                UtilityNotice(title: "purge.permanent_note", symbol: "exclamationmark.triangle", isError: true)
+                UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath")
+
+                HStack(spacing: 8) {
+                    Button("purge.paths.edit") { showingPathsEditor = true }
+                        .buttonStyle(.bordered)
+                    Button("purge.whitelist") { onOpenSettings() }
+                        .buttonStyle(.bordered)
+                    Spacer()
+                }
+
+                if viewModel.isPreviewing {
+                    busyState(title: "purge.previewing")
+                } else if viewModel.isExecuting {
+                    busyState(title: "purge.executing")
+                } else if let preview = viewModel.preview {
+                    outputPanel(output: preview.output)
+                } else {
+                    UtilityEmptyState(symbol: "hammer", title: "sidebar.purge", message: "purge.preview_hint")
+                        .frame(minHeight: 200)
+                }
+
+                if let errorMessageKey = viewModel.errorMessageKey {
+                    UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
+                } else if let errorMessage = viewModel.errorMessage {
+                    UtilityNotice(title: "purge.error_title", detail: errorMessage, isError: true)
+                }
+                if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+                    UtilityNotice(title: "purge.result", detail: executionSummary, symbol: "checkmark.circle")
+                }
             }
-            if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
-                UtilityNotice(title: "purge.result", detail: executionSummary, symbol: "checkmark.circle")
-            }
+            .padding(24)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(UtilityStyle.background)
+        .background(MoleTheme.background)
     }
 
     private func busyState(title: LocalizedStringKey) -> some View {
-        UtilityPanel {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text(title).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 200)
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(title).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 
     private func outputPanel(output: String) -> some View {
@@ -90,7 +114,7 @@ struct PurgeView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
             .padding(12)
-            .background(UtilityStyle.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
+            .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 8))
             HStack {
                 Spacer()
                 Button("purge.execute", role: .destructive) { viewModel.requestConfirmation() }
@@ -100,7 +124,7 @@ struct PurgeView: View {
             }
         }
         .padding(16)
-        .background(UtilityStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(UtilityStyle.separator))
+        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
+        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
 }

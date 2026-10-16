@@ -3,6 +3,12 @@ import SwiftUI
 @MainActor
 struct OptimizeView: View {
     @ObservedObject var viewModel: OptimizeViewModel
+    var onOpenSettings: () -> Void = {}
+
+    private var rows: [OptimizePlanRow] {
+        guard let preview = viewModel.preview else { return [] }
+        return OptimizePlanParser.rows(from: preview.output)
+    }
 
     var body: some View {
         Group {
@@ -17,7 +23,7 @@ struct OptimizeView: View {
                 content
             }
         }
-        .navigationTitle("optimize.maintenance")
+        .navigationTitle("sidebar.optimize")
         .toolbar {
             ToolbarItem {
                 if viewModel.isPreviewing {
@@ -31,81 +37,132 @@ struct OptimizeView: View {
                         Label("optimize.preview", systemImage: "eye")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(UtilityStyle.accent)
+                    .tint(MoleTheme.accent)
                 }
             }
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath")
-            if viewModel.isPreviewing {
-                busyState(title: "optimize.previewing")
-            } else if viewModel.isExecuting {
-                busyState(title: "optimize.executing")
-            } else if let preview = viewModel.preview {
-                outputPanel(title: "optimize.preview_output", output: preview.output) {
-                    Button("optimize.execute", role: .destructive) {
-                        viewModel.requestConfirmation()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(!viewModel.canConfirm)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("optimize.eyebrow")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(MoleTheme.accentStrong)
+                        .textCase(.uppercase)
+                    Text("optimize.title").font(.system(size: 30, weight: .bold))
+                    Text("optimize.subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
                 }
-            } else {
-                UtilityEmptyState(symbol: "wrench.and.screwdriver", title: "optimize.empty", message: "optimize.preview_hint")
-            }
 
-            if let errorMessageKey = viewModel.errorMessageKey {
-                UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
-            } else if let errorMessage = viewModel.errorMessage {
-                UtilityNotice(title: "optimize.error_title", detail: errorMessage, isError: true)
+                UtilityNotice(title: "optimize.permanent_note", symbol: "exclamationmark.triangle", isError: true)
+                UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath")
+
+                HStack {
+                    Button("optimize.whitelist") { onOpenSettings() }
+                        .buttonStyle(.bordered)
+                    Spacer()
+                }
+
+                if viewModel.isPreviewing {
+                    busyState(title: "optimize.previewing")
+                } else if viewModel.isExecuting {
+                    busyState(title: "optimize.executing")
+                } else if viewModel.preview != nil {
+                    planCard
+                } else {
+                    UtilityEmptyState(symbol: "wrench.and.screwdriver", title: "optimize.empty", message: "optimize.preview_hint")
+                        .frame(minHeight: 200)
+                }
+
+                if let errorMessageKey = viewModel.errorMessageKey {
+                    UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
+                } else if let errorMessage = viewModel.errorMessage {
+                    UtilityNotice(title: "optimize.error_title", detail: errorMessage, isError: true)
+                }
+                if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+                    UtilityNotice(title: "optimize.result", detail: executionSummary, symbol: "checkmark.circle")
+                }
             }
-            if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
-                UtilityNotice(title: "optimize.result", detail: executionSummary, symbol: "checkmark.circle")
-            }
+            .padding(24)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(UtilityStyle.background)
+        .background(MoleTheme.background)
     }
 
-    private func busyState(title: LocalizedStringKey) -> some View {
-        UtilityPanel {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text(title).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 200)
-        }
-    }
-
-    private func outputPanel<Action: View>(
-        title: LocalizedStringKey,
-        output: String,
-        @ViewBuilder action: () -> Action
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var planCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(title).font(.system(size: 16, weight: .semibold))
+                Text("optimize.tasks_title").font(.system(size: 13, weight: .semibold))
                 Spacer()
                 UtilityBadge(title: "optimize.preview_ready", symbol: "checkmark")
             }
-            ScrollView {
-                Text(output.isEmpty ? String(localized: "optimize.empty_output") : output)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
+            .padding(16)
+            Divider()
+            if rows.isEmpty {
+                Text("optimize.empty_output").foregroundStyle(MoleTheme.subtle).padding(16)
+            } else {
+                ForEach(rows) { row in
+                    rowView(row)
+                    Divider().padding(.leading, 16)
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
-            .padding(12)
-            .background(UtilityStyle.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
-            HStack { Spacer(); action() }
+            if let output = viewModel.preview?.output, !output.isEmpty {
+                Divider()
+                DisclosureGroup("optimize.raw_output") {
+                    Text(output)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(16)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("optimize.execute", role: .destructive) {
+                    viewModel.requestConfirmation()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(!viewModel.canConfirm)
+            }
+            .padding(14)
         }
-        .padding(16)
-        .background(UtilityStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(UtilityStyle.separator))
+        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
+        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
+    }
+
+    private func rowView(_ row: OptimizePlanRow) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: row.status == .willRun ? "checkmark.circle" : "minus.circle")
+                .foregroundStyle(row.status == .willRun ? MoleTheme.accent : MoleTheme.subtle)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: row.name).font(.system(size: 12, weight: .medium))
+                if let reason = row.reason {
+                    Text(verbatim: reason).font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
+                }
+            }
+            Spacer(minLength: 8)
+            if row.deletesFiles {
+                Text("optimize.row_deletes_permanently")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+            }
+            Text(row.status == .willRun ? LocalizedStringKey("optimize.row_will_run") : LocalizedStringKey("optimize.row_skipped"))
+                .font(.system(size: 10))
+                .foregroundStyle(MoleTheme.muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func busyState(title: LocalizedStringKey) -> some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(title).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 }
