@@ -118,6 +118,15 @@ final class OperationSession<Preview: Equatable & Sendable> {
         state = .ready(id, preview)
     }
 
+    /// Adopts an externally produced preview (background prewarm result)
+    /// without a local preview run. Refused while a preview or execution is in
+    /// flight and while a confirmation is on screen, so the sheet the user is
+    /// looking at is never replaced.
+    func adoptPreview(_ preview: Preview) {
+        guard !isBusy, !isConfirmationPresented else { return }
+        state = .ready(UUID(), preview)
+    }
+
     @discardableResult
     func beginConfirmation() -> Bool {
         guard case let .ready(id, preview) = state else { return false }

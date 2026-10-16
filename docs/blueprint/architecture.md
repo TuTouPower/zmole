@@ -15,7 +15,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 侧边栏主导航为十个目的地：概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。设置从系统菜单升为正式页面，系统菜单的设置命令选中该页。⌘K 命令面板只做页面跳转，不承载删除或执行动作。自定义窗口壳只替换导航；各页面继续呈现既有功能，破坏性语义留在各自的页面 task。优化与项目清理是两个独立页面：任务/产物行只读，计划来自本次 dry-run，执行范围由 mole 决定；两者的删除保持永久删除，白名单与扫描目录分别在设置与项目清理页编辑。
 
-安装包不使用上游全屏菜单：捆绑 installer 增加非交互接口 `--list-json`（列出绝对路径、字节大小、来源、身份）与 `--remove <path>`（只接受本次列出的路径、核对身份与大小、`MOLE_DELETE_MODE=trash` 移入废纸篓，失败保留原文件）。扫描规则仍由捆绑脚本负责，界面（t023）只消费该接口。
+安装包不使用上游全屏菜单：捆绑 installer 增加非交互接口 `--list-json`（列出绝对路径、字节大小、来源、身份）与 `--remove <path> --size <n> --identity <id>`（只接受调用方会话名单里的路径；直接核对目标自身——仍在扫描根内、该深度、候选扩展名，且大小与身份未变——`MOLE_DELETE_MODE=trash` 移入废纸篓，失败保留原文件）。删除不重新遍历扫描根（t029）；扫描规则仍由捆绑脚本负责，界面（t023）只消费该接口。
 
 设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理预览失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
 
@@ -49,7 +49,15 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
 
-`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；卸载名单流与空闲预跑各持独立实例；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
+
+### 卸载名单与确认
+
+卸载名单走 `uninstall --list-stream`：先输出已发现的应用身份（名称/路径），再按应用输出完整行（bundle id、卸载名、来源、大小、版本、上次使用时间来自同一次扫描；版本读目标自身 Info.plist，不用 Spotlight）。界面先列名单、大小随后补上，尚无大小的行不显示为 0；图标在列表可交互后异步补上。同一次会话的预览与确认复用这份名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。
+
+### 空闲预跑
+
+`PrewarmService` 在空闲时按固定顺序各跑一次只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；任意时刻只有一个在跑，不获取写入租约。空闲 = 无写入租约、无用户可见的页面扫描（含磁盘页扫描与正在查看的清理预览）。写入开始取消当前预跑；写入成功后作废全部预跑结果，回到空闲再跑一遍。用户重新扫描某一项会取消当前预跑并把该项交给用户扫描。失败的项跳过继续、下一次空闲重试。页面打开时若有对应预跑结果则直接显示并标出扫描时间，不立刻重扫；确认框开着时新结果不替换正在确认的一份。demo 模式不启动预跑。
 
 ## 捆绑与进程边界
 

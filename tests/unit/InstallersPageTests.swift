@@ -128,6 +128,56 @@ final class InstallersPageTests: XCTestCase {
         XCTAssertEqual(removals.count, 1)
     }
 
+    func testBatchRemovalUsesTheSameListingWithoutRescanning() async {
+        let spy = InstallerRunnerSpy()
+        let viewModel = makeViewModel(spy)
+        await viewModel.loadListIfNeeded()
+        let first = Self.fixture[0]
+        let second = Self.fixture[1]
+        viewModel.toggleSelection(first)
+        viewModel.toggleSelection(second)
+
+        viewModel.requestConfirmation()
+        await viewModel.confirmRemoval()
+
+        let invocations = await spy.invocations
+        let listCalls = invocations.filter { $0 == ["installer", "--list-json"] }
+        XCTAssertEqual(listCalls.count, 1, "the scan roots are traversed once, at listing time")
+        let removals = await spy.removalInvocations
+        XCTAssertEqual(removals.count, 2, "each file is verified and removed individually")
+    }
+
+    func testPageReentryReusesTheSessionList() async {
+        let spy = InstallerRunnerSpy()
+        let viewModel = makeViewModel(spy)
+        await viewModel.loadListIfNeeded()
+        await viewModel.loadListIfNeeded()
+        await viewModel.loadListIfNeeded()
+
+        let invocations = await spy.invocations
+        XCTAssertEqual(invocations.filter { $0 == ["installer", "--list-json"] }.count, 1)
+    }
+
+    func testSelectionCannotOutliveItsSessionList() async {
+        let spy = InstallerRunnerSpy()
+        let viewModel = makeViewModel(spy)
+        await viewModel.loadListIfNeeded()
+        viewModel.toggleSelection(Self.fixture[0])
+        XCTAssertTrue(
+            viewModel.selectedPaths.isSubset(of: Set(viewModel.candidates.map(\.path))),
+            "selection is always derived from the session list"
+        )
+
+        // Re-scanning replaces the session list; the old selection and its
+        // confirmation are gone, so nothing can be removed from a stale list.
+        await viewModel.scan()
+        XCTAssertTrue(viewModel.selectedPaths.isSubset(of: Set(viewModel.candidates.map(\.path))))
+        XCTAssertFalse(viewModel.canConfirm)
+        await viewModel.confirmRemoval()
+        let removals = await spy.removalInvocations
+        XCTAssertTrue(removals.isEmpty, "a stale confirmation must not remove anything")
+    }
+
     private func makeViewModel(_ spy: InstallerRunnerSpy) -> InstallersViewModel {
         InstallersViewModel(
             interface: InstallerInterface { arguments in await spy.run(arguments) },

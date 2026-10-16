@@ -135,6 +135,11 @@ scan_installers_in_path() {
 }
 
 scan_all_installers() {
+    # zmole test hook (t029): proving that `--remove` never re-walks the scan
+    # roots; production leaves this unset.
+    if [[ "${MOLE_INSTALLER_SCAN_DISABLED:-0}" == "1" ]]; then
+        return 1
+    fi
     for path in "${INSTALLER_SCAN_PATHS[@]}"; do
         scan_installers_in_path "$path"
     done
@@ -821,10 +826,13 @@ show_summary() {
     printf '\n'
 }
 
-# zmole local patch (t022): non-interactive interface for the GUI.
-# `--list-json` prints candidates as JSON; `--remove <path>` moves one listed
-# path to the Trash after re-verifying its size and identity. Delete failures
-# keep the file; there is no permanent-delete fallback. Replay on upstream bump.
+# zmole local patch (t022, t029): non-interactive interface for the GUI.
+# `--list-json` prints candidates as JSON; `--remove <path> --size <n>
+# --identity <id>` moves one listed path to the Trash after verifying that the
+# target is still an installer candidate in a scan root and that its size and
+# identity match the listing. Removal never re-walks the scan roots (t029).
+# Delete failures keep the file; there is no permanent-delete fallback.
+# Replay on upstream bump.
 
 installer_json_escape() {
     local value="$1"
@@ -879,6 +887,39 @@ installer_list_json() {
     return 0
 }
 
+# zmole local patch (t029): verify one listed target without re-walking the
+# scan roots. The caller owns the session list (it only sends paths it listed);
+# this check proves the target is still an installer-candidate location and
+# does not read any directory outside the target itself.
+installer_path_is_candidate() {
+    local target="$1"
+    [[ "$target" == /* ]] || return 1
+    [[ -L "$target" ]] && return 1
+
+    local root="" in_root=false
+    for root in "${INSTALLER_SCAN_PATHS[@]}"; do
+        case "$target" in
+            "$root"/*)
+                in_root=true
+                break
+                ;;
+        esac
+    done
+    [[ "$in_root" == true ]] || return 1
+
+    local max_depth="${MOLE_INSTALLER_SCAN_MAX_DEPTH:-$INSTALLER_SCAN_MAX_DEPTH_DEFAULT}"
+    local relative="${target#"$root"/}"
+    local depth
+    depth=$(awk -F'/' '{ print NF }' <<< "$relative")
+    [[ "$depth" =~ ^[0-9]+$ && "$depth" -le "$max_depth" ]] || return 1
+
+    case "${target##*/}" in
+        *.dmg | *.pkg | *.mpkg | *.iso | *.xip) return 0 ;;
+        *.zip) is_installer_zip "$target" ;;
+        *) return 1 ;;
+    esac
+}
+
 installer_remove_path() {
     local target="$1"
     local expected_size="${2:-}"
@@ -895,25 +936,8 @@ installer_remove_path() {
         return 1
     }
 
-    if ! collect_installers_noninteractive; then
-        echo "No installer candidates in the current scan" >&2
-        return 1
-    fi
-    [[ ${#INSTALLER_PATHS[@]} -gt 0 ]] || {
-        echo "No installer candidates in the current scan" >&2
-        return 1
-    }
-
-    local idx=-1
-    local i
-    for i in "${!INSTALLER_PATHS[@]}"; do
-        if [[ "${INSTALLER_PATHS[$i]}" == "$target" ]]; then
-            idx=$i
-            break
-        fi
-    done
-    [[ $idx -ge 0 ]] || {
-        echo "Path is not in the current installer scan" >&2
+    installer_path_is_candidate "$target" || {
+        echo "Path is not an installer candidate" >&2
         return 1
     }
 

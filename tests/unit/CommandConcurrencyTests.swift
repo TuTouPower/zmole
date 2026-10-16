@@ -102,8 +102,10 @@ final class CommandConcurrencyTests: XCTestCase {
         }
         return MoleCommandLanes(
             history: try bridge(), uninstall: try bridge(),
+            uninstallStream: try MoleBridge(executableURL: sleepURL),
             installer: try bridge(), statusCommand: try bridge(), cleanCommand: try bridge(),
             optimize: try bridge(), purge: try bridge(), estimate: try bridge(),
+            prewarm: try MoleBridge(executableURL: sleepURL),
             statusStream: try MoleBridge(executableURL: sleepURL),
             cleanStream: try MoleBridge(executableURL: sleepURL)
         )

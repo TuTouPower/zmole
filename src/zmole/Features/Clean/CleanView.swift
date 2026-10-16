@@ -26,6 +26,7 @@ struct CleanView: View {
         .navigationTitle("sidebar.clean")
         .task {
             if whitelistViewModel.document == nil { whitelistViewModel.load() }
+            viewModel.adoptPrewarmPreviewIfAvailable()
         }
     }
 
@@ -70,6 +71,11 @@ struct CleanView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(MoleTheme.accent)
                     .disabled(viewModel.isConfirmationPresented)
+                }
+                if let capturedAt = viewModel.previewCapturedAt {
+                    Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoleTheme.muted)
                 }
             }
             .padding(.top, 6)

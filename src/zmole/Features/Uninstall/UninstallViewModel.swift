@@ -1,41 +1,53 @@
+import AppKit
 import Combine
 import Foundation
 
 @MainActor
 final class UninstallViewModel: ObservableObject {
-    @Published private(set) var apps: [UninstallApp] = []
-    @Published private(set) var selectedIDs: Set<String> = []
+    @Published private(set) var listings: [UninstallAppListing] = []
+    @Published private(set) var selectedPaths: Set<String> = []
     @Published private(set) var hasLoaded = false
+    @Published private(set) var isListing = false
+    @Published private(set) var listCapturedAt: Date?
     @Published private(set) var showBusyNotice = false
     @Published private(set) var focusedAppID: String?
-    @Published private(set) var metadataByID: [String: UninstallAppMetadata] = [:]
+    @Published private(set) var iconsByPath: [String: NSImage] = [:]
     @Published private(set) var relatedPathsByID: [String: [String]] = [:]
+    @Published private(set) var listErrorMessage: String?
 
     private let process: any MoleProcessControlling
+    private let listStream: UninstallListStream
     private let coordinator: OperationCoordinator
-    private let metadataProvider: UninstallMetadataProviding
+    private let targetChecker: UninstallTargetChecking
+    private let iconProvider: UninstallIconProviding
     private let revealer: FileRevealing
+    private weak var prewarm: (any PrewarmResultProviding)?
+
     private var relatedLoadedIDs: Set<String> = []
     private let session = OperationSession<UninstallPreviewSnapshot>()
-    private let listSession = OperationSession<UninstallListSnapshot>()
     private var lease: OperationLease?
     private var previewCoordinatorGeneration: UInt64?
-    private var listGeneration = UUID()
     private var transientErrorKey: String?
+    private var iconTask: Task<Void, Never>?
     private var coordinatorSubscription: AnyCancellable?
 
     init(
         process: any MoleProcessControlling,
+        listStream: UninstallListStream,
         coordinator: OperationCoordinator,
-        metadataProvider: UninstallMetadataProviding = LiveUninstallMetadataProvider(),
-        revealer: FileRevealing = LiveFileRevealer()
+        targetChecker: UninstallTargetChecking = LiveUninstallTargetChecker(),
+        iconProvider: UninstallIconProviding = LiveUninstallIconProvider(),
+        revealer: FileRevealing = LiveFileRevealer(),
+        prewarm: (any PrewarmResultProviding)? = nil
     ) {
         self.process = process
+        self.listStream = listStream
         self.coordinator = coordinator
-        self.metadataProvider = metadataProvider
+        self.targetChecker = targetChecker
+        self.iconProvider = iconProvider
         self.revealer = revealer
+        self.prewarm = prewarm
         session.onChange = { [weak self] in self?.objectWillChange.send() }
-        listSession.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
             self?.expirePreviewIfNeeded(generation: generation)
         }
@@ -44,14 +56,25 @@ final class UninstallViewModel: ObservableObject {
     var operationState: OperationState<UninstallPreviewSnapshot> { session.state }
     var result: OperationResult? { session.result }
     var preview: UninstallPreviewSnapshot? { session.preview }
-    var isListing: Bool { listSession.isPreviewing }
     var isPreviewing: Bool { session.isPreviewing }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
+
+    /// Rows whose identity is fully resolved (previewable/uninstallable).
+    var apps: [UninstallApp] { listings.compactMap(\.uninstallApp) }
+
+    /// Kept for call sites that bound selection to application ids.
+    var selectedIDs: Set<String> { selectedPaths }
+
+    var selectedApps: [UninstallApp] {
+        apps.filter { selectedPaths.contains($0.path) }
+    }
+
     var canPreview: Bool {
-        !selectedIDs.isEmpty && !isListing && !session.isBusy && selectedIDs.allSatisfy { id in
-            apps.contains { $0.id == id }
-        }
+        !selectedPaths.isEmpty && !isListing && !session.isBusy
+            && selectedPaths.allSatisfy { path in
+                listings.contains { $0.path == path && $0.isResolved }
+            }
     }
     var canConfirm: Bool { session.canConfirm && isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
@@ -61,59 +84,118 @@ final class UninstallViewModel: ObservableObject {
         return session.result?.summary
     }
 
+    func icon(for app: UninstallApp) -> NSImage? { iconsByPath[app.path] }
+
+    func icon(forPath path: String) -> NSImage? { iconsByPath[path] }
+
+    // MARK: - Listing
+
     func loadListIfNeeded() async {
         guard !hasLoaded else { return }
+        if adoptPrewarmList() { return }
         await loadList()
     }
 
     func loadList() async {
         guard !isListing, !session.isBusy else { return }
+        prewarm?.userDidRescan(.uninstallList)
         releaseLease()
         session.invalidate()
-        selectedIDs.removeAll()
+        selectedPaths.removeAll()
         clearTransientError()
+        relatedLoadedIDs = []
+        relatedPathsByID = [:]
+        iconsByPath = [:]
+        listings = []
+        listCapturedAt = nil
+        await performList()
+    }
 
-        guard let operationID = listSession.beginPreview() else { return }
+    /// Streams the list into `listings`, merging later rows per path. Keeps
+    /// whatever session state exists (the identity-refusal path re-scans the
+    /// list while its failure stays on screen); the fresh scan replaces the
+    /// listing wholesale, so removed apps do not linger.
+    private func performList() async {
+        guard !isListing else { return }
+        listErrorMessage = nil
+        isListing = true
+        defer { isListing = false }
+
+        var merged: [UninstallAppListing] = []
+        var indexByPath: [String: Int] = [:]
+        var seenPaths: Set<String> = []
         do {
-            let snapshot = try await fetchList()
-            guard listSession.accepts(operationID), !listSession.isCancelling(operationID) else { return }
-            apps = snapshot.apps
-            listGeneration = snapshot.generation
+            let rows = await listStream.rows()
+            for try await row in rows {
+                UninstallListMerge.merge(row, into: &merged, indexByPath: &indexByPath)
+                seenPaths.insert(row.path)
+                // Publish each pass so rows show up while the scan is still
+                // resolving sizes; the wholesale assignment at the end keeps
+                // the listing free of leftovers from the previous pass.
+                listings = merged
+            }
             hasLoaded = true
-            focusedAppID = apps.first?.id
-            metadataByID = [:]
-            relatedPathsByID = [:]
-            relatedLoadedIDs = []
-            listSession.invalidate()
-            Task { [weak self] in await self?.loadAllMetadata() }
         } catch let error as MoleBridgeError where error == .cancelled {
-            listSession.finishCancelled(
-                OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
-                id: operationID
-            )
+            // Keep whatever was already resolved; a cancelled scan is not a
+            // failure and must not show as one.
         } catch {
-            guard listSession.accepts(operationID), !listSession.isCancelling(operationID) else { return }
-            if CommandBusy.isBusy(error) {
-                listSession.invalidate()
+            guard !CommandBusy.isBusy(error) else {
                 showBusyNotice = true
                 return
             }
-            apps = []
+            listings = []
             hasLoaded = false
-            listSession.fail(
-                OperationResult(status: .failed, summary: error.localizedDescription, errorKey: nil),
-                id: operationID
-            )
+            listErrorMessage = error.localizedDescription
+            return
+        }
+
+        // Drop session state for rows this pass no longer reports, including
+        // after a cancelled scan that already replaced the listing.
+        pruneSessionState(to: seenPaths)
+        if hasLoaded {
+            if focusedAppID == nil || !listings.contains(where: { $0.path == focusedAppID }) {
+                focusedAppID = listings.first?.path
+            }
+            startIconLoading()
         }
     }
 
+    private func pruneSessionState(to seenPaths: Set<String>) {
+        selectedPaths = selectedPaths.intersection(seenPaths)
+        relatedLoadedIDs = relatedLoadedIDs.intersection(seenPaths)
+        relatedPathsByID = relatedPathsByID.filter { seenPaths.contains($0.key) }
+        iconsByPath = iconsByPath.filter { seenPaths.contains($0.key) }
+    }
+
     func cancelList() async {
-        guard let operationID = listSession.beginPreviewCancellation() else { return }
-        await process.cancel()
-        listSession.finishCancelled(
-            OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
-            id: operationID
-        )
+        guard isListing else { return }
+        await listStream.cancel()
+    }
+
+    private func adoptPrewarmList() -> Bool {
+        guard let result = prewarm?.takeResult(.uninstallList),
+              case let .uninstallRows(rows) = result.payload else { return false }
+        listings = rows
+        hasLoaded = true
+        listCapturedAt = result.capturedAt
+        focusedAppID = rows.first?.path
+        startIconLoading()
+        return true
+    }
+
+    /// Icons arrive after the list is already interactive; the list never
+    /// blocks on a synchronous icon read.
+    private func startIconLoading() {
+        iconTask?.cancel()
+        iconTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for listing in listings where iconsByPath[listing.path] == nil {
+                guard !Task.isCancelled else { return }
+                if let icon = await iconProvider.icon(forAppAt: listing.path) {
+                    iconsByPath[listing.path] = icon
+                }
+            }
+        }
     }
 
     func cancelPreview() async {
@@ -126,12 +208,18 @@ final class UninstallViewModel: ObservableObject {
         releaseLease()
     }
 
+    // MARK: - Selection
+
     func toggleSelection(_ app: UninstallApp) {
+        toggleSelection(path: app.path)
+    }
+
+    func toggleSelection(path: String) {
         guard !isListing, !session.isBusy else { return }
-        if selectedIDs.contains(app.id) {
-            selectedIDs.remove(app.id)
+        if selectedPaths.contains(path) {
+            selectedPaths.remove(path)
         } else {
-            selectedIDs.insert(app.id)
+            selectedPaths.insert(path)
         }
         releaseLease()
         session.invalidate()
@@ -140,7 +228,8 @@ final class UninstallViewModel: ObservableObject {
 
     func selectAll(_ ids: Set<String>) {
         guard !isListing, !session.isBusy else { return }
-        selectedIDs = Set(apps.map(\.id)).intersection(ids.isEmpty ? Set(apps.map(\.id)) : ids)
+        let all = Set(listings.map(\.path))
+        selectedPaths = ids.isEmpty ? all : all.intersection(ids)
         releaseLease()
         session.invalidate()
         clearTransientError()
@@ -148,57 +237,45 @@ final class UninstallViewModel: ObservableObject {
 
     func clearSelection() {
         guard !isListing, !session.isBusy else { return }
-        selectedIDs.removeAll()
+        selectedPaths.removeAll()
         releaseLease()
         session.invalidate()
         clearTransientError()
     }
 
+    // MARK: - Detail
+
     var focusedApp: UninstallApp? {
         guard let focusedAppID else { return nil }
-        return apps.first { $0.id == focusedAppID }
+        return apps.first { $0.path == focusedAppID }
     }
 
     func focus(_ app: UninstallApp) {
-        focusedAppID = app.id
+        focusedAppID = app.path
     }
 
-    func metadata(for app: UninstallApp) -> UninstallAppMetadata? {
-        metadataByID[app.id]
+    func focus(path: String) {
+        focusedAppID = path
     }
 
     /// nil until that app's own dry-run has run; empty means the dry-run found
     /// no related paths. Related files are never inferred from the list JSON.
     func relatedPaths(for app: UninstallApp) -> [String]? {
-        relatedLoadedIDs.contains(app.id) ? (relatedPathsByID[app.id] ?? []) : nil
-    }
-
-    func loadDetail(for app: UninstallApp) async {
-        if metadataByID[app.id] == nil {
-            let metadata = await metadataProvider.metadata(forAppAt: app.path)
-            metadataByID[app.id] = metadata
-        }
+        relatedLoadedIDs.contains(app.path) ? (relatedPathsByID[app.path] ?? []) : nil
     }
 
     func revealInFinder(_ app: UninstallApp) {
         Task { await revealer.reveal(path: app.path) }
     }
 
-    private func loadAllMetadata() async {
-        for app in apps where metadataByID[app.id] == nil {
-            let metadata = await metadataProvider.metadata(forAppAt: app.path)
-            metadataByID[app.id] = metadata
-        }
-    }
-
     /// Runs the related-files dry-run on demand. It holds the uninstall lease so
     /// it cannot run concurrently with a batch preview/execution on the shared
     /// single-slot command bridge.
     func loadRelatedFiles(for app: UninstallApp) async {
-        guard !relatedLoadedIDs.contains(app.id), !session.isBusy, !isListing else { return }
-        guard (try? UninstallSelectionValidator.batch(selectedIDs: [app.id], apps: apps)) != nil else {
-            relatedLoadedIDs.insert(app.id)
-            relatedPathsByID[app.id] = []
+        guard !relatedLoadedIDs.contains(app.path), !session.isBusy, !isListing else { return }
+        guard (try? UninstallSelectionValidator.batch(selectedIDs: [app.path], apps: apps)) != nil else {
+            relatedLoadedIDs.insert(app.path)
+            relatedPathsByID[app.path] = []
             return
         }
         guard let lease = coordinator.acquire(.uninstall) else { return }
@@ -213,8 +290,8 @@ final class UninstallViewModel: ObservableObject {
         ), result.exitCode == 0 else {
             return
         }
-        relatedLoadedIDs.insert(app.id)
-        relatedPathsByID[app.id] = Self.relatedPaths(from: result.stdout)
+        relatedLoadedIDs.insert(app.path)
+        relatedPathsByID[app.path] = Self.relatedPaths(from: result.stdout)
     }
 
     static func relatedPaths(from output: String) -> [String] {
@@ -224,6 +301,8 @@ final class UninstallViewModel: ObservableObject {
             .filter { $0.hasPrefix("/") || $0.hasPrefix("~/") }
     }
 
+    // MARK: - Preview / execution
+
     func previewUninstall() async {
         guard !isListing, !session.isBusy else { return }
         releaseLease()
@@ -231,7 +310,7 @@ final class UninstallViewModel: ObservableObject {
         clearTransientError()
         let batch: [UninstallApp]
         do {
-            batch = try UninstallSelectionValidator.batch(selectedIDs: selectedIDs, apps: apps)
+            batch = try UninstallSelectionValidator.batch(selectedIDs: selectedPaths, apps: apps)
         } catch {
             setTransientError(error)
             return
@@ -270,7 +349,7 @@ final class UninstallViewModel: ObservableObject {
                 UninstallPreviewSnapshot(
                     generation: operationID,
                     apps: batch,
-                    selectedIDs: selectedIDs,
+                    selectedIDs: selectedPaths,
                     output: outputSummary(result)
                 ),
                 id: operationID
@@ -331,29 +410,21 @@ final class UninstallViewModel: ObservableObject {
         previewCoordinatorGeneration = coordinator.invalidationGeneration
 
         do {
-            let current = try await fetchList()
-            guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
-            guard selectedIDs == currentPreview.selectedIDs else {
+            // Confirm-time check stays cheap: path + bundle identity. The
+            // session list is reused; no full size scan is run.
+            for app in currentPreview.apps where !(await targetChecker.stillMatches(app)) {
                 throw UninstallViewModelError.changedTarget
             }
-            let currentBatch = try UninstallSelectionValidator.batch(
-                selectedIDs: currentPreview.selectedIDs,
-                apps: current.apps
-            )
-            guard Set(currentBatch.map(\.identity)) == currentPreview.identities else {
-                throw UninstallViewModelError.changedTarget
-            }
-            apps = current.apps
-            listGeneration = current.generation
+            selectedPaths = Set(currentPreview.selectedIDs)
             let result = try await process.run(
-                ["uninstall"] + currentBatch.map(\.uninstallName),
+                ["uninstall"] + currentPreview.apps.map(\.uninstallName),
                 stdin: Self.confirmationInput,
                 timeout: 600
             )
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             let operationResult = UninstallBatchResultParser.result(
                 result,
-                expectedCount: currentBatch.count
+                expectedCount: currentPreview.apps.count
             )
             session.finish(operationResult, id: execution.id)
             coordinator.invalidatePreviews()
@@ -387,6 +458,11 @@ final class UninstallViewModel: ObservableObject {
             }
             session.fail(result, id: execution.id)
             releaseLease()
+            if (error as? UninstallViewModelError) == .changedTarget {
+                // Identity changed since preview: refuse and re-scan the list
+                // while the refusal stays visible.
+                await performList()
+            }
         }
     }
 
@@ -399,15 +475,6 @@ final class UninstallViewModel: ObservableObject {
         )
         coordinator.invalidatePreviews()
         releaseLease()
-    }
-
-    private func fetchList() async throws -> UninstallListSnapshot {
-        let result = try await process.run(["uninstall", "--list"], stdin: nil, timeout: 120)
-        guard result.exitCode == 0 else { throw MoleBridgeError.commandFailed(result) }
-        return UninstallListSnapshot(
-            generation: UUID(),
-            apps: try UninstallListDecoder.decode(result.stdout)
-        )
     }
 
     private func operationID(for state: OperationState<UninstallPreviewSnapshot>) -> UUID? {
