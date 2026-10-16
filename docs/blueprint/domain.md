@@ -15,12 +15,13 @@
 |磁盘分析|analyze|只读浏览占用；第一版不在浏览结果上删除|
 |状态|status|只读健康快照（非 live watch）|
 |工程产物清理|purge|删除可重建构建产物；非 TTY 执行必须 `--yes`|
+|安装包|installer|扫描下载中的安装包；非交互列出后按路径移入废纸篓|
 |操作历史|history|mole 操作日志|
 |健康分|health score|status 给出的综合分|
 
 ## 第一版非目标
 
-- installer、analyze 删除、嵌终端、代按键驱动 TUI
+- analyze 删除、嵌终端、代按键驱动 TUI
 - 捆绑 mole 的 self-update / remove
 - 把 `zmo`/`mo` 装进 PATH
 - Sparkle、Apple 公证、Mac App Store、遥测

@@ -37,20 +37,26 @@ trap 'trap - EXIT; cleanup; exit 130' INT TERM
 
 # Scan configuration
 readonly INSTALLER_SCAN_MAX_DEPTH_DEFAULT=2
-readonly INSTALLER_SCAN_PATHS=(
-    "$HOME/Downloads"
-    "$HOME/Desktop"
-    "$HOME/Documents"
-    "$HOME/Public"
-    "$HOME/Library/Downloads"
-    "/Users/Shared"
-    "/Users/Shared/Downloads"
-    "$HOME/Library/Caches/Homebrew"
-    "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
-    "$HOME/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"
-    "$HOME/Library/Application Support/Telegram Desktop"
-    "$HOME/Downloads/Telegram Desktop"
-)
+# zmole local patch (t022): MOLE_INSTALLER_SCAN_ROOT narrows the scan to one
+# directory for the non-interactive test harness; production leaves it unset.
+if [[ -n "${MOLE_INSTALLER_SCAN_ROOT:-}" ]]; then
+    INSTALLER_SCAN_PATHS=("$MOLE_INSTALLER_SCAN_ROOT")
+else
+    INSTALLER_SCAN_PATHS=(
+        "$HOME/Downloads"
+        "$HOME/Desktop"
+        "$HOME/Documents"
+        "$HOME/Public"
+        "$HOME/Library/Downloads"
+        "/Users/Shared"
+        "/Users/Shared/Downloads"
+        "$HOME/Library/Caches/Homebrew"
+        "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
+        "$HOME/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"
+        "$HOME/Library/Application Support/Telegram Desktop"
+        "$HOME/Downloads/Telegram Desktop"
+    )
+fi
 readonly MAX_ZIP_ENTRIES=50
 readonly INSTALLER_EXIT_INCOMPLETE=3
 ZIP_LIST_CMD=()
@@ -815,9 +821,138 @@ show_summary() {
     printf '\n'
 }
 
+# zmole local patch (t022): non-interactive interface for the GUI.
+# `--list-json` prints candidates as JSON; `--remove <path>` moves one listed
+# path to the Trash after re-verifying its size and identity. Delete failures
+# keep the file; there is no permanent-delete fallback. Replay on upstream bump.
+
+installer_json_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s' "$value"
+}
+
+collect_installers_noninteractive() {
+    INSTALLER_PATHS=()
+    INSTALLER_SIZES=()
+    INSTALLER_SOURCES=()
+
+    local -a all_files=()
+    local file
+    while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        all_files+=("$file")
+    done < <(scan_all_installers | sort -u)
+
+    for file in "${all_files[@]:-}"; do
+        [[ -z "$file" ]] && continue
+        [[ -f "$file" ]] || continue
+        local size
+        size=$(get_file_size "$file" 2> /dev/null || echo "")
+        [[ "$size" =~ ^[0-9]+$ ]] || size=0
+        INSTALLER_PATHS+=("$file")
+        INSTALLER_SIZES+=("$size")
+        INSTALLER_SOURCES+=("$(get_source_display "$file")")
+    done
+
+    [[ ${#INSTALLER_PATHS[@]} -gt 0 ]]
+}
+
+installer_list_json() {
+    if ! collect_installers_noninteractive; then
+        printf '[]\n'
+        return 0
+    fi
+
+    local out="["
+    local i
+    for i in "${!INSTALLER_PATHS[@]}"; do
+        [[ $i -gt 0 ]] && out+=","
+        out+="{\"path\":\"$(installer_json_escape "${INSTALLER_PATHS[$i]}")\""
+        out+=",\"size_bytes\":${INSTALLER_SIZES[$i]}"
+        out+=",\"source\":\"$(installer_json_escape "${INSTALLER_SOURCES[$i]}")\""
+        out+=",\"identity\":\"$(installer_json_escape "$(mole_path_identity "${INSTALLER_PATHS[$i]}")")\"}"
+    done
+    out+="]"
+    printf '%s\n' "$out"
+    return 0
+}
+
+installer_remove_path() {
+    local target="$1"
+    local expected_size="${2:-}"
+    local expected_identity="${3:-}"
+
+    [[ "$target" == /* ]] || {
+        echo "Refusing to remove a non-absolute path" >&2
+        return 1
+    }
+    # The caller must pass the size and identity observed at listing time; a
+    # missing pair cannot be verified and is refused.
+    [[ "$expected_size" =~ ^[0-9]+$ && -n "$expected_identity" ]] || {
+        echo "Removal requires the listed size and identity" >&2
+        return 1
+    }
+
+    if ! collect_installers_noninteractive; then
+        echo "No installer candidates in the current scan" >&2
+        return 1
+    fi
+    [[ ${#INSTALLER_PATHS[@]} -gt 0 ]] || {
+        echo "No installer candidates in the current scan" >&2
+        return 1
+    }
+
+    local idx=-1
+    local i
+    for i in "${!INSTALLER_PATHS[@]}"; do
+        if [[ "${INSTALLER_PATHS[$i]}" == "$target" ]]; then
+            idx=$i
+            break
+        fi
+    done
+    [[ $idx -ge 0 ]] || {
+        echo "Path is not in the current installer scan" >&2
+        return 1
+    }
+
+    local planned_size="$expected_size"
+    local planned_identity="$expected_identity"
+
+    local current_size
+    current_size=$(installer_file_size_bytes "$target" 2> /dev/null) || {
+        echo "Size unavailable" >&2
+        return 1
+    }
+    [[ "$current_size" == "$planned_size" ]] || {
+        echo "Changed since scan (size)" >&2
+        return 1
+    }
+    [[ "$(mole_path_identity "$target")" == "$planned_identity" ]] || {
+        echo "Changed since scan (identity)" >&2
+        return 1
+    }
+
+    if MOLE_DELETE_MODE=trash mole_delete "$target" false; then
+        if [[ ! -e "$target" && ! -L "$target" ]]; then
+            return 0
+        fi
+        echo "Target still exists after Trash move" >&2
+        return 1
+    fi
+    echo "Failed to move to Trash" >&2
+    return 1
+}
+
 main() {
-    for arg in "$@"; do
-        case "$arg" in
+    local mode="interactive"
+    local remove_path=""
+    local remove_size=""
+    local remove_identity=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
             "--help" | "-h")
                 show_installer_help
                 exit 0
@@ -828,12 +963,39 @@ main() {
             "--dry-run" | "-n")
                 export MOLE_DRY_RUN=1
                 ;;
+            "--list-json")
+                mode="list"
+                ;;
+            "--remove")
+                mode="remove"
+                remove_path="${2:-}"
+                shift || true
+                ;;
+            "--size")
+                remove_size="${2:-}"
+                shift || true
+                ;;
+            "--identity")
+                remove_identity="${2:-}"
+                shift || true
+                ;;
             *)
-                echo "Unknown option: $arg" >&2
+                echo "Unknown option: $1" >&2
                 exit 1
                 ;;
         esac
+        shift || true
     done
+
+    # Non-interactive modes never enter the alt screen or read keys.
+    if [[ "$mode" == "list" ]]; then
+        installer_list_json
+        return $?
+    fi
+    if [[ "$mode" == "remove" ]]; then
+        installer_remove_path "$remove_path" "$remove_size" "$remove_identity"
+        return $?
+    fi
 
     if [[ "${MOLE_DRY_RUN:-0}" == "1" ]]; then
         echo -e "${YELLOW}${ICON_DRY_RUN} DRY RUN MODE${NC}, No installer files will be removed"
