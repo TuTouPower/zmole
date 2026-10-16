@@ -3,9 +3,9 @@ import XCTest
 
 final class BatchUninstallTests: XCTestCase {
     func testDecoderKeepsSourceAndParsesHumanSize() throws {
-        let apps = try UninstallListDecoder.decode("""
+        let apps = try JSONDecoder().decode([UninstallApp].self, from: Data("""
         [{"name":"Foo","bundle_id":"com.example.foo","uninstall_name":"Foo","path":"/Applications/Foo.app","source":"Homebrew","size":"1.5 GB"}]
-        """)
+        """.utf8))
 
         XCTAssertEqual(apps[0].source, "Homebrew")
         XCTAssertEqual(apps[0].sizeBytes, 1_500_000_000)

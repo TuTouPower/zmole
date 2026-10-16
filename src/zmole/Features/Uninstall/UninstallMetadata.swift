@@ -1,40 +1,8 @@
 import AppKit
-import CoreServices
 import Foundation
-
-struct UninstallAppMetadata: Equatable, Sendable {
-    let version: String?
-    let lastUsed: Date?
-}
-
-protocol UninstallMetadataProviding: Sendable {
-    func metadata(forAppAt path: String) async -> UninstallAppMetadata
-}
 
 protocol FileRevealing: Sendable {
     func reveal(path: String) async
-}
-
-/// Reads version and last-used from on-device metadata only. Missing fields stay
-/// nil so the UI can show "unknown" instead of invented values.
-struct LiveUninstallMetadataProvider: UninstallMetadataProviding {
-    func metadata(forAppAt path: String) async -> UninstallAppMetadata {
-        await Task.detached(priority: .utility) {
-            let url = URL(fileURLWithPath: path)
-            let bundle = Bundle(url: url)
-            let shortVersion = bundle?.infoDictionary?["CFBundleShortVersionString"] as? String
-            let bundleVersion = bundle?.infoDictionary?["CFBundleVersion"] as? String
-            let version = [shortVersion, bundleVersion]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first { !$0.isEmpty }
-            return UninstallAppMetadata(version: version, lastUsed: Self.lastUsedDate(at: url))
-        }.value
-    }
-
-    static func lastUsedDate(at url: URL) -> Date? {
-        guard let item = NSMetadataItem(url: url) else { return nil }
-        return item.value(forAttribute: kMDItemLastUsedDate as String) as? Date
-    }
 }
 
 struct LiveFileRevealer: FileRevealing {
@@ -43,5 +11,37 @@ struct LiveFileRevealer: FileRevealing {
             let url = URL(fileURLWithPath: path)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
+    }
+}
+
+/// App icons load after the list is already interactive; list rendering never
+/// waits on a synchronous icon read.
+protocol UninstallIconProviding: Sendable {
+    func icon(forAppAt path: String) async -> NSImage?
+}
+
+struct LiveUninstallIconProvider: UninstallIconProviding {
+    func icon(forAppAt path: String) async -> NSImage? {
+        await Task.detached(priority: .utility) {
+            NSWorkspace.shared.icon(forFile: path)
+        }.value
+    }
+}
+
+/// Cheap confirm-time identity check: the listed path still exists and its
+/// bundle identity is unchanged. It never runs a full list scan; a change
+/// refuses the execution and the caller re-lists.
+protocol UninstallTargetChecking: Sendable {
+    func stillMatches(_ app: UninstallApp) async -> Bool
+}
+
+struct LiveUninstallTargetChecker: UninstallTargetChecking {
+    func stillMatches(_ app: UninstallApp) async -> Bool {
+        await Task.detached(priority: .utility) {
+            guard FileManager.default.fileExists(atPath: app.path) else { return false }
+            guard !app.bundleID.isEmpty else { return true }
+            guard let bundle = Bundle(url: URL(fileURLWithPath: app.path)) else { return false }
+            return bundle.bundleIdentifier == app.bundleID
+        }.value
     }
 }

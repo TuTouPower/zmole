@@ -18,26 +18,82 @@ enum UtilityStyle {
     }
 }
 
-struct UtilityToolbar<Actions: View>: View {
+/// Shared page head from the visual demo: eyebrow + title + subtitle on the
+/// left, page actions on the right. Pages put their primary actions here;
+/// in-progress cancel buttons may stay next to the content they cancel.
+struct MolePageHead<Actions: View>: View {
+    let eyebrow: LocalizedStringKey
     let title: LocalizedStringKey
-    var subtitle: LocalizedStringKey? = nil
+    let subtitle: LocalizedStringKey
     @ViewBuilder let actions: () -> Actions
 
+    init(
+        eyebrow: LocalizedStringKey,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey,
+        @ViewBuilder actions: @escaping () -> Actions
+    ) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.actions = actions
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 14, weight: .semibold))
-                if let subtitle {
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+        HStack(alignment: .bottom, spacing: 20) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(eyebrow)
+                    .font(.system(size: 11, weight: .semibold))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+                    .foregroundStyle(MoleTheme.accentStrong)
+                Text(title)
+                    .font(.system(size: 30, weight: .bold))
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(MoleTheme.muted)
             }
             Spacer(minLength: 12)
-            actions()
+            HStack(spacing: 8) {
+                actions()
+            }
         }
-        .padding(.horizontal, 20)
-        .frame(minHeight: 54)
-        .background(UtilityStyle.surface)
-        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+extension MolePageHead where Actions == EmptyView {
+    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey, subtitle: LocalizedStringKey) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle) { EmptyView() }
+    }
+}
+
+/// Demo stat-strip tile: bold value on top, muted label below.
+struct MoleStatTile: View {
+    let value: String
+    let label: LocalizedStringKey
+    var emphasized = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundStyle(emphasized ? MoleTheme.accentStrong : Color.primary)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(MoleTheme.muted)
+        }
+        .padding(.horizontal, 17)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MoleTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
+        .overlay(
+            RoundedRectangle(cornerRadius: MoleTheme.radiusMD)
+                .strokeBorder(MoleTheme.line)
+        )
     }
 }
 
@@ -75,28 +131,62 @@ struct UtilityEmptyState: View {
     }
 }
 
+/// Semantic tone of a notice. Info is the demo `.info-banner` style; error and
+/// the default accent style keep their existing appearance.
+enum NoticeTone: Equatable {
+    case accent
+    case info
+    case error
+}
+
 struct UtilityNotice: View {
     let title: LocalizedStringKey
     var detail: String? = nil
     var symbol = "info.circle"
     var isError = false
+    var isInfo = false
+
+    static func tone(isInfo: Bool, isError: Bool) -> NoticeTone {
+        if isError { return .error }
+        return isInfo ? .info : .accent
+    }
+
+    private var tone: NoticeTone {
+        Self.tone(isInfo: isInfo, isError: isError)
+    }
+
+    private var tint: Color {
+        switch tone {
+        case .accent: return UtilityStyle.accent
+        case .info: return MoleTheme.blue
+        case .error: return .red
+        }
+    }
+
+    private var background: Color {
+        switch tone {
+        case .accent: return UtilityStyle.accent.opacity(0.07)
+        case .info: return MoleTheme.blueSoft
+        case .error: return Color.red.opacity(0.07)
+        }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(isError ? .red : UtilityStyle.accent)
+            Image(systemName: symbol).foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 5) {
-                Text(title).fontWeight(.medium)
+                Text(title).fontWeight(.medium).foregroundStyle(tone == .info ? tint : Color.primary)
                 if let detail, !detail.isEmpty {
                     Text(verbatim: detail)
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(tone == .info ? tint : Color.secondary)
                         .textSelection(.enabled)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background((isError ? Color.red : UtilityStyle.accent).opacity(0.07))
+        .background(background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -123,42 +213,5 @@ struct UtilityBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(UtilityStyle.selection, in: RoundedRectangle(cornerRadius: 5))
-    }
-}
-
-struct UtilityMetric: View {
-    let title: LocalizedStringKey
-    let value: String
-    var detail: LocalizedStringKey = ""
-    var fraction: Double? = nil
-    var emphasized = false
-
-    var body: some View {
-        UtilityPanel {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                Text(verbatim: value)
-                    .font(.system(size: 27, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(emphasized ? UtilityStyle.accent : Color.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if let fraction {
-                    GeometryReader { proxy in
-                        Capsule().fill(UtilityStyle.selection)
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(UtilityStyle.accent)
-                                    .frame(width: proxy.size.width * min(1, max(0, fraction)))
-                            }
-                    }
-                    .frame(height: 5)
-                    .accessibilityHidden(true)
-                }
-                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
-        }
     }
 }

@@ -81,6 +81,31 @@ uninstall_normalize_last_used_display() {
     echo "$display"
 }
 
+# zmole local patch (t029): bundle version for the GUI list stream. Reads the
+# target's own Info.plist only (no Spotlight); missing values stay empty so the
+# app shows "unknown" instead of inventing one.
+uninstall_read_bundle_version() {
+    local app_path="$1"
+    local plist="$app_path/Contents/Info.plist"
+    [[ -f "$plist" ]] || {
+        printf '%s' ""
+        return 0
+    }
+
+    local value=""
+    value=$(run_with_timeout 0.2 plutil -extract CFBundleShortVersionString raw "$plist" 2> /dev/null || echo "")
+    case "$value" in
+        *"does not exist"* | *"Unexpected"*) value="" ;;
+    esac
+    if [[ -z "$value" ]]; then
+        value=$(run_with_timeout 0.2 plutil -extract CFBundleVersion raw "$plist" 2> /dev/null || echo "")
+        case "$value" in
+            *"does not exist"* | *"Unexpected"*) value="" ;;
+        esac
+    fi
+    printf '%s' "$value"
+}
+
 uninstall_quick_app_size_kb() {
     local app_path="$1"
     [[ -n "$app_path" && -d "$app_path" ]] || {
@@ -486,6 +511,14 @@ start_uninstall_metadata_refresh() {
 }
 
 uninstall_print_app_search_dirs() {
+    # zmole local patch (t029): MOLE_UNINSTALL_SCAN_ROOT narrows the scan to
+    # one directory for the non-interactive test harness; production leaves it
+    # unset.
+    if [[ -n "${MOLE_UNINSTALL_SCAN_ROOT:-}" ]]; then
+        printf '%s\n' "$MOLE_UNINSTALL_SCAN_ROOT"
+        return 0
+    fi
+
     local -a app_dirs=(
         "/Applications"
         "$HOME/Applications"
@@ -1293,6 +1326,21 @@ scan_applications() {
     # Phase 2: discover candidate apps.
     _scan_discover_apps
 
+    # zmole local patch (t029): with MOLE_UNINSTALL_LIST_STREAM_FD set, publish
+    # the discovered identities before sizes are resolved so the GUI can paint
+    # the list immediately. The fd is a duplicate of the caller's stdout: this
+    # function's own stdout is captured by the caller to pass back apps_file.
+    # Later rows for the same path supersede these.
+    if [[ "${MOLE_UNINSTALL_LIST_STREAM_FD:-}" =~ ^[0-9]+$ && -s "$discovered_file" ]]; then
+        sort -u "$discovered_file" | while IFS='|' read -r stream_path stream_name _; do
+            [[ -n "$stream_path" ]] || continue
+            printf '{"path":"%s","name":"%s"}\n' \
+                "$(uninstall_list_json_escape "$stream_path")" \
+                "$(uninstall_list_json_escape "$stream_name")" \
+                >&"$MOLE_UNINSTALL_LIST_STREAM_FD"
+        done
+    fi
+
     # Phase 3: partition into warm-cache and cold rows.
     local -a app_data_tuples=()
     _scan_partition_cache
@@ -1662,6 +1710,69 @@ uninstall_list_apps() {
     return 0
 }
 
+# zmole local patch (t029): progressive JSON-lines listing for the GUI.
+# Emits, on stdout:
+#   1. one identity row per discovered app (path + name) while scanning;
+#   2. one full row per app after the scan resolves name/bundle/size/last-used,
+#      adding the bundle version from the app's own Info.plist;
+#   3. a final {"event":"done"} marker.
+# Later rows for the same path supersede earlier rows. Read-only: the scan is
+# the same one the destructive path uses; no deletion happens here.
+uninstall_stream_apps() {
+    # fd 3 is the real stdout; fd 1 is captured by each `scan_applications`
+    # command substitution while resolving the apps file path.
+    exec 3>&1
+    MOLE_UNINSTALL_LIST_STREAM_FD=3
+    export MOLE_UNINSTALL_LIST_STREAM_FD
+
+    local apps_file=""
+    if ! apps_file=$(scan_applications); then
+        uninstall_abort "could not complete the application scan"
+        return 1
+    fi
+    if [[ ! -f "$apps_file" ]]; then
+        uninstall_abort "application scan produced no list"
+        return 1
+    fi
+    if ! load_applications "$apps_file"; then
+        rm -f "$apps_file"
+        uninstall_abort "no applications available for uninstallation"
+        return 1
+    fi
+    rm -f "$apps_file"
+
+    local app_data
+    for app_data in "${apps_data[@]+"${apps_data[@]}"}"; do
+        IFS='|' read -r app_epoch app_path app_name bundle_id size _ _ <<< "$app_data"
+        local cask=""
+        if is_homebrew_available; then
+            cask=$(get_brew_cask_name "$app_path" 2> /dev/null || true)
+        fi
+        local uninstall_name="${cask:-$app_name}"
+        local source_label="App"
+        [[ -n "$cask" ]] && source_label="Homebrew"
+        local size_display
+        size_display=$(uninstall_normalize_size_display "$size" "$app_path")
+        local version
+        version=$(uninstall_read_bundle_version "$app_path")
+        local last_used_epoch=0
+        [[ "$app_epoch" =~ ^[0-9]+$ ]] && last_used_epoch="$app_epoch"
+
+        printf '{"path":"%s","name":"%s","bundle_id":"%s","uninstall_name":"%s","source":"%s","size":"%s","version":"%s","last_used_epoch":%s}\n' \
+            "$(uninstall_list_json_escape "$app_path")" \
+            "$(uninstall_list_json_escape "$app_name")" \
+            "$(uninstall_list_json_escape "$bundle_id")" \
+            "$(uninstall_list_json_escape "$uninstall_name")" \
+            "$source_label" \
+            "$(uninstall_list_json_escape "$size_display")" \
+            "$(uninstall_list_json_escape "$version")" \
+            "$last_used_epoch"
+    done
+
+    printf '{"event":"done"}\n'
+    return 0
+}
+
 main() {
     # Set current command for operation logging
     export MOLE_CURRENT_COMMAND="uninstall"
@@ -1674,6 +1785,7 @@ main() {
     # Parse flags and collect app name arguments
     local -a app_name_args=()
     local list_mode=0
+    local list_stream_mode=0
     for arg in "$@"; do
         case "$arg" in
             "--help" | "-h")
@@ -1691,6 +1803,10 @@ main() {
                 ;;
             "--list")
                 list_mode=1
+                ;;
+            "--list-stream")
+                list_mode=1
+                list_stream_mode=1
                 ;;
             "--whitelist")
                 echo "Unknown uninstall option: $arg" >&2
@@ -1712,7 +1828,11 @@ main() {
     # --list short-circuits before any destructive code. Read-only path:
     # scan, resolve uninstall names, print table or JSON, exit 0.
     if [[ $list_mode -eq 1 ]]; then
-        uninstall_list_apps
+        if [[ $list_stream_mode -eq 1 ]]; then
+            uninstall_stream_apps
+        else
+            uninstall_list_apps
+        fi
         return $?
     fi
 

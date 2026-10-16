@@ -30,7 +30,7 @@ struct InstallersView: View {
         }
         .navigationTitle("sidebar.installers")
         .task {
-            if viewModel.candidates.isEmpty, !viewModel.isListing { await viewModel.scan() }
+            await viewModel.loadListIfNeeded()
         }
     }
 
@@ -63,6 +63,11 @@ struct InstallersView: View {
                     .textCase(.uppercase)
                 Text("installers.title").font(.system(size: 30, weight: .bold))
                 Text("installers.subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                if let capturedAt = viewModel.listCapturedAt {
+                    Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoleTheme.muted)
+                }
             }
             Spacer()
             Button {

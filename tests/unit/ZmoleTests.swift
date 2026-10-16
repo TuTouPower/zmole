@@ -46,7 +46,7 @@ final class ZmoleTests: XCTestCase {
         XCTAssertFalse(dependencies.whitelistViewModel.filePath.contains("/.config/mole/"))
 
         await dependencies.analyzeViewModel.loadOverview()
-        XCTAssertEqual(dependencies.analyzeViewModel.snapshot?.path, "/Users/demo")
+        XCTAssertEqual(dependencies.analyzeViewModel.currentPath, DemoDiskScanner.root)
     }
 
     @MainActor
@@ -92,7 +92,11 @@ final class ZmoleTests: XCTestCase {
         XCTAssertTrue(viewModel.isPaused)
     }
 
-    func testStatusMetricDetailKeysHaveLocalizedValues() throws {
+    // Renamed and re-keyed in t035: the status rebuild retired the old
+    // metric-detail cards, and these are the metric labels the page renders
+    // now. Same intent: every status metric label is localized in three
+    // languages.
+    func testStatusStatKeysHaveLocalizedValues() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -101,7 +105,7 @@ final class ZmoleTests: XCTestCase {
         let data = try Data(contentsOf: sourceURL)
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(root["strings"] as? [String: Any])
-        for key in ["status.health_detail", "status.cpu.detail", "status.memory.detail"] {
+        for key in ["status.stat.cpu", "status.stat.memory", "status.stat.disk_write", "status.stat.temperature"] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
             for locale in ["en", "zh-Hans", "zh-Hant"] {
@@ -666,97 +670,9 @@ final class ZmoleTests: XCTestCase {
         XCTAssertEqual(directory.displayState.entries.first?.size, 1024)
     }
 
-    @MainActor
-    func testAnalyzeViewModelNavigatesToDirectoryAndBack() async {
-        let sequence = AnalyzeCommandSequence(results: [
-            (Self.analyzeOverviewFixture, ["analyze", "--json"]),
-            (Self.analyzePathFixture, ["analyze", "--json", "/Applications"]),
-            (Self.analyzeOverviewFixture, ["analyze", "--json"])
-        ])
-        let loader = AnalyzeSnapshotLoader { arguments in
-            await sequence.next(arguments)
-        }
-        let viewModel = AnalyzeViewModel(loader: loader)
-
-        await viewModel.loadOverview()
-        XCTAssertEqual(viewModel.snapshot?.path, "/")
-
-        let directory = AnalyzeEntry(
-            name: "Applications", path: "/Applications", size: 1, isDirectory: true
-        )
-        await viewModel.openDirectory(directory)
-        XCTAssertEqual(viewModel.snapshot?.path, "/Applications")
-        XCTAssertEqual(viewModel.snapshot?.entries.first?.name, "Utilities")
-        XCTAssertEqual(viewModel.snapshot?.entries.first?.size, 1024)
-        XCTAssertTrue(viewModel.canGoBack)
-
-        await viewModel.goBack()
-        XCTAssertEqual(viewModel.snapshot?.path, "/")
-        XCTAssertFalse(viewModel.canGoBack)
-
-        let arguments = await sequence.recordedArguments
-        XCTAssertEqual(
-            arguments,
-            [
-                ["analyze", "--json"],
-                ["analyze", "--json", "/Applications"],
-                ["analyze", "--json"]
-            ]
-        )
-    }
-
-    @MainActor
-    func testAnalyzeViewModelIgnoresBackWhileDirectoryLoads() async {
-        let command = BlockingAnalyzeCommand()
-        let loader = AnalyzeSnapshotLoader { arguments in
-            await command.run(arguments)
-        }
-        let viewModel = AnalyzeViewModel(loader: loader)
-
-        await viewModel.loadOverview()
-        let directory = AnalyzeEntry(
-            name: "Applications", path: "/Applications", size: 1, isDirectory: true
-        )
-        let loadTask = Task { @MainActor in
-            await viewModel.openDirectory(directory)
-        }
-
-        for _ in 0..<1_000 where !viewModel.isLoading {
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        XCTAssertTrue(viewModel.isLoading)
-        XCTAssertTrue(viewModel.canGoBack)
-
-        await viewModel.goBack()
-
-        let arguments = await command.recordedArguments
-        XCTAssertEqual(
-            arguments,
-            [
-                ["analyze", "--json"],
-                ["analyze", "--json", "/Applications"]
-            ]
-        )
-
-        await command.finishDirectoryLoad()
-        await loadTask.value
-        XCTAssertEqual(viewModel.snapshot?.path, "/Applications")
-    }
-
-    @MainActor
-    func testAnalyzeViewModelShowsFailureWithoutDeleteAction() async {
-        let loader = AnalyzeSnapshotLoader { _ in
-            throw MoleBridgeError.commandFailed(
-                MoleCommandResult(stdout: "", stderr: "analyze failed", exitCode: 8)
-            )
-        }
-        let viewModel = AnalyzeViewModel(loader: loader)
-
-        await viewModel.loadOverview()
-
-        XCTAssertNil(viewModel.snapshot)
-        XCTAssertEqual(viewModel.errorMessage, "mole 命令失败（8）：analyze failed")
-    }
+    // The former mole-driven disk ViewModel tests moved to DiskExplorerTests,
+    // which drives the same navigation states through an injected directory
+    // source instead of `analyze --json` command recording.
 
     private static let statusFixture = """
     {
@@ -841,48 +757,6 @@ private actor CommandSequence {
 
     func next() -> MoleCommandResult {
         MoleCommandResult(stdout: outputs.removeFirst(), stderr: "", exitCode: 0)
-    }
-}
-
-private actor AnalyzeCommandSequence {
-    private var results: [(String, [String])]
-    private(set) var recordedArguments: [[String]] = []
-
-    init(results: [(String, [String])]) {
-        self.results = results
-    }
-
-    func next(_ arguments: [String]) -> MoleCommandResult {
-        let result = results.removeFirst()
-        recordedArguments.append(arguments)
-        return MoleCommandResult(stdout: result.0, stderr: "", exitCode: 0)
-    }
-}
-
-private actor BlockingAnalyzeCommand {
-    private(set) var recordedArguments: [[String]] = []
-    private var directoryContinuation: CheckedContinuation<MoleCommandResult, Never>?
-
-    func run(_ arguments: [String]) async -> MoleCommandResult {
-        recordedArguments.append(arguments)
-        guard arguments.last == "/Applications" else {
-            return MoleCommandResult(stdout: ZmoleTests.analyzeOverviewFixture, stderr: "", exitCode: 0)
-        }
-
-        return await withCheckedContinuation { continuation in
-            directoryContinuation = continuation
-        }
-    }
-
-    func finishDirectoryLoad() {
-        directoryContinuation?.resume(
-            returning: MoleCommandResult(
-                stdout: ZmoleTests.analyzePathFixture,
-                stderr: "",
-                exitCode: 0
-            )
-        )
-        directoryContinuation = nil
     }
 }
 

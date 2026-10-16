@@ -3,45 +3,10 @@ import XCTest
 
 @MainActor
 final class RecoverableBusyTests: XCTestCase {
-    private static let analyzeJSON = """
-    {"path":"/","overview":true,"entries":[{"name":"Applications","path":"/Applications","size":10,"is_dir":true}]}
-    """
-
-    func testBusyIsNotShownAsFailureAndKeepsData() async {
-        let gate = BusyGate()
-        let loader = AnalyzeSnapshotLoader { _ in
-            if await gate.isBusy { throw MoleBridgeError.busy }
-            return MoleCommandResult(stdout: Self.analyzeJSON, stderr: "", exitCode: 0)
-        }
-        let viewModel = AnalyzeViewModel(loader: loader)
-
-        await viewModel.loadOverview()
-        XCTAssertNotNil(viewModel.snapshot)
-
-        await gate.setBusy(true)
-        await viewModel.refreshCurrent()
-        XCTAssertTrue(viewModel.showBusyNotice)
-        XCTAssertNil(viewModel.errorMessage)
-        XCTAssertNotNil(viewModel.snapshot, "busy must keep the previous data")
-
-        await gate.setBusy(false)
-        await viewModel.refreshCurrent()
-        XCTAssertFalse(viewModel.showBusyNotice)
-        XCTAssertNotNil(viewModel.snapshot)
-    }
-
-    func testRealFailureStillShowsAsFailure() async {
-        let loader = AnalyzeSnapshotLoader { _ in
-            throw MoleBridgeError.commandFailed(
-                MoleCommandResult(stdout: "", stderr: "analyze failed", exitCode: 8)
-            )
-        }
-        let viewModel = AnalyzeViewModel(loader: loader)
-        await viewModel.loadOverview()
-
-        XCTAssertNotNil(viewModel.errorMessage)
-        XCTAssertFalse(viewModel.showBusyNotice)
-    }
+    // The disk page no longer runs a mole command (t028 moved it to an
+    // in-app read-only scanner), so its former busy-recovery tests were
+    // removed with the command lane. The busy semantics below stay covered
+    // for every page that still spawns mole.
 
     func testWriteBusyFromCoordinatorIsRecoverable() async {
         let coordinator = OperationCoordinator()

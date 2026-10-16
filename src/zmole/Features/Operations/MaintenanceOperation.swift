@@ -41,6 +41,7 @@ class MaintenanceViewModel: ObservableObject {
     private let coordinator: OperationCoordinator
     private let kind: MaintenanceKind
     private let session = OperationSession<MaintenancePreviewSnapshot>()
+    private weak var prewarm: (any PrewarmResultProviding)?
     private var lease: OperationLease?
     private var previewCoordinatorGeneration: UInt64?
     private var coordinatorSubscription: AnyCancellable?
@@ -48,11 +49,13 @@ class MaintenanceViewModel: ObservableObject {
     init(
         kind: MaintenanceKind,
         process: any MoleProcessControlling,
-        coordinator: OperationCoordinator
+        coordinator: OperationCoordinator,
+        prewarm: (any PrewarmResultProviding)? = nil
     ) {
         self.kind = kind
         self.process = process
         self.coordinator = coordinator
+        self.prewarm = prewarm
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
             guard let self,
@@ -78,9 +81,27 @@ class MaintenanceViewModel: ObservableObject {
         return result.summary
     }
     @Published private(set) var showBusyNotice = false
+    @Published private(set) var previewCapturedAt: Date?
+
+    /// Shows a finished background prewarm preview without re-running the
+    /// scan. Does nothing when the user already has a preview or no prewarm
+    /// result is available.
+    func adoptPrewarmPreviewIfAvailable() {
+        guard session.preview == nil, !session.isBusy else { return }
+        guard let item = kind.prewarmItem,
+              let result = prewarm?.takeResult(item),
+              case let .maintenance(output) = result.payload else { return }
+        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        session.adoptPreview(MaintenancePreviewSnapshot(generation: UUID(), output: output))
+        previewCapturedAt = result.capturedAt
+    }
 
     func previewMaintenance() async {
         guard !session.isBusy else { return }
+        if let item = kind.prewarmItem {
+            prewarm?.userDidRescan(item)
+        }
+        previewCapturedAt = nil
         releaseLease()
         session.invalidate()
         showBusyNotice = false
@@ -144,6 +165,7 @@ class MaintenanceViewModel: ObservableObject {
         guard let operationID = session.beginPreviewCancellation() else { return }
         await process.cancel()
         session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
+        previewCapturedAt = nil
         releaseLease()
     }
 
@@ -172,6 +194,7 @@ class MaintenanceViewModel: ObservableObject {
         showBusyNotice = false
         coordinator.invalidatePreviews()
         previewCoordinatorGeneration = coordinator.invalidationGeneration
+        previewCapturedAt = nil
 
         do {
             let result = try await process.run(kind.executionArguments, stdin: nil, timeout: 600)
@@ -240,6 +263,13 @@ private extension MaintenanceKind {
         switch self {
         case .optimize: return .optimize
         case .purge: return .purge
+        }
+    }
+
+    var prewarmItem: PrewarmItem? {
+        switch self {
+        case .optimize: return .optimizeDryRun
+        case .purge: return .purgeDryRun
         }
     }
 }

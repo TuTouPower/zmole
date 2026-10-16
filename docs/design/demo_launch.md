@@ -1,6 +1,6 @@
 # 确定性 UI 演示入口
 
-演示模式复用生产 `AppShellView`、页面 View 与 ViewModel，但把 `MoleProcessControlling` 注入为内存假服务。演示进程不会定位、启动或取消捆绑 `mole`，不会写入 `~/.config/mole/`。
+演示模式复用生产 `AppShellView`、页面 View 与 ViewModel，但把 `MoleProcessControlling` 与磁盘页的目录源 `DiskScanning` 注入为内存假服务。演示进程不会定位、启动或取消捆绑 `mole`；磁盘页由内存目录源驱动，不读真实目录；也不会写入 `~/.config/mole/`。
 
 ```text
 Zmole.app/Contents/MacOS/Zmole \

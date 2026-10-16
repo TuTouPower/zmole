@@ -1,25 +1,30 @@
 import Foundation
 
 struct SpaceMapTile: Identifiable {
-    let entry: AnalyzeEntry
+    let entry: DiskEntry
     let rect: CGRect
     var id: String { entry.id }
 }
 
 enum SpaceMapLayout {
-    /// Partition one level only; descendant sizes must not be counted twice.
-    static func tiles(entries: [AnalyzeEntry], in bounds: CGRect) -> [SpaceMapTile] {
+    /// Partition one level only; entries with unknown sizes draw no area and
+    /// descendant sizes must not be counted twice.
+    static func tiles(entries: [DiskEntry], in bounds: CGRect) -> [SpaceMapTile] {
         guard bounds.width > 0, bounds.height > 0 else { return [] }
-        let positive = entries.filter { $0.size > 0 }.sorted {
-            $0.size == $1.size ? $0.path < $1.path : $0.size > $1.size
-        }
+        let positive = entries
+            .filter { ($0.knownSize ?? 0) > 0 }
+            .sorted { lhs, rhs in
+                let left = lhs.knownSize ?? 0
+                let right = rhs.knownSize ?? 0
+                return left == right ? lhs.path < rhs.path : left > right
+            }
         var result: [SpaceMapTile] = []
         partition(positive[...], bounds: bounds, into: &result)
         return result
     }
 
     private static func partition(
-        _ entries: ArraySlice<AnalyzeEntry>, bounds: CGRect, into result: inout [SpaceMapTile]
+        _ entries: ArraySlice<DiskEntry>, bounds: CGRect, into result: inout [SpaceMapTile]
     ) {
         guard let first = entries.first else { return }
         guard entries.count > 1 else {
@@ -27,13 +32,13 @@ enum SpaceMapLayout {
             return
         }
         // Double avoids Int64 overflow when adding very large entries.
-        let total = entries.reduce(0.0) { $0 + Double($1.size) }
+        let total = entries.reduce(0.0) { $0 + Double($1.knownSize ?? 0) }
         var accumulated = 0.0
         var split = entries.startIndex + 1
-        var splitWeight = Double(first.size)
+        var splitWeight = Double(first.knownSize ?? 0)
         var distance = Double.greatestFiniteMagnitude
         for index in entries.indices.dropLast() {
-            accumulated += Double(entries[index].size)
+            accumulated += Double(entries[index].knownSize ?? 0)
             let candidate = abs(total / 2 - accumulated)
             if candidate < distance {
                 split = index + 1

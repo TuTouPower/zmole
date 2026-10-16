@@ -11,6 +11,7 @@ final class InstallersViewModel: ObservableObject {
     @Published private(set) var isConfirmationPresented = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var showBusyNotice = false
+    @Published private(set) var listCapturedAt: Date?
 
     /// Snapshot of the listing that the current selection/confirmation binds to.
     /// A new scan replaces it and clears the selection.
@@ -18,11 +19,17 @@ final class InstallersViewModel: ObservableObject {
 
     private let interface: InstallerInterface
     private let coordinator: OperationCoordinator
+    private weak var prewarm: (any PrewarmResultProviding)?
     private var lease: OperationLease?
 
-    init(interface: InstallerInterface, coordinator: OperationCoordinator) {
+    init(
+        interface: InstallerInterface,
+        coordinator: OperationCoordinator,
+        prewarm: (any PrewarmResultProviding)? = nil
+    ) {
         self.interface = interface
         self.coordinator = coordinator
+        self.prewarm = prewarm
     }
 
     var selectedCandidates: [InstallerCandidate] {
@@ -47,12 +54,22 @@ final class InstallersViewModel: ObservableObject {
         return "\(count) \(unit) · \(size)"
     }
 
+    /// Uses the background prewarm result when it exists; otherwise scans now.
+    /// The session list is kept until the user re-scans or a removal updates it.
+    func loadListIfNeeded() async {
+        guard candidates.isEmpty, !isListing, !isRemoving else { return }
+        if adoptPrewarmList() { return }
+        await scan()
+    }
+
     func scan() async {
         guard !isListing, !isRemoving else { return }
+        prewarm?.userDidRescan(.installerList)
         isListing = true
         errorMessage = nil
         showBusyNotice = false
         failures = []
+        listCapturedAt = nil
         defer { isListing = false }
         do {
             let list = try await interface.list()
@@ -70,6 +87,17 @@ final class InstallersViewModel: ObservableObject {
             selectedPaths.removeAll()
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func adoptPrewarmList() -> Bool {
+        guard let result = prewarm?.takeResult(.installerList),
+              case let .installerCandidates(list) = result.payload else { return false }
+        candidates = list
+        lastListing = list
+        selectedPaths.removeAll()
+        isConfirmationPresented = false
+        listCapturedAt = result.capturedAt
+        return true
     }
 
     func toggleSelection(_ candidate: InstallerCandidate) {

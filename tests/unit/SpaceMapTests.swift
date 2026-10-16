@@ -11,7 +11,7 @@ final class SpaceMapTests: XCTestCase {
         XCTAssertEqual(tiles.count, 3)
         for tile in tiles {
             XCTAssertEqual(tile.rect.width * tile.rect.height / 400_000,
-                           Double(tile.entry.size) / 100, accuracy: 0.000001)
+                           Double(tile.entry.knownSize ?? 0) / 100, accuracy: 0.000001)
             XCTAssertTrue(bounds.contains(tile.rect))
         }
         for i in tiles.indices {
@@ -42,7 +42,7 @@ final class SpaceMapTests: XCTestCase {
         XCTAssertTrue(first.allSatisfy { $0.rect.width.isFinite && $0.rect.height.isFinite })
     }
 
-    private func entry(_ name: String, _ size: Int64) -> AnalyzeEntry {
-        AnalyzeEntry(name: name, path: "/" + name, size: size, isDirectory: true)
+    private func entry(_ name: String, _ size: Int64) -> DiskEntry {
+        DiskEntry(name: name, path: "/" + name, isDirectory: true, value: .size(size))
     }
 }

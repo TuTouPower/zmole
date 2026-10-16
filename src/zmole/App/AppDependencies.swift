@@ -119,6 +119,13 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     private static func analyzeFixture(path: String?) -> String {
         guard let path else { return defaultAnalyzeFixture }
         if path.hasSuffix("/Library/Developer") { return developerAnalyzeFixture }
+        if path.hasPrefix("/System/") {
+            // The system segment is summed child by child, skipping the data
+            // volume.
+            if path == "/System/Volumes" { return dataVolumeAnalyzeFixture }
+            if path == "/System/Library" { return systemAnalyzeFixture }
+            return systemChildAnalyzeFixture
+        }
         switch path {
         case "/Applications": return applicationsAnalyzeFixture
         case "/System": return systemAnalyzeFixture
@@ -157,6 +164,20 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     ]}
     """
 
+    // Only reachable if something wrongly walks the data volume; the estimate
+    // loader skips /System/Volumes, so this never enters the system segment.
+    private static let dataVolumeAnalyzeFixture = """
+    {"path":"/System/Volumes","overview":false,"entries":[
+      {"name":"Data","path":"/System/Volumes/Data","size":1470000000000,"is_dir":true}
+    ]}
+    """
+
+    private static let systemChildAnalyzeFixture = """
+    {"path":"/System/Child","overview":false,"entries":[
+      {"name":"Payload","path":"/System/Child/Payload","size":120000000,"is_dir":true}
+    ]}
+    """
+
     private static let developerAnalyzeFixture = """
     {"path":"~/Library/Developer","overview":false,"entries":[
       {"name":"Xcode","path":"~/Library/Developer/Xcode","size":24000000000,"is_dir":true},
@@ -189,7 +210,7 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     [{"path":"/Users/demo/Downloads/Android Studio.dmg","size_bytes":1210000000,"source":"Downloads","identity":"1:2:3"},{"path":"/Users/demo/Downloads/Figma.pkg","size_bytes":640000000,"source":"Downloads","identity":"4:5:6"},{"path":"/Users/demo/Downloads/VSCode.zip","size_bytes":310000000,"source":"Downloads","identity":"7:8:9"}]
     """
 
-    private static let uninstallFixture = """
+    static let uninstallFixture = """
     [{"name":"Demo Editor","bundle_id":"com.example.demo-editor","uninstall_name":"Demo Editor","path":"/Applications/Demo Editor.app","source":"App","size":"1.4 GB"},{"name":"Brew Tool","bundle_id":"com.example.brew-tool","uninstall_name":"Brew Tool","path":"/Applications/Brew Tool.app","source":"Homebrew","size":"820 MB"},{"name":"Photo Vault","bundle_id":"com.example.photo-vault","uninstall_name":"Photo Vault","path":"/Applications/Photo Vault.app","source":"App","size":"2.1 GB"},{"name":"Terminal Plus","bundle_id":"com.example.terminal-plus","uninstall_name":"Terminal Plus","path":"/Applications/Terminal Plus.app","source":"App","size":null},{"name":"Note Studio with a Long Name","bundle_id":"com.example.note-studio","uninstall_name":"Note Studio with a Long Name","path":"/Applications/Note Studio with a Long Name.app","source":"Homebrew","size":"640 MB"},{"name":"Render Farm","bundle_id":"com.example.render-farm","uninstall_name":"Render Farm","path":"/Applications/Render Farm.app","source":"App","size":"3.8 GB"},{"name":"Data Tools","bundle_id":"com.example.data-tools","uninstall_name":"Data Tools","path":"/Applications/Data Tools.app","source":"Homebrew","size":"120 MB"},{"name":"Legacy Client","bundle_id":"com.example.legacy-client","uninstall_name":"Legacy Client","path":"/Applications/Legacy Client.app","source":"App","size":"55 MB"}]
     """
 
@@ -253,6 +274,74 @@ private struct DemoMoleStreaming: MoleStreaming {
     }
 }
 
+/// Progressive uninstall listing for demo mode: identities first, then the
+/// resolved rows, so the staged page is visible without spawning mole.
+private struct DemoUninstallListStream: MoleStreaming {
+    let state: DemoState
+
+    func stream(
+        _ arguments: [String],
+        stdin: Data?,
+        timeout: TimeInterval?
+    ) async -> AsyncThrowingStream<MoleOutputEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                if state == .error {
+                    continuation.finish(throwing: MoleBridgeError.commandFailed(
+                        MoleCommandResult(stdout: "", stderr: "Demo uninstall scan failed", exitCode: 7)
+                    ))
+                    return
+                }
+                if state == .empty {
+                    continuation.finish()
+                    return
+                }
+                let apps = (try? JSONDecoder().decode(
+                    [UninstallApp].self,
+                    from: Data(DemoMoleProcess.uninstallFixture.utf8)
+                )) ?? []
+                for app in apps {
+                    guard !Task.isCancelled else { return }
+                    continuation.yield(.stdoutLine(Self.identityLine(app)))
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+                let resolvedCount = state == .partial ? min(4, apps.count) : apps.count
+                for (index, app) in apps.enumerated() where index < resolvedCount {
+                    guard !Task.isCancelled else { return }
+                    continuation.yield(.stdoutLine(Self.fullLine(app, index: index)))
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+                continuation.yield(.stdoutLine(Data("{\"event\":\"done\"}\n".utf8)))
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func line(_ object: [String: Any]) -> Data {
+        var payload = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
+        payload.append(0x0A)
+        return payload
+    }
+
+    private static func identityLine(_ app: UninstallApp) -> Data {
+        line(["path": app.path, "name": app.name])
+    }
+
+    private static func fullLine(_ app: UninstallApp, index: Int) -> Data {
+        line([
+            "path": app.path,
+            "name": app.name,
+            "bundle_id": app.bundleID,
+            "uninstall_name": app.uninstallName,
+            "source": app.source ?? "App",
+            "size": app.size ?? "N/A",
+            "version": "\(1 + index % 4).\(index % 10).0",
+            "last_used_epoch": Int(Date().addingTimeInterval(-Double(index) * 86_400).timeIntervalSince1970)
+        ])
+    }
+}
+
 struct DemoConfiguration: Equatable, Sendable {
     let isEnabled: Bool
     let page: AppDestination
@@ -294,6 +383,138 @@ enum DemoAppearance: String, Sendable {
     case dark
 }
 
+/// Deterministic in-memory directory source for the disk page in demo mode.
+/// It never reads the file system and never spawns the bundled executable.
+struct DemoDiskScanner: DiskScanning {
+    static let root = "/Users/demo"
+
+    let state: DemoState
+
+    func listDirectory(_ path: String) async throws -> [DiskEntry] {
+        if state == .error {
+            throw DiskScanError.unreadable(path)
+        }
+        if state == .empty {
+            guard path == Self.root else { throw DiskScanError.unreadable(path) }
+            return []
+        }
+        guard let level = Self.levels[path] else {
+            throw DiskScanError.unreadable(path)
+        }
+        return level.entries.map { entry in
+            var listed = entry
+            if listed.isDirectory {
+                listed.value = .computing
+            }
+            return listed
+        }
+    }
+
+    func measureSubtree(_ path: String, deduplicator: HardLinkDeduplicator) async -> DiskScanResult {
+        if state == .partial, path == Self.child(Self.root, "Library") {
+            // Keep one subtree computing so the pending state stays visible.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_600_000_000_000)
+            }
+        }
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        guard let level = Self.levels[path] else {
+            return DiskScanResult(path: path, totalSize: 0, isReadable: false, levels: [:])
+        }
+        let prefix = LiveDiskScanner.directoryPrefix(path)
+        let subtree = Self.levels.filter { $0.key == path || $0.key.hasPrefix(prefix) }
+        return DiskScanResult(path: path, totalSize: level.totalSize, isReadable: true, levels: subtree)
+    }
+
+    private static func child(_ parent: String, _ name: String) -> String {
+        LiveDiskScanner.childPath(parent, name)
+    }
+
+    private static func file(_ name: String, _ bytes: Int64, in parent: String) -> DiskEntry {
+        DiskEntry(name: name, path: child(parent, name), isDirectory: false, value: .size(bytes))
+    }
+
+    private static func directory(_ name: String, _ bytes: Int64, in parent: String) -> DiskEntry {
+        DiskEntry(name: name, path: child(parent, name), isDirectory: true, value: .size(bytes))
+    }
+
+    private static func level(_ parent: String, _ entries: [DiskEntry], total: Int64) -> (String, DiskLevel) {
+        (parent, DiskLevel(entries: entries, totalSize: total))
+    }
+
+    private static let levels: [String: DiskLevel] = {
+        let root = Self.root
+        let applications = child(root, "Applications")
+        let library = child(root, "Library")
+        let projects = child(root, "Projects")
+        let downloads = child(root, "Downloads with a very long name")
+        let developer = child(root, "Developer SDKs")
+        let media = child(root, "Media Archive")
+        let config = child(root, ".config")
+        let emptyFolder = child(root, "empty-folder")
+        let zmoleProject = child(projects, "zmole")
+        let derivedData = child(zmoleProject, "DerivedData")
+        let source = child(zmoleProject, "Source")
+        let xcode = child(applications, "Xcode.app")
+        let docker = child(applications, "Docker.app")
+        let caches = child(library, "Caches")
+        let containers = child(library, "Containers")
+        let clips = child(media, "Clips")
+
+        let pairs: [(String, DiskLevel)] = [
+            level(root, [
+                file("notes.md", 18_304, in: root),
+                file("tiny.log", 96, in: root),
+                directory("Applications", 34_000_000_000, in: root),
+                directory("Library", 18_123_968_512, in: root),
+                directory("Projects", 12_900_270_080, in: root),
+                directory("Downloads with a very long name", 5_800_038_400, in: root),
+                directory("Developer SDKs", 4_200_000_000, in: root),
+                directory("Media Archive", 2_100_000_000, in: root),
+                directory(".config", 930_000_000, in: root),
+                directory("empty-folder", 0, in: root)
+            ], total: 78_054_295_392),
+            level(applications, [
+                directory("Xcode.app", 22_000_000_000, in: applications),
+                directory("Docker.app", 12_000_000_000, in: applications)
+            ], total: 34_000_000_000),
+            level(xcode, [directory("Contents", 22_000_000_000, in: xcode)], total: 22_000_000_000),
+            level(docker, [directory("Contents", 12_000_000_000, in: docker)], total: 12_000_000_000),
+            level(library, [
+                directory("Caches", 9_000_000_000, in: library),
+                directory("Containers", 9_123_968_512, in: library)
+            ], total: 18_123_968_512),
+            level(caches, [file("com.demo.cache", 9_000_000_000, in: caches)], total: 9_000_000_000),
+            level(containers, [file("com.demo.container", 9_123_968_512, in: containers)], total: 9_123_968_512),
+            level(projects, [directory("zmole", 12_900_270_080, in: projects)], total: 12_900_270_080),
+            level(zmoleProject, [
+                directory("DerivedData", 12_000_000_000, in: zmoleProject),
+                directory("Source", 900_270_080, in: zmoleProject)
+            ], total: 12_900_270_080),
+            level(derivedData, [file("Build.db", 12_000_000_000, in: derivedData)], total: 12_000_000_000),
+            level(source, [file("main.swift", 900_270_080, in: source)], total: 900_270_080),
+            level(downloads, [
+                file("Android Studio.dmg", 1_210_000_000, in: downloads),
+                file("Figma.pkg", 640_000_000, in: downloads),
+                file("VSCode.zip", 310_000_000, in: downloads),
+                file("Old Installer.dmg", 3_640_038_400, in: downloads)
+            ], total: 5_800_038_400),
+            level(developer, [
+                file("Xcode.xip", 2_400_000_000, in: developer),
+                file("CoreSimulator.dmg", 1_800_000_000, in: developer)
+            ], total: 4_200_000_000),
+            level(media, [directory("Clips", 2_100_000_000, in: media)], total: 2_100_000_000),
+            level(clips, [
+                file("Footage.mov", 2_000_000_000, in: clips),
+                file("Archive.zip", 100_000_000, in: clips)
+            ], total: 2_100_000_000),
+            level(config, [file("settings.json", 930_000_000, in: config)], total: 930_000_000),
+            level(emptyFolder, [], total: 0)
+        ]
+        return Dictionary(uniqueKeysWithValues: pairs)
+    }()
+}
+
 @MainActor
 final class AppDependencies: ObservableObject {
     let coordinator: OperationCoordinator
@@ -313,6 +534,9 @@ final class AppDependencies: ObservableObject {
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
     let lanes: MoleCommandLanes
+    let prewarmService: PrewarmService?
+
+    private var prewarmSubscriptions: [AnyCancellable] = []
 
     let demo: DemoConfiguration
 
@@ -336,24 +560,28 @@ final class AppDependencies: ObservableObject {
         if configuration.isEnabled {
             lanes = .demo(
                 process: DemoMoleProcess(cleanPreviewURL: cleanPreviewURL, state: configuration.state),
-                streaming: DemoMoleStreaming(state: configuration.state)
+                streaming: DemoMoleStreaming(state: configuration.state),
+                uninstallStream: DemoUninstallListStream(state: configuration.state)
             )
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                   let streamBridge = try? MoleBridge(),
-                  let cleanBridge = try? MoleBridge() {
-            // One bridge per one-shot consumer: a slow read (analyze) no longer
-            // rejects other pages as busy. Writes stay mutually exclusive via the
+                  let cleanBridge = try? MoleBridge(),
+                  let uninstallStreamBridge = try? MoleBridge(),
+                  let prewarmBridge = try? MoleBridge() {
+            // One bridge per one-shot consumer: a slow read no longer rejects
+            // other pages as busy. Writes stay mutually exclusive via the
             // coordinator lease, not the bridge.
             lanes = MoleCommandLanes(
-                analyze: bridges[0],
-                history: bridges[1],
-                uninstall: bridges[2],
-                installer: bridges[3],
-                statusCommand: bridges[4],
-                cleanCommand: bridges[5],
-                optimize: bridges[6],
-                purge: bridges[7],
-                estimate: bridges[8],
+                history: bridges[0],
+                uninstall: bridges[1],
+                uninstallStream: uninstallStreamBridge,
+                installer: bridges[2],
+                statusCommand: bridges[3],
+                cleanCommand: bridges[4],
+                optimize: bridges[5],
+                purge: bridges[6],
+                estimate: bridges[7],
+                prewarm: prewarmBridge,
                 statusStream: streamBridge,
                 cleanStream: cleanBridge
             )
@@ -361,7 +589,8 @@ final class AppDependencies: ObservableObject {
             lanes = .unavailable()
         }
 
-        coordinator = OperationCoordinator()
+        let sharedCoordinator = OperationCoordinator()
+        coordinator = sharedCoordinator
         let previewStore: CleanPreviewStore
         if configuration.isEnabled {
             previewStore = CleanPreviewStore(
@@ -370,15 +599,38 @@ final class AppDependencies: ObservableObject {
         } else {
             previewStore = .live
         }
+        let prewarm = lanes.prewarm.map { lane in
+            PrewarmService(
+                process: lane,
+                installerInterface: InstallerInterface(process: lane),
+                cleanPreviewStore: previewStore,
+                coordinator: sharedCoordinator
+            )
+        }
+        prewarmService = prewarm
         cleanViewModel = CleanViewModel(
             process: lanes.cleanCommand,
             previewStore: previewStore,
             coordinator: coordinator,
-            streaming: lanes.cleanStream
+            streaming: lanes.cleanStream,
+            prewarm: prewarm
         )
-        uninstallViewModel = UninstallViewModel(process: lanes.uninstall, coordinator: coordinator)
-        optimizeViewModel = OptimizeViewModel(process: lanes.optimize, coordinator: coordinator)
-        purgeViewModel = PurgeViewModel(process: lanes.purge, coordinator: coordinator)
+        uninstallViewModel = UninstallViewModel(
+            process: lanes.uninstall,
+            listStream: UninstallListStream(streaming: lanes.uninstallStream),
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
+        optimizeViewModel = OptimizeViewModel(
+            process: lanes.optimize,
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
+        purgeViewModel = PurgeViewModel(
+            process: lanes.purge,
+            coordinator: coordinator,
+            prewarm: prewarm
+        )
         let whitelistURL = configuration.isEnabled
             ? demoDirectory.appendingPathComponent("whitelist")
             : WhitelistStore.live.fileURL
@@ -403,11 +655,14 @@ final class AppDependencies: ObservableObject {
             coordinator: coordinator
         )
 
-        let analyzeBox = MoleProcessBox(lanes.analyze)
-        let loader = AnalyzeSnapshotLoader { arguments in
-            try await analyzeBox.process.run(arguments, stdin: nil, timeout: 120)
+        if configuration.isEnabled {
+            analyzeViewModel = AnalyzeViewModel(
+                scanner: DemoDiskScanner(state: configuration.state),
+                root: DemoDiskScanner.root
+            )
+        } else {
+            analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
         }
-        analyzeViewModel = AnalyzeViewModel(loader: loader)
 
         let statusBox = MoleProcessBox(lanes.statusCommand)
         let statusLoader = StatusSnapshotLoader { arguments in
@@ -422,7 +677,8 @@ final class AppDependencies: ObservableObject {
         historyViewModel = HistoryViewModel(loader: historyLoader)
         installersViewModel = InstallersViewModel(
             interface: InstallerInterface(process: lanes.installer),
-            coordinator: coordinator
+            coordinator: coordinator,
+            prewarm: prewarm
         )
 
         let estimateBox = MoleProcessBox(lanes.estimate)
@@ -436,5 +692,36 @@ final class AppDependencies: ObservableObject {
             storageCache: configuration.isEnabled ? nil : .live,
             coordinator: coordinator
         )
+
+        if let prewarm {
+            prewarm.externalActivityProvider = { [weak analyzeViewModel, weak uninstallViewModel, weak installersViewModel] in
+                (analyzeViewModel?.isScanning ?? false)
+                    || (uninstallViewModel?.isListing ?? false)
+                    || (installersViewModel?.isListing ?? false)
+            }
+            prewarm.cleanPreviewActiveProvider = { [weak cleanViewModel] in
+                guard let cleanViewModel else { return false }
+                return cleanViewModel.preview != nil
+                    || cleanViewModel.isConfirmationPresented
+                    || cleanViewModel.isPreviewing
+            }
+            // Published changes fire before the mutation lands; hop one main
+            // actor turn so the idle check reads the new values.
+            prewarmSubscriptions = [
+                analyzeViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                uninstallViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                installersViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                },
+                cleanViewModel.objectWillChange.sink { [weak prewarm] _ in
+                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                }
+            ]
+            prewarm.noteActivityChanged()
+        }
     }
 }

@@ -21,6 +21,7 @@ struct PurgeView: View {
             }
         }
         .navigationTitle("sidebar.purge")
+        .task { viewModel.adoptPrewarmPreviewIfAvailable() }
         .toolbar {
             ToolbarItem {
                 if viewModel.isPreviewing {
@@ -53,10 +54,15 @@ struct PurgeView: View {
                         .textCase(.uppercase)
                     Text("purge.title").font(.system(size: 30, weight: .bold))
                     Text("purge.page_subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                    if let capturedAt = viewModel.previewCapturedAt {
+                        Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(MoleTheme.muted)
+                    }
                 }
 
                 UtilityNotice(title: "purge.permanent_note", symbol: "exclamationmark.triangle", isError: true)
-                UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath")
+                UtilityNotice(title: "purge.preview_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
 
                 HStack(spacing: 8) {
                     Button("purge.paths.edit") { showingPathsEditor = true }

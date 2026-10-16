@@ -160,4 +160,11 @@ final class StatusViewModel: ObservableObject {
         isPaused = false
         start()
     }
+
+    /// Explicit user refresh: restarts the subscription so a fresh sample
+    /// arrives even while the stream is already running.
+    func resample() async {
+        await pause()
+        start()
+    }
 }
