@@ -1,0 +1,22 @@
+{
+  "tid": "t019",
+  "attempt": 1,
+  "execution_id": "5a8a0a2fe0dc4bf591a1e9339061ba5c",
+  "status": "done",
+  "branch": "t019_uninstall_detail",
+  "base_sha": "88be325cacc5c76cdc0a7c76bfea2436df35953b",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (145 pass incl. UninstallDetailTests 12); pytest .repo_template/tests -q -m contract (147 pass); md_format --changed",
+  "blackbox": "GUI demo smoke environment-limited (recorded in t015). Uninstall list/detail/metadata/dry-run/confirmation covered by injected-fake tests; Finder reveal recorded via a spy.",
+  "review": "full: review_code.md PASS (rounds 1-3), review_test.md PASS (rounds 1-3); reviewed_scope 5b2d5ab80d5cb213; no unresolved critical/important",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Uninstall/UninstallSnapshot.swift UninstallListFilter", "src/zmole/Features/Uninstall/UninstallViewModel.swift focus/selectedIDs", "tests/unit/UninstallDetailTests.swift testSearchFilterHidesRowButKeepsSelection / testFocusAndSelectionAreIndependentOfEachOther"],
+    "AC-002": ["src/zmole/Features/Uninstall/UninstallViewModel.swift previewUninstall/confirmExecution", "tests/unit/UninstallDetailTests.swift testBatchPreviewUsesOnlySelectedUninstallNamesAndConfirmationInput / testConfirmationExecutesOnlySelectedBatch"],
+    "AC-003": ["src/zmole/Features/Uninstall/UninstallMetadata.swift", "tests/unit/UninstallDetailTests.swift testMetadataShowsUnknownWhenMissing"],
+    "AC-004": ["src/zmole/Features/Uninstall/UninstallViewModel.swift loadRelatedFiles/relatedPaths", "tests/unit/UninstallDetailTests.swift testRelatedPathsOnlyComeFromThatAppsDryRun / testRelatedPathsEmptyWhenDryRunHasNoPaths"],
+    "AC-005": ["src/zmole/Features/Uninstall/UninstallSnapshot.swift sizeText", "tests/unit/UninstallDetailTests.swift testZeroSizeStringIsUnknown / testUnknownSizeIsNilAndTotalUsesBodyEstimateWording"],
+    "AC-006": ["src/zmole/Features/Uninstall/UninstallViewModel.swift revealInFinder", "tests/unit/UninstallDetailTests.swift testRevealInFinderUsesTheAppPath"],
+    "AC-007": ["src/zmole/Features/Uninstall/UninstallView.swift DestructiveConfirmationView", "tests/unit/UninstallDetailTests.swift testCancelConfirmationDoesNotExecuteUninstall"]
+  },
+  "pending": [],
+  "findings": []
+}

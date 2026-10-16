@@ -13,7 +13,6 @@ struct UninstallView: View {
     @State private var search = ""
     @State private var source = "all"
     @State private var sort: UninstallSort = .name
-    @State private var expandedID: String?
 
     private var sources: [String] {
         let values = Set(viewModel.apps.compactMap(\.source)).sorted()
@@ -21,14 +20,7 @@ struct UninstallView: View {
     }
 
     private var visibleApps: [UninstallApp] {
-        viewModel.apps
-            .filter { source == "all" || $0.source == source }
-            .filter {
-                search.isEmpty
-                    || $0.name.localizedCaseInsensitiveContains(search)
-                    || $0.bundleID.localizedCaseInsensitiveContains(search)
-                    || $0.path.localizedCaseInsensitiveContains(search)
-            }
+        UninstallListFilter.visible(viewModel.apps, search: search, source: source)
             .sorted { lhs, rhs in
                 switch sort {
                 case .name:
@@ -54,6 +46,23 @@ struct UninstallView: View {
     }
 
     var body: some View {
+        Group {
+            if viewModel.isConfirmationPresented {
+                DestructiveConfirmationView(
+                    title: "uninstall.confirm_title",
+                    summary: "uninstall.confirm_summary",
+                    onConfirm: { Task { await viewModel.confirmExecution() } },
+                    onCancel: { viewModel.cancelConfirmation() }
+                )
+            } else {
+                mainContent
+            }
+        }
+        .navigationTitle("sidebar.uninstall")
+        .task { await viewModel.loadListIfNeeded() }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             controls
             if !viewModel.selectedIDs.isEmpty {
@@ -61,10 +70,6 @@ struct UninstallView: View {
             }
             Divider()
             content
-        }
-        .navigationTitle("software.uninstall")
-        .task {
-            await viewModel.loadListIfNeeded()
         }
         .toolbar {
             ToolbarItem {
@@ -91,14 +96,15 @@ struct UninstallView: View {
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
-            .background(UtilityStyle.secondarySurface, in: RoundedRectangle(cornerRadius: 7))
+            .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 7))
+            .frame(maxWidth: 260)
             Picker("uninstall.source", selection: $source) {
                 ForEach(sources, id: \.self) { value in
                     Text(value == "all" ? LocalizedStringKey("uninstall.all_sources") : LocalizedStringKey(value))
                         .tag(value)
                 }
             }
-            .frame(width: 130)
+            .frame(width: 140)
             Picker("uninstall.sort", selection: $sort) {
                 ForEach(UninstallSort.allCases) { item in
                     Text(item.titleKey).tag(item)
@@ -109,37 +115,36 @@ struct UninstallView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(UtilityStyle.background)
+        .background(MoleTheme.background)
     }
 
     private var selectionShelf: some View {
         HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(UtilityStyle.accent)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(MoleTheme.accent)
             Text("uninstall.selected")
                 .font(.system(size: 13, weight: .medium))
             if hasUnknownSize {
-                Text("uninstall.size_unknown")
-                    .foregroundStyle(.secondary)
+                Text("uninstall.size_unknown").foregroundStyle(.secondary)
             } else {
-                Text(UtilityStyle.bytes(knownSelectedBytes))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 5) {
+                    Text(verbatim: UtilityStyle.bytes(knownSelectedBytes))
+                        .font(.system(size: 12, design: .monospaced))
+                    Text("uninstall.selected_total_app_estimate")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Button("uninstall.clear_selection") {
-                for app in selectedApps { viewModel.toggleSelection(app) }
-            }
-            .buttonStyle(.borderless)
-            Button("uninstall.preview") {
-                Task { await viewModel.previewUninstall() }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(UtilityStyle.accent)
-            .disabled(!viewModel.canPreview)
+            Button("uninstall.clear_selection") { viewModel.clearSelection() }
+                .buttonStyle(.borderless)
+            Button("uninstall.preview") { Task { await viewModel.previewUninstall() } }
+                .buttonStyle(.borderedProminent)
+                .tint(MoleTheme.accent)
+                .disabled(!viewModel.canPreview)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-        .background(UtilityStyle.selection)
+        .background(MoleTheme.selection)
         .accessibilityElement(children: .contain)
     }
 
@@ -158,79 +163,179 @@ struct UninstallView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.apps.isEmpty {
-            UtilityEmptyState(symbol: "square.stack.3d.up", title: "software.uninstall", message: "uninstall.empty")
+            UtilityEmptyState(symbol: "square.stack.3d.up", title: "sidebar.uninstall", message: "uninstall.empty")
         } else {
-            List {
-                ForEach(visibleApps) { app in
-                    appRow(app)
-                }
+            HStack(alignment: .top, spacing: 0) {
+                listPane
+                Divider()
+                detailPane
             }
-            .listStyle(.inset)
             .overlay(alignment: .bottom) { resultPanel }
         }
     }
 
+    private var listPane: some View {
+        List {
+            ForEach(visibleApps) { app in
+                appRow(app)
+                    .listRowBackground(viewModel.focusedAppID == app.id ? MoleTheme.surface2 : Color.clear)
+            }
+        }
+        .listStyle(.inset)
+        .frame(minWidth: 320)
+    }
+
     private func appRow(_ app: UninstallApp) -> some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 11) {
             Button {
                 viewModel.toggleSelection(app)
+            } label: {
+                Image(systemName: viewModel.selectedIDs.contains(app.id) ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 15))
+                    .foregroundStyle(viewModel.selectedIDs.contains(app.id) ? MoleTheme.accent : .secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(viewModel.selectedIDs.contains(app.id) ? "uninstall.selected_state" : "uninstall.not_selected_state"))
+
+            Button {
+                viewModel.focus(app)
+                Task { await viewModel.loadDetail(for: app) }
             } label: {
                 HStack(spacing: 11) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
                         .resizable()
-                        .frame(width: 34, height: 34)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                    Image(systemName: viewModel.selectedIDs.contains(app.id) ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(viewModel.selectedIDs.contains(app.id) ? UtilityStyle.accent : .secondary)
+                        .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
                         HStack(spacing: 7) {
-                            Text(verbatim: app.source ?? String(localized: "uninstall.source_unknown"))
-                            Text(verbatim: app.size ?? String(localized: "uninstall.size_unknown"))
+                            Text(verbatim: metadataLine(app))
+                            Spacer(minLength: 0)
+                            Text(verbatim: app.sizeText ?? String(localized: "uninstall.size_unknown"))
                                 .font(.system(size: 11, design: .monospaced))
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 12)
-                    Button {
-                        expandedID = expandedID == app.id ? nil : app.id
-                    } label: {
-                        Image(systemName: expandedID == app.id ? "chevron.up" : "chevron.down")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("uninstall.details")
+                    Spacer(minLength: 8)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: UninstallAccessibility.description(for: app)))
-            .accessibilityValue(
-                Text(viewModel.selectedIDs.contains(app.id) ? "uninstall.selected_state" : "uninstall.not_selected_state")
-            )
+        }
+        .padding(.vertical, 6)
+    }
 
-            if expandedID == app.id {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(app.uninstallName)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                    Text(app.path)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                    Text(app.bundleID)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-                .padding(.leading, 80)
-                .padding(.bottom, 9)
+    private func metadataLine(_ app: UninstallApp) -> String {
+        let version = viewModel.metadata(for: app)?.version ?? String(localized: "uninstall.unknown")
+        return String(localized: "uninstall.version_line") + " " + version
+    }
+
+    private var detailPane: some View {
+        Group {
+            if let app = viewModel.focusedApp {
+                detailContent(app)
+            } else {
+                Text("uninstall.detail.empty")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .listRowBackground(viewModel.selectedIDs.contains(app.id) ? UtilityStyle.selection : UtilityStyle.surface)
+        .frame(width: 360)
+    }
+
+    private func detailContent(_ app: UninstallApp) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                        .resizable()
+                        .frame(width: 52, height: 52)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(app.name).font(.system(size: 17, weight: .semibold)).lineLimit(1)
+                        Text(verbatim: "\(String(localized: "uninstall.version_line")) \(viewModel.metadata(for: app)?.version ?? String(localized: "uninstall.unknown"))")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(verbatim: app.sizeText ?? String(localized: "uninstall.size_unknown"))
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        Text("uninstall.app_size_estimate").font(.system(size: 9)).foregroundStyle(MoleTheme.subtle)
+                    }
+                }
+
+                detailRow("uninstall.last_used", lastUsedText(app))
+                detailRow("uninstall.path", app.path)
+                detailRow("uninstall.bundle_id", app.bundleID)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("uninstall.files_title").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                    if let paths = viewModel.relatedPaths(for: app) {
+                        if paths.isEmpty {
+                            Text("uninstall.files_none").font(.system(size: 11)).foregroundStyle(.secondary)
+                        } else {
+                            ForEach(paths, id: \.self) { path in
+                                Text(verbatim: path)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("uninstall.files_not_loaded").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Button("uninstall.files_check") {
+                                Task { await viewModel.loadRelatedFiles(for: app) }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
+
+                HStack(spacing: 8) {
+                    Button {
+                        viewModel.revealInFinder(app)
+                    } label: {
+                        Label("uninstall.reveal", systemImage: "arrow.up.forward.app")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    Button {
+                        viewModel.clearSelection()
+                        viewModel.toggleSelection(app)
+                        Task { await viewModel.previewUninstall() }
+                    } label: {
+                        Label("uninstall.trash", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                }
+            }
+            .padding(18)
+        }
+    }
+
+    private func detailRow(_ title: LocalizedStringKey, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(title).font(.system(size: 11)).foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(verbatim: value)
+                .font(.system(size: 11, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func lastUsedText(_ app: UninstallApp) -> String {
+        guard let date = viewModel.metadata(for: app)?.lastUsed else {
+            return String(localized: "uninstall.unknown")
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     @ViewBuilder
@@ -254,7 +359,7 @@ struct UninstallView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     }
-                    .frame(maxHeight: 140)
+                    .frame(maxHeight: 120)
                 }
             }
             .padding(14)
