@@ -193,8 +193,25 @@ final class UninstallDetailTests: XCTestCase {
         XCTAssertNil(app.sizeText)
     }
 
+    func testAnotherWriteInvalidatesAnUninstallPreview() async {
+        let coordinator = OperationCoordinator()
+        let viewModel = makeViewModel(process: DetailProcessSpy(), coordinator: coordinator)
+
+        await viewModel.loadListIfNeeded()
+        viewModel.toggleSelection(viewModel.apps[0])
+        await viewModel.previewUninstall()
+        XCTAssertTrue(viewModel.canConfirm)
+
+        // A write elsewhere (e.g. a clean run) bumps the shared generation.
+        coordinator.invalidatePreviews()
+
+        XCTAssertNil(viewModel.preview, "another write must expire the uninstall preview")
+        XCTAssertFalse(viewModel.canConfirm)
+    }
+
     private func makeViewModel(
         process: DetailProcessSpy,
+        coordinator: OperationCoordinator? = nil,
         alphaVersion: String? = nil,
         alphaLastUsed: Date? = nil,
         revealer: FileRevealing = RevealerSpy()
@@ -223,7 +240,7 @@ final class UninstallDetailTests: XCTestCase {
                     lastUsed: nil
                 )
             ]),
-            coordinator: OperationCoordinator(),
+            coordinator: coordinator ?? OperationCoordinator(),
             targetChecker: FixedTargetChecker(matches: true),
             iconProvider: NoopIconProvider(),
             revealer: revealer

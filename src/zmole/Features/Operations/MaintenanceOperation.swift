@@ -42,9 +42,7 @@ class MaintenanceViewModel: ObservableObject {
     private let kind: MaintenanceKind
     private let session = OperationSession<MaintenancePreviewSnapshot>()
     private weak var prewarm: (any PrewarmResultProviding)?
-    private var lease: OperationLease?
-    private var previewCoordinatorGeneration: UInt64?
-    private var coordinatorSubscription: AnyCancellable?
+    private let leaseCoordinator: PreviewLeaseCoordinator
 
     init(
         kind: MaintenanceKind,
@@ -56,14 +54,12 @@ class MaintenanceViewModel: ObservableObject {
         self.process = process
         self.coordinator = coordinator
         self.prewarm = prewarm
+        leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
-        coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
-            guard let self,
-                  let previewGeneration = self.previewCoordinatorGeneration,
-                  previewGeneration != generation,
-                  self.session.preview != nil else { return }
+        leaseCoordinator.onInvalidation = { [weak self] in
+            guard let self, self.session.preview != nil else { return false }
             self.session.expirePreview(errorKey: "operation.error.stale_preview")
-            self.previewCoordinatorGeneration = nil
+            return true
         }
     }
 
@@ -73,7 +69,7 @@ class MaintenanceViewModel: ObservableObject {
     var isPreviewing: Bool { session.isPreviewing }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
-    var canConfirm: Bool { session.canConfirm && isCurrentPreview }
+    var canConfirm: Bool { session.canConfirm && leaseCoordinator.isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
     var errorMessageKey: String? { session.result?.errorKey }
     var errorMessage: String? {
@@ -102,7 +98,7 @@ class MaintenanceViewModel: ObservableObject {
         guard let item = kind.prewarmItem,
               let result = prewarm?.takeResult(item),
               case let .maintenance(output) = result.payload else { return }
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.captureGeneration()
         session.adoptPreview(MaintenancePreviewSnapshot(generation: UUID(), output: output))
         previewCapturedAt = result.capturedAt
     }
@@ -113,19 +109,18 @@ class MaintenanceViewModel: ObservableObject {
             prewarm?.userDidRescan(item)
         }
         previewCapturedAt = nil
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         showBusyNotice = false
-        guard let newLease = coordinator.acquire(kind.writeOperation) else {
+        guard leaseCoordinator.acquire(kind.writeOperation) else {
             showBusyNotice = true
             return
         }
-        lease = newLease
         guard let operationID = session.beginPreview() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.captureGeneration()
 
         do {
             let result = try await process.run(
@@ -134,9 +129,9 @@ class MaintenanceViewModel: ObservableObject {
                 timeout: 120
             )
             guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
-            guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
+            guard leaseCoordinator.isCurrentPreview else {
                 session.fail(OperationResult(status: .failed, errorKey: "operation.error.stale_preview"), id: operationID)
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             guard result.exitCode == 0 else { throw MoleBridgeError.commandFailed(result) }
@@ -147,16 +142,16 @@ class MaintenanceViewModel: ObservableObject {
                 ),
                 id: operationID
             )
-            releaseLease(clearPreviewGeneration: false)
+            leaseCoordinator.release(clearPreviewGeneration: false)
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
-            releaseLease()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 session.invalidate()
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             let summary: String?
@@ -169,7 +164,7 @@ class MaintenanceViewModel: ObservableObject {
                 OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
                 id: operationID
             )
-            releaseLease()
+            leaseCoordinator.release()
         }
     }
 
@@ -178,7 +173,7 @@ class MaintenanceViewModel: ObservableObject {
         await process.cancel()
         session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
         previewCapturedAt = nil
-        releaseLease()
+        leaseCoordinator.release()
     }
 
     func requestConfirmation() {
@@ -193,19 +188,17 @@ class MaintenanceViewModel: ObservableObject {
 
     func confirmMaintenance() async {
         guard session.isConfirmationPresented, canConfirm else { return }
-        guard let newLease = coordinator.acquire(kind.writeOperation) else {
+        guard leaseCoordinator.acquire(kind.writeOperation) else {
             showBusyNotice = true
             session.cancelConfirmation()
             return
         }
-        lease = newLease
         guard let execution = session.beginExecution() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
         showBusyNotice = false
-        coordinator.invalidatePreviews()
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.invalidateAndRecapture()
         previewCapturedAt = nil
 
         do {
@@ -220,12 +213,12 @@ class MaintenanceViewModel: ObservableObject {
                     id: execution.id
                 )
             }
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: execution.id)
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(execution.id) else { return }
             let summary: String?
@@ -238,8 +231,8 @@ class MaintenanceViewModel: ObservableObject {
                 OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
                 id: execution.id
             )
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         }
     }
 
@@ -247,19 +240,8 @@ class MaintenanceViewModel: ObservableObject {
         guard let operationID = session.beginExecutionCancellation() else { return }
         await process.cancel()
         session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
-        coordinator.invalidatePreviews()
-        releaseLease()
-    }
-
-    private var isCurrentPreview: Bool {
-        guard let generation = previewCoordinatorGeneration else { return false }
-        return coordinator.isCurrent(generation)
-    }
-
-    private func releaseLease(clearPreviewGeneration: Bool = true) {
-        lease?.release()
-        lease = nil
-        if clearPreviewGeneration { previewCoordinatorGeneration = nil }
+        leaseCoordinator.invalidatePreviews()
+        leaseCoordinator.release()
     }
 }
 
