@@ -30,7 +30,10 @@ struct AboutView: View {
     }
 
     private func loadMoleVersion() async {
-        guard let bridge = try? MoleBridge() else { return }
-        moleVersion = (try? await bridge.version()) ?? "—"
+        guard BundledMoleInfo.executableURL() != nil, let tag = BundledMoleInfo.tag() else {
+            moleVersion = String(localized: "about.version_unavailable")
+            return
+        }
+        moleVersion = tag
     }
 }

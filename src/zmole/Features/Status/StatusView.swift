@@ -67,12 +67,30 @@ struct StatusView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading && viewModel.snapshot == nil {
-            ProgressView("status.loading")
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 80)
-        } else if let snapshot = viewModel.snapshot {
-            StatusSnapshotContent(snapshot: snapshot, series: viewModel.series)
+        if let snapshot = viewModel.snapshot {
+            VStack(spacing: 14) {
+                if let errorKey = viewModel.errorMessageKey {
+                    VStack(spacing: 10) {
+                        UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                        Button("status.retry") { viewModel.retry() }
+                    }
+                    .frame(maxWidth: 560, alignment: .top)
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(spacing: 10) {
+                        UtilityNotice(title: "status.error_title", detail: errorMessage, isError: true)
+                        Button("status.retry") { viewModel.retry() }
+                    }
+                    .frame(maxWidth: 560, alignment: .top)
+                }
+                StatusSnapshotContent(snapshot: snapshot, series: viewModel.series)
+            }
+        } else if let errorKey = viewModel.errorMessageKey {
+            VStack(spacing: 14) {
+                UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                Button("status.retry") { viewModel.retry() }
+            }
+            .padding(.top, 12)
+            .frame(maxWidth: 560, alignment: .top)
         } else if let errorMessage = viewModel.errorMessage {
             VStack(spacing: 14) {
                 UtilityNotice(title: "status.error_title", detail: errorMessage, isError: true)

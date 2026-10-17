@@ -186,6 +186,10 @@ final class NoticeToneTests: XCTestCase {
     }
 }
 
+/// Page-structure guardrails. These assert on production source text on
+/// purpose: they exist to catch a regression (a page dropping the shared head
+/// or re-adding a duplicate toolbar), not to prove rendering behavior — the
+/// behavior itself is covered by the page ViewModel tests.
 final class PageHeadAdoptionTests: XCTestCase {
     func testTheFivePagesUseTheSharedPageHead() throws {
         let pages = [

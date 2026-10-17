@@ -14,6 +14,7 @@ final class UninstallViewModel: ObservableObject {
     @Published private(set) var iconsByPath: [String: NSImage] = [:]
     @Published private(set) var relatedPathsByID: [String: [String]] = [:]
     @Published private(set) var listErrorMessage: String?
+    @Published private(set) var listWasCancelled = false
 
     private let process: any MoleProcessControlling
     private let listStream: UninstallListStream
@@ -63,18 +64,14 @@ final class UninstallViewModel: ObservableObject {
     /// Rows whose identity is fully resolved (previewable/uninstallable).
     var apps: [UninstallApp] { listings.compactMap(\.uninstallApp) }
 
-    /// Kept for call sites that bound selection to application ids.
-    var selectedIDs: Set<String> { selectedPaths }
-
     var selectedApps: [UninstallApp] {
         apps.filter { selectedPaths.contains($0.path) }
     }
 
     var canPreview: Bool {
-        !selectedPaths.isEmpty && !isListing && !session.isBusy
-            && selectedPaths.allSatisfy { path in
-                listings.contains { $0.path == path && $0.isResolved }
-            }
+        guard !selectedPaths.isEmpty, !isListing, !session.isBusy else { return false }
+        let resolvedPaths = Set(listings.lazy.filter(\.isResolved).map(\.path))
+        return selectedPaths.isSubset(of: resolvedPaths)
     }
     var canConfirm: Bool { session.canConfirm && isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
@@ -82,6 +79,15 @@ final class UninstallViewModel: ObservableObject {
     var errorMessage: String? {
         if transientErrorKey != nil { return nil }
         return session.result?.summary
+    }
+
+    /// What the confirmation sheet covers: app count and known total size of
+    /// the current preview.
+    var confirmationDetail: String? {
+        guard let preview = session.preview else { return nil }
+        let bytes = preview.apps.compactMap(\.sizeBytes).reduce(0, +)
+        let sizeText = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        return String(localized: "uninstall.confirm_detail \(preview.apps.count) \(sizeText)")
     }
 
     func icon(for app: UninstallApp) -> NSImage? { iconsByPath[app.path] }
@@ -108,6 +114,7 @@ final class UninstallViewModel: ObservableObject {
         iconsByPath = [:]
         listings = []
         listCapturedAt = nil
+        listWasCancelled = false
         await performList()
     }
 
@@ -126,18 +133,30 @@ final class UninstallViewModel: ObservableObject {
         var seenPaths: Set<String> = []
         do {
             let rows = await listStream.rows()
+            var lastPublish = Date.distantPast
+            var dirty = false
             for try await row in rows {
                 UninstallListMerge.merge(row, into: &merged, indexByPath: &indexByPath)
                 seenPaths.insert(row.path)
-                // Publish each pass so rows show up while the scan is still
-                // resolving sizes; the wholesale assignment at the end keeps
-                // the listing free of leftovers from the previous pass.
+                dirty = true
+                // Throttle progressive publishes so the view is not rebuilt
+                // once per resolved row; the wholesale assignment at the end
+                // keeps the listing free of leftovers from the previous pass.
+                let now = Date()
+                if now.timeIntervalSince(lastPublish) >= 0.05 {
+                    listings = merged
+                    lastPublish = now
+                    dirty = false
+                }
+            }
+            if dirty {
                 listings = merged
             }
             hasLoaded = true
         } catch let error as MoleBridgeError where error == .cancelled {
             // Keep whatever was already resolved; a cancelled scan is not a
-            // failure and must not show as one.
+            // failure, but it is flagged so the UI can offer to resume.
+            listWasCancelled = true
         } catch {
             guard !CommandBusy.isBusy(error) else {
                 showBusyNotice = true
@@ -226,15 +245,6 @@ final class UninstallViewModel: ObservableObject {
         clearTransientError()
     }
 
-    func selectAll(_ ids: Set<String>) {
-        guard !isListing, !session.isBusy else { return }
-        let all = Set(listings.map(\.path))
-        selectedPaths = ids.isEmpty ? all : all.intersection(ids)
-        releaseLease()
-        session.invalidate()
-        clearTransientError()
-    }
-
     func clearSelection() {
         guard !isListing, !session.isBusy else { return }
         selectedPaths.removeAll()
@@ -248,10 +258,6 @@ final class UninstallViewModel: ObservableObject {
     var focusedApp: UninstallApp? {
         guard let focusedAppID else { return nil }
         return apps.first { $0.path == focusedAppID }
-    }
-
-    func focus(_ app: UninstallApp) {
-        focusedAppID = app.path
     }
 
     func focus(path: String) {
@@ -288,6 +294,8 @@ final class UninstallViewModel: ObservableObject {
             stdin: Self.confirmationInput,
             timeout: 120
         ), result.exitCode == 0 else {
+            transientErrorKey = "uninstall.error.related_failed"
+            objectWillChange.send()
             return
         }
         relatedLoadedIDs.insert(app.path)
@@ -297,8 +305,43 @@ final class UninstallViewModel: ObservableObject {
     static func relatedPaths(from output: String) -> [String] {
         output
             .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .compactMap { rawLine -> String? in
+                let line = MaintenanceOutput.stripANSI(String(rawLine))
+                guard let start = firstPathIndex(in: line) else { return nil }
+                let path = stripTrailingSize(from: String(line[start...]))
+                    .trimmingCharacters(in: .whitespaces)
+                return path.isEmpty ? nil : path
+            }
             .filter { $0.hasPrefix("/") || $0.hasPrefix("~/") }
+    }
+
+    /// First `/`- or `~/`-leading substring in a preview line, skipping the
+    /// leading "✓"/"System:"/"Review only:" decorations mole prints.
+    private static func firstPathIndex(in line: String) -> String.Index? {
+        let slash = line.firstIndex(of: "/")
+        let tilde = line.range(of: "~/")?.lowerBound
+        switch (slash, tilde) {
+        case let (.some(slashIndex), .some(tildeIndex)):
+            return min(slashIndex, tildeIndex)
+        case let (.some(slashIndex), .none):
+            return slashIndex
+        case let (.none, .some(tildeIndex)):
+            return tildeIndex
+        case (.none, .none):
+            return nil
+        }
+    }
+
+    /// Drops the trailing ` <size>` token that `format_uninstall_preview_path`
+    /// appends (e.g. `"/p 1.4GB"` -> `"/p"`).
+    private static func stripTrailingSize(from path: String) -> String {
+        guard let lastSpace = path.lastIndex(of: " ") else { return path }
+        let tail = String(path[path.index(after: lastSpace)...])
+        let sizePattern = #"^\d+(\.\d+)?\s?(B|KB|MB|GB|TB|PB|KiB|MiB|GiB|TiB)$"#
+        guard tail.range(of: sizePattern, options: [.regularExpression, .caseInsensitive]) != nil else {
+            return path
+        }
+        return String(path[..<lastSpace])
     }
 
     // MARK: - Preview / execution
@@ -350,7 +393,7 @@ final class UninstallViewModel: ObservableObject {
                     generation: operationID,
                     apps: batch,
                     selectedIDs: selectedPaths,
-                    output: outputSummary(result)
+                    output: MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
                 ),
                 id: operationID
             )
@@ -365,11 +408,14 @@ final class UninstallViewModel: ObservableObject {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
+                session.invalidate()
                 releaseLease()
                 return
             }
             let summary = (error as? MoleBridgeError).flatMap { commandError -> String? in
-                if case let .commandFailed(result) = commandError { return outputSummary(result) }
+                if case let .commandFailed(result) = commandError {
+                    return MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
+                }
                 return commandError.localizedDescription
             }
             session.fail(
@@ -429,6 +475,14 @@ final class UninstallViewModel: ObservableObject {
             session.finish(operationResult, id: execution.id)
             coordinator.invalidatePreviews()
             releaseLease()
+            if operationResult.status == .succeeded {
+                pruneRemoved(paths: Set(currentPreview.apps.map(\.path)))
+            } else if operationResult.status == .partial {
+                // Partially removed: succeeded and failed targets cannot be
+                // told apart reliably from the summary, so re-scan instead of
+                // leaving stale rows selectable.
+                await performList()
+            }
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
@@ -440,6 +494,7 @@ final class UninstallViewModel: ObservableObject {
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
+                session.invalidate()
                 coordinator.invalidatePreviews()
                 releaseLease()
                 return
@@ -516,11 +571,12 @@ final class UninstallViewModel: ObservableObject {
         objectWillChange.send()
     }
 
-    private func outputSummary(_ result: MoleCommandResult) -> String {
-        [result.stdout, result.stderr]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
+    private func pruneRemoved(paths: Set<String>) {
+        listings.removeAll { paths.contains($0.path) }
+        selectedPaths.subtract(paths)
+        relatedLoadedIDs.subtract(paths)
+        relatedPathsByID = relatedPathsByID.filter { !paths.contains($0.key) }
+        iconsByPath = iconsByPath.filter { !paths.contains($0.key) }
     }
 
     private static let confirmationInput = Data("y\n".utf8)

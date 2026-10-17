@@ -147,11 +147,12 @@ final class OverviewCacheTests: XCTestCase {
         let cache = makeCache(directory)
         let now = Date(timeIntervalSince1970: 5_000_000)
         let counts = EstimateCounter()
+        let clock = MutableNow(now)
         let viewModel = OverviewViewModel(
             storageLoader: makeLoader(counts: counts, failing: ["/System/Library"]),
             historyLoader: nil,
             storageCache: cache,
-            now: { now }
+            now: { clock.now }
         )
 
         await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
@@ -162,7 +163,15 @@ final class OverviewCacheTests: XCTestCase {
             "a scan that missed a path must not become the authoritative estimate"
         )
         XCTAssertNil(cache.load(now: now), "a partial scan must not write a cache")
-        XCTAssertTrue(viewModel.estimateNeedsRefresh, "the next appearance retries")
+        XCTAssertFalse(
+            viewModel.estimateNeedsRefresh,
+            "a failed scan backs off before retrying"
+        )
+        clock.advance(by: OverviewViewModel.estimateFailureCooldown + 60)
+        XCTAssertTrue(
+            viewModel.estimateNeedsRefresh,
+            "after the cool-down the next appearance retries"
+        )
     }
 
     func testCancelledScanDoesNotPersistAnything() async throws {
@@ -284,6 +293,24 @@ final class OverviewCacheTests: XCTestCase {
         XCTAssertNil(cache.load(now: now))
     }
 
+    func testSchemaOneCacheIsIgnoredAfterTheSchemaBump() throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = makeCache(directory)
+        let now = Date(timeIntervalSince1970: 5_000_000)
+
+        try JSONEncoder().encode(StorageEstimateCacheEntry(
+            schemaVersion: 1,
+            capturedAt: now,
+            sums: StorageSums(applications: 1, system: 1, developer: 1, users: 1)
+        )).write(to: cache.fileURL)
+
+        XCTAssertNil(
+            cache.load(now: now),
+            "schema-1 entries carry the old data-volume-inflated system sum and must be discarded"
+        )
+    }
+
     func testIncompleteCacheIsNotTreatedAsFresh() async throws {
         let directory = try tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -378,5 +405,27 @@ private actor ScanGate {
     func release() {
         continuation?.resume()
         continuation = nil
+    }
+}
+
+/// Injectable, advanceable clock for back-off tests.
+private final class MutableNow: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(_ value: Date) {
+        self.value = value
+    }
+
+    var now: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.lock()
+        value += interval
+        lock.unlock()
     }
 }

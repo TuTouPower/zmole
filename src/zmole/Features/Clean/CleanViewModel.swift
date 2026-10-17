@@ -69,6 +69,13 @@ final class CleanViewModel: ObservableObject {
         return result.summary
     }
 
+    /// What the confirmation sheet covers: entry count and reclaim total of
+    /// the current preview.
+    var confirmationDetail: String? {
+        guard let preview = session.preview else { return nil }
+        return String(localized: "clean.confirm_detail \(preview.entries.count) \(preview.reclaimText)")
+    }
+
     /// Shows a finished background prewarm preview without re-running the
     /// scan. Does nothing when the user already has a preview or no prewarm
     /// result is available.
@@ -84,7 +91,7 @@ final class CleanViewModel: ObservableObject {
 
     func previewClean() async {
         guard !session.isBusy else { return }
-        prewarm?.userDidRescan(.cleanDryRun)
+        await prewarm?.userDidRescanAndWaitForTermination(.cleanDryRun)
         previewCapturedAt = nil
         releaseLease()
         session.invalidate()
@@ -104,7 +111,10 @@ final class CleanViewModel: ObservableObject {
         do {
             let generation = try previewStore.begin()
             try await runDryRun(operationID: operationID)
-            guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
+            guard session.accepts(operationID), !session.isCancelling(operationID) else {
+                releaseLease()
+                return
+            }
             guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
                 session.fail(
                     OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
@@ -114,7 +124,8 @@ final class CleanViewModel: ObservableObject {
                 releaseLease()
                 return
             }
-            let snapshot = try previewStore.read(generation)
+            let store = previewStore
+            let snapshot = try await Task.detached { try store.read(generation) }.value
             session.acceptPreview(snapshot, id: operationID)
             lastReclaimBytes = snapshot.reclaimBytes
             releaseLease(clearPreviewGeneration: false)
@@ -129,6 +140,7 @@ final class CleanViewModel: ObservableObject {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
+                session.invalidate()
                 releaseLease()
                 return
             }
@@ -138,7 +150,7 @@ final class CleanViewModel: ObservableObject {
                 summary = nil
                 errorKey = previewError.errorKey
             } else if case let MoleBridgeError.commandFailed(result) = error {
-                summary = outputSummary(result)
+                summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
                 errorKey = "clean.error.failed"
             } else {
                 summary = error.localizedDescription
@@ -246,7 +258,7 @@ final class CleanViewModel: ObservableObject {
             let result = try await process.run(["clean"], stdin: nil, timeout: 600)
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             showBusyNotice = false
-            let summary = outputSummary(result)
+            let summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
             let operationResult: OperationResult
             if result.exitCode == 0 {
                 operationResult = OperationResult(status: .succeeded, summary: summary)
@@ -272,6 +284,7 @@ final class CleanViewModel: ObservableObject {
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
+                session.invalidate()
                 coordinator.invalidatePreviews()
                 releaseLease()
                 return
@@ -316,12 +329,5 @@ final class CleanViewModel: ObservableObject {
         if clearPreviewGeneration {
             previewCoordinatorGeneration = nil
         }
-    }
-
-    private func outputSummary(_ result: MoleCommandResult) -> String {
-        [result.stdout, result.stderr]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
     }
 }

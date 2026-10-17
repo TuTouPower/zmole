@@ -13,6 +13,7 @@ struct PurgeView: View {
                 DestructiveConfirmationView(
                     title: "purge.confirm_title",
                     summary: "purge.confirm_summary",
+                    detail: viewModel.confirmationDetail,
                     onConfirm: { Task { await viewModel.confirmExecution() } },
                     onCancel: { viewModel.cancelConfirmation() }
                 )
@@ -22,23 +23,6 @@ struct PurgeView: View {
         }
         .navigationTitle("sidebar.purge")
         .task { viewModel.adoptPrewarmPreviewIfAvailable() }
-        .toolbar {
-            ToolbarItem {
-                if viewModel.isPreviewing {
-                    Button("purge.cancel") { Task { await viewModel.cancelPreview() } }
-                } else if viewModel.isExecuting {
-                    Button("purge.cancel") { Task { await viewModel.cancelExecution() } }
-                } else {
-                    Button {
-                        Task { await viewModel.previewPurge() }
-                    } label: {
-                        Label("purge.preview", systemImage: "eye")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MoleTheme.accent)
-                }
-            }
-        }
         .sheet(isPresented: $showingPathsEditor) {
             PurgePathsEditorView(viewModel: pathsViewModel) { showingPathsEditor = false }
         }
@@ -47,13 +31,12 @@ struct PurgeView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("purge.eyebrow")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(MoleTheme.accentStrong)
-                        .textCase(.uppercase)
-                    Text("purge.title").font(.system(size: 30, weight: .bold))
-                    Text("purge.page_subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                MolePageHead(
+                    eyebrow: "purge.eyebrow",
+                    title: "purge.title",
+                    subtitle: "purge.page_subtitle"
+                ) {
+                    previewOrCancelButton
                     if let capturedAt = viewModel.previewCapturedAt {
                         Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
                             .font(.system(size: 11))
@@ -73,9 +56,9 @@ struct PurgeView: View {
                 }
 
                 if viewModel.isPreviewing {
-                    busyState(title: "purge.previewing")
+                    UtilityBusyState(title: "purge.previewing")
                 } else if viewModel.isExecuting {
-                    busyState(title: "purge.executing")
+                    UtilityBusyState(title: "purge.executing")
                 } else if let preview = viewModel.preview {
                     outputPanel(output: preview.output)
                 } else {
@@ -91,7 +74,9 @@ struct PurgeView: View {
                 } else if let errorMessage = viewModel.errorMessage {
                     UtilityNotice(title: "purge.error_title", detail: errorMessage, isError: true)
                 }
-                if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+                if let executionSummary = viewModel.executionSummary,
+                   !executionSummary.isEmpty,
+                   viewModel.result?.status == .succeeded {
                     UtilityNotice(title: "purge.result", detail: executionSummary, symbol: "checkmark.circle")
                 }
             }
@@ -100,12 +85,22 @@ struct PurgeView: View {
         .background(MoleTheme.background)
     }
 
-    private func busyState(title: LocalizedStringKey) -> some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text(title).foregroundStyle(.secondary)
+    /// Page action: preview, or cancel whatever the page is currently doing.
+    @ViewBuilder
+    private var previewOrCancelButton: some View {
+        if viewModel.isPreviewing {
+            Button("purge.cancel") { Task { await viewModel.cancelPreview() } }
+        } else if viewModel.isExecuting {
+            Button("purge.cancel") { Task { await viewModel.cancelExecution() } }
+        } else {
+            Button {
+                Task { await viewModel.previewPurge() }
+            } label: {
+                Label("purge.preview", systemImage: "eye")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MoleTheme.accent)
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
     }
 
     private func outputPanel(output: String) -> some View {

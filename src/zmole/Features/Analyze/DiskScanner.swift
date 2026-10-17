@@ -82,8 +82,10 @@ struct DiskScanResult: Equatable, Sendable {
     let levels: [String: DiskLevel]
 }
 
-enum DiskScanError: Error, Equatable, LocalizedError, Sendable {
+enum DiskScanError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case unreadable(String)
+
+    var errorKey: String { "disk.error.unreadable" }
 
     var errorDescription: String? {
         switch self {
@@ -115,7 +117,7 @@ struct LiveDiskScanner: DiskScanning {
     }
 
     func measureSubtree(_ path: String, deduplicator: HardLinkDeduplicator) async -> DiskScanResult {
-        await Task.detached(priority: .utility) {
+        let work = Task.detached(priority: .utility) {
             var levels: [String: DiskLevel] = [:]
             let outcome = Self.walk(path, deduplicator: deduplicator, levels: &levels)
             return DiskScanResult(
@@ -124,7 +126,12 @@ struct LiveDiskScanner: DiskScanning {
                 isReadable: outcome.isReadable,
                 levels: levels
             )
-        }.value
+        }
+        return await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
     struct NodeStat {
@@ -208,6 +215,12 @@ struct LiveDiskScanner: DiskScanning {
         var entries: [DiskEntry] = []
         var total: Int64 = 0
         for name in names.sorted() {
+            if Task.isCancelled {
+                // Partial result; the caller discards it once the measurable
+                // task has been cancelled.
+                levels[path] = DiskLevel(entries: entries, totalSize: total)
+                return WalkOutcome(totalSize: total, isReadable: false)
+            }
             let child = childPath(path, name)
             guard let info = nodeStat(child) else {
                 entries.append(

@@ -9,9 +9,9 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 |模块|职责|边界|
 |---|---|---|
 |`App`|窗口、侧边栏十页导航、本地化、设置、依赖装配|不直接 `Process`|
-|`Features/*`|Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Whitelist|用户意图 → Bridge API + UI 状态|
+|`Features/*`|Overview / Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Installers / Whitelist / Settings / Confirmation / Operations|用户意图 → Bridge API + UI 状态|
 |`MoleBridge`|定位 bundle 内 mole、拼参数、跑 `Process`、读 stdout/stderr、解析退出码与 JSON|唯一允许 spawn mole 的层|
-|`Models`|命令结果、预览条目、白名单行等值类型|与 UI 解耦|
+|`Models`|预留共享值类型落点（当前为空目录）；命令结果、预览条目、白名单行等值类型按 Feature 就近存放|与 UI 解耦|
 
 侧边栏主导航为十个目的地：概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。设置从系统菜单升为正式页面，系统菜单的设置命令选中该页。⌘K 命令面板只做页面跳转，不承载删除或执行动作。自定义窗口壳只替换导航；各页面继续呈现既有功能，破坏性语义留在各自的页面 task。优化与项目清理是两个独立页面：任务/产物行只读，计划来自本次 dry-run，执行范围由 mole 决定；两者的删除保持永久删除，白名单与扫描目录分别在设置与项目清理页编辑。
 
@@ -35,9 +35,10 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 ```
 
 - 破坏性命令：本次预览成功 → 界面确认（对象与预览一致）→ 再 spawn 执行。预览失败、取消、目标变化后禁止执行。确认前不创建**执行**用 `Process`（预览 spawn 允许）。
-- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是预览快照，执行时 mole 会重扫；UI 须写明。只展示**本次** dry-run 写入的内容，禁止沿用旧文件。
+- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是预览快照，执行时 mole 会重扫；UI 须写明。只展示**本次** dry-run 写入的内容，禁止沿用旧文件。用户预览开始前会等待被取消的预跑进程完全退出，避免两侧并发写同一文件。
 - 白名单：读写 `~/.config/mole/whitelist`（及 optimize 对应文件），不跑 whitelist TUI。
 - App 设置（语言覆盖等）存本应用容器；mole 配置仍在 `~/.config/mole/`。
+- mole 配置文件（`purge_paths`、`whitelist`、`whitelist_optimize`）在本仓视为纯数据：GUI 逐行校验形状后原样写入，由 mole 负责解释与展开安全；GUI 不做 shell 转义（也不按 shell 求值）。
 
 ### 卸载确认协议
 
@@ -47,9 +48,9 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 ### 进程生命周期
 
-MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。
+MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。写端管道忽略 SIGPIPE（fd 级 `F_SETNOSIGPIPE`），SIGTERM→SIGKILL 前复核进程组身份（`getpgid(pid) == pid`）；应用退出时由 AppDelegate 取消全部活跃 runner，限时等待 2 秒。子进程环境在启动时剥离全部 `MOLE_*` 变量，其余继承。
 
-`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、status --json、clean 执行、optimize、purge、概览估算）各持一条独立 `MoleBridge`，互不阻塞；卸载名单流与空闲预跑各持独立实例；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、clean 执行、optimize、purge、概览估算）各持独立 `MoleBridge`，互不阻塞；概览估算持 3 条通道以并发探测多个目录（单通道内串行）；卸载名单流与空闲预跑各持独立实例；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
 
 ### 卸载名单与确认
 
@@ -78,7 +79,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
 
-磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用三次固定 `analyze` 加系统段逐项求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
+磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用 `analyze` 目录求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。各探测经 3 条独立估算通道并发执行（单通道内串行，平均分摊）。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
 
 估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入时先用缓存即时渲染（“其他”用实时 status 已用现算），后台仅在缓存缺失、超过 TTL（6 小时）或收到写入失效信号时，经独立只读通道重算并回写；不提供手动计算按钮。缓存超过最大年龄（7 天）或 schema 不符即作废。只有完整扫描（四个路径全部可读）才落盘并接替当前估算；扫描被取消或缺少任一路径时不写缓存、不替换已展示结果，下一次进入概览重试。
 
@@ -86,11 +87,11 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ## 磁盘页扫描
 
-磁盘页不调用 mole：生产扫描根是 `/`，`LiveDiskScanner` 在应用内只读遍历目录（`lstat`）。文件大小取 `st_blocks × 512`；符号链接只计链接自身；同一扫描内指向同一文件的硬链接只计一次（行仍显示自身分配块，父扫描已计入的文件其子目录层合计不再重复计入）；与父目录设备号不同的子目录不计入父合计，进入后单独计算。进入目录先列出直接子项与直接文件大小，子目录大小在后台逐个补上；扫描完成的层级保留在 `AnalyzeViewModel` 的会话缓存中，再次进入不再读盘，只有「重新分析」重扫当前目录及其子树并替换结果。大小未知的目录显示计算中、不显示为 0、不计入合计与面积图；无法读取的目录显示未扫描。demo 模式注入内存目录源，不读真实文件系统。概览五段估算仍走 `analyze`，与本路径无关。
+磁盘页不调用 mole：生产扫描根是 `/`，`LiveDiskScanner` 在应用内只读遍历目录（`lstat`）。文件大小取 `st_blocks × 512`；符号链接只计链接自身；同一扫描内指向同一文件的硬链接只计一次（行仍显示自身分配块，父扫描已计入的文件其子目录层合计不再重复计入）；与父目录设备号不同的子目录不计入父合计，进入后单独计算。进入目录先列出直接子项与直接文件大小，子目录大小在后台补上（最多 3 路并发，测量子任务随刷新取消）；扫描完成的层级保留在 `AnalyzeViewModel` 的会话缓存中（受容量上限约束），再次进入不再读盘，只有「重新分析」重扫当前目录及其子树并替换结果。大小未知的目录显示计算中、不显示为 0、不计入合计与面积图；无法读取的目录显示未扫描。demo 模式注入内存目录源，不读真实文件系统。概览五段估算仍走 `analyze`，与本路径无关。
 
 ## Demo 装配边界
 
-`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态；`--demo-data-root` 将 clean-list 与 whitelist 写入指定 scratch 目录，不触碰 `~/.config/mole/`。
+`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态且仅在 `--demo` 下生效；`--demo-data-root` 只接受用户临时目录内的路径（越界值忽略并回退随机 scratch 目录），将 clean-list 与 whitelist 写入该目录，不触碰 `~/.config/mole/`。
 
 ## 与上游关系
 

@@ -51,6 +51,7 @@ struct UninstallView: View {
                 DestructiveConfirmationView(
                     title: "uninstall.confirm_title",
                     summary: "uninstall.confirm_summary",
+                    detail: viewModel.confirmationDetail,
                     onConfirm: { Task { await viewModel.confirmExecution() } },
                     onCancel: { viewModel.cancelConfirmation() }
                 )
@@ -75,7 +76,7 @@ struct UninstallView: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
             controls
-            if !viewModel.selectedIDs.isEmpty {
+            if !viewModel.selectedPaths.isEmpty {
                 selectionShelf
             }
             Divider()
@@ -185,7 +186,19 @@ struct UninstallView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.listings.isEmpty {
-            UtilityEmptyState(symbol: "square.stack.3d.up", title: "sidebar.uninstall", message: "uninstall.empty")
+            if viewModel.listWasCancelled {
+                VStack(spacing: 14) {
+                    UtilityNotice(title: "uninstall.list_cancelled", symbol: "exclamationmark.circle")
+                    Button("uninstall.list_resume") { Task { await viewModel.loadList() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(MoleTheme.accent)
+                }
+                .frame(maxWidth: 480)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                UtilityEmptyState(symbol: "square.stack.3d.up", title: "sidebar.uninstall", message: "uninstall.empty")
+            }
         } else {
             HStack(alignment: .top, spacing: 0) {
                 listPane
@@ -396,7 +409,14 @@ struct UninstallView: View {
 
     @ViewBuilder
     private var resultPanel: some View {
-        if viewModel.showBusyNotice {
+        if viewModel.listWasCancelled {
+            VStack(alignment: .leading, spacing: 8) {
+                UtilityNotice(title: "uninstall.list_cancelled", symbol: "exclamationmark.circle")
+                Button("uninstall.list_resume") { Task { await viewModel.loadList() } }
+                    .buttonStyle(.bordered)
+            }
+            .padding(12)
+        } else if viewModel.showBusyNotice {
             RecoverableBusyNotice()
                 .padding(12)
         } else if let preview = viewModel.preview {
@@ -425,8 +445,12 @@ struct UninstallView: View {
             .background(.bar)
             .overlay(alignment: .top) { Divider() }
         } else if let errorMessageKey = viewModel.errorMessageKey {
-            UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
-                .padding(12)
+            UtilityNotice(
+                title: LocalizedStringKey(errorMessageKey),
+                detail: viewModel.executionSummary,
+                isError: true
+            )
+            .padding(12)
         } else if let errorMessage = viewModel.errorMessage {
             UtilityNotice(title: "uninstall.error_title", detail: errorMessage, isError: true)
                 .padding(12)

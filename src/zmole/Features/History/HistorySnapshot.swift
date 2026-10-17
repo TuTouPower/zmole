@@ -187,9 +187,18 @@ struct HistoryDeletion: Decodable, Equatable, Sendable {
     }
 }
 
-enum HistorySnapshotError: Error, Equatable, LocalizedError, Sendable {
+enum HistorySnapshotError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case invalidJSON
     case invalidSession
+
+    var errorKey: String {
+        switch self {
+        case .invalidJSON:
+            return "history.error.invalid_json"
+        case .invalidSession:
+            return "history.error.invalid_session"
+        }
+    }
 
     var errorDescription: String? {
         switch self {

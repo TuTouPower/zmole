@@ -15,7 +15,8 @@ fail() {
 }
 
 setup_fixture() {
-    WORK="$(mktemp -d)"
+    WORK="$(mktemp -d)" || exit 1
+    trap 'rm -rf "${WORK:-}"' EXIT
     HOME="$WORK/home"
     export HOME
     SCAN="$HOME/Downloads"

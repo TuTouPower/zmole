@@ -95,21 +95,6 @@ enum CleanPreviewParser {
 
     static func parseHumanSize(_ text: String) -> Int64? {
         let head = text.split(separator: ",").first.map(String.init) ?? text
-        let trimmed = head.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty || trimmed.lowercased().contains("unknown") { return nil }
-
-        let parts = trimmed.split(separator: " ")
-        guard let numberText = parts.first, let value = Double(numberText) else { return nil }
-        let unit = parts.count > 1 ? parts[1].uppercased() : "B"
-        let multiplier: Double
-        switch unit {
-        case "B": multiplier = 1
-        case "KB", "K": multiplier = 1_000
-        case "MB", "M": multiplier = 1_000_000
-        case "GB", "G": multiplier = 1_000_000_000
-        case "TB", "T": multiplier = 1_000_000_000_000
-        default: return nil
-        }
-        return Int64((value * multiplier).rounded())
+        return HumanSizeParser.bytes(from: head)
     }
 }

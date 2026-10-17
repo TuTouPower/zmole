@@ -35,6 +35,16 @@ private final class MoleProcessBox: @unchecked Sendable {
     }
 }
 
+/// Shared deterministic status fixture for the demo command sources.
+enum DemoFixtures {
+    static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
+        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
+        return """
+        {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
+        """
+    }
+}
+
 /// Deterministic command source for screenshot and UI review runs.
 /// It never resolves or launches the bundled executable.
 private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable {
@@ -78,7 +88,7 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
             let path = arguments.last.flatMap { $0.hasPrefix("/") || $0.hasPrefix("~") ? $0 : nil }
             return MoleCommandResult(stdout: Self.analyzeFixture(path: path), stderr: "", exitCode: 0)
         case "status":
-            return MoleCommandResult(stdout: Self.statusFixture(stale: state == .stale, includeDetails: state != .partial), stderr: "", exitCode: 0)
+            return MoleCommandResult(stdout: DemoFixtures.statusFixture(stale: state == .stale, includeDetails: state != .partial), stderr: "", exitCode: 0)
         case "history":
             return MoleCommandResult(stdout: Self.historyFixture, stderr: "", exitCode: 0)
         case "installer":
@@ -195,13 +205,6 @@ private final class DemoMoleProcess: MoleProcessControlling, @unchecked Sendable
     {"path":"/Users/demo","overview":true,"entries":[]}
     """
 
-    private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
-        return """
-        {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
-        """
-    }
-
     private static let historyFixture = """
     {"limit":20,"sessions":[{"command":"clean","ended_at":"2026-09-22T10:20:00+08:00","items":12,"size":"3.2 GB"}],"deletions":[{"path":"/Users/demo/Library/Caches","timestamp":"2026-09-22T10:20:04+08:00","mode":"clean","status":"success","size_kb":128}]}
     """
@@ -256,7 +259,7 @@ private struct DemoMoleStreaming: MoleStreaming {
                         continuation.finish(throwing: StatusWatchError.disconnected)
                         return
                     }
-                    continuation.yield(.stdoutLine(Data(Self.statusFixture(stale: state == .stale, includeDetails: state != .partial).utf8)))
+                    continuation.yield(.stdoutLine(Data(DemoFixtures.statusFixture(stale: state == .stale, includeDetails: state != .partial).utf8)))
                     sampleCount += 1
                     try? await Task.sleep(nanoseconds: state == .busy ? 3_000_000_000 : 800_000_000)
                 }
@@ -264,13 +267,6 @@ private struct DemoMoleStreaming: MoleStreaming {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
-    }
-
-    private static func statusFixture(stale: Bool, includeDetails: Bool) -> String {
-        let details = includeDetails ? ",\"disk_io\":{\"read_rate\":12.4,\"write_rate\":3.8},\"network\":[{\"name\":\"en0\",\"rx_rate_mbs\":4.2,\"tx_rate_mbs\":1.3,\"ip\":\"192.0.2.10\"}],\"top_processes\":[{\"pid\":101,\"name\":\"Demo Editor\",\"cpu\":12.1,\"memory\":4.2,\"memory_bytes\":536870912},{\"pid\":202,\"name\":\"swift-build\",\"cpu\":8.4,\"memory\":2.1,\"memory_bytes\":268435456} ],\"thermal\":{\"cpu_temp\":48},\"zombie_count\":0" : ""
-        return """
-        {"health_score":92,"cpu":{"usage":23.5},"memory":{"used":8589934592,"total":17179869184,"used_percent":50.0},"disks":[{"mount":"/","used":300647710720,"total":994662584320,"used_percent":30.2}]\(details),"process_stale":\(stale)}
-        """
     }
 }
 
@@ -355,10 +351,30 @@ struct DemoConfiguration: Equatable, Sendable {
         page = Self.value(after: "--demo-page", in: arguments)
             .flatMap(AppDestination.init(demoValue:)) ?? .overview
         state = Self.value(after: "--demo-state", in: arguments).flatMap(DemoState.init(rawValue:)) ?? .populated
-        let root = Self.value(after: "--demo-data-root", in: arguments).map { URL(fileURLWithPath: $0, isDirectory: true) }
-        dataRoot = isEnabled ? root : nil
-        language = Self.value(after: "--demo-language", in: arguments).flatMap(AppLanguage.init(rawValue:))
-        appearance = Self.value(after: "--demo-appearance", in: arguments).flatMap(DemoAppearance.init(rawValue:))
+        let root = Self.value(after: "--demo-data-root", in: arguments)
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        dataRoot = isEnabled ? Self.validatedDataRoot(root) : nil
+        language = isEnabled
+            ? Self.value(after: "--demo-language", in: arguments).flatMap(AppLanguage.init(rawValue:))
+            : nil
+        appearance = isEnabled
+            ? Self.value(after: "--demo-appearance", in: arguments).flatMap(DemoAppearance.init(rawValue:))
+            : nil
+    }
+
+    /// Demo data must stay inside the user's temporary directory so a stray
+    /// `--demo-data-root` can never create or overwrite files elsewhere.
+    private static func validatedDataRoot(_ root: URL?) -> URL? {
+        guard let root else { return nil }
+        let tempPath = FileManager.default.temporaryDirectory.standardizedFileURL.path
+        let candidate = root.standardizedFileURL.path
+        guard candidate == tempPath || candidate.hasPrefix(tempPath + "/") else {
+            FileHandle.standardError.write(
+                Data("--demo-data-root outside the temporary directory was ignored: \(candidate)\n".utf8)
+            )
+            return nil
+        }
+        return root
     }
 
     private static func value(after flag: String, in arguments: [String]) -> String? {
@@ -564,23 +580,23 @@ final class AppDependencies: ObservableObject {
                 uninstallStream: DemoUninstallListStream(state: configuration.state)
             )
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
-                  let streamBridge = try? MoleBridge(),
-                  let cleanBridge = try? MoleBridge(),
-                  let uninstallStreamBridge = try? MoleBridge(),
-                  let prewarmBridge = try? MoleBridge() {
+                   let streamBridge = try? MoleBridge(),
+                   let cleanBridge = try? MoleBridge(),
+                   let uninstallStreamBridge = try? MoleBridge(),
+                   let prewarmBridge = try? MoleBridge() {
             // One bridge per one-shot consumer: a slow read no longer rejects
             // other pages as busy. Writes stay mutually exclusive via the
             // coordinator lease, not the bridge.
             lanes = MoleCommandLanes(
-                history: bridges[0],
-                uninstall: bridges[1],
+                history: bridges.history,
+                uninstall: bridges.uninstall,
                 uninstallStream: uninstallStreamBridge,
-                installer: bridges[2],
-                statusCommand: bridges[3],
-                cleanCommand: bridges[4],
-                optimize: bridges[5],
-                purge: bridges[6],
-                estimate: bridges[7],
+                installer: bridges.installer,
+                cleanCommand: bridges.cleanCommand,
+                optimize: bridges.optimize,
+                purge: bridges.purge,
+                estimate: bridges.estimate,
+                estimatePool: [bridges.estimate] + bridges.estimateExtras,
                 prewarm: prewarmBridge,
                 statusStream: streamBridge,
                 cleanStream: cleanBridge
@@ -664,11 +680,7 @@ final class AppDependencies: ObservableObject {
             analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
         }
 
-        let statusBox = MoleProcessBox(lanes.statusCommand)
-        let statusLoader = StatusSnapshotLoader { arguments in
-            try await statusBox.process.run(arguments, stdin: nil, timeout: 120)
-        }
-        statusViewModel = StatusViewModel(streaming: lanes.statusStream, loader: statusLoader)
+        statusViewModel = StatusViewModel(streaming: lanes.statusStream)
 
         let historyBox = MoleProcessBox(lanes.history)
         let historyLoader = HistorySnapshotLoader { arguments in
@@ -681,11 +693,13 @@ final class AppDependencies: ObservableObject {
             prewarm: prewarm
         )
 
-        let estimateBox = MoleProcessBox(lanes.estimate)
-        let estimateAnalyzeLoader = AnalyzeSnapshotLoader { arguments in
-            try await estimateBox.process.run(arguments, stdin: nil, timeout: 120)
+        let estimateLoaders = lanes.estimatePool.map { lane in
+            let box = MoleProcessBox(lane)
+            return AnalyzeSnapshotLoader { arguments in
+                try await box.process.run(arguments, stdin: nil, timeout: 120)
+            }
         }
-        let storageLoader = StorageEstimateLoader(loader: estimateAnalyzeLoader)
+        let storageLoader = StorageEstimateLoader(loaders: estimateLoaders)
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,
             historyLoader: historyLoader,
@@ -694,10 +708,12 @@ final class AppDependencies: ObservableObject {
         )
 
         if let prewarm {
-            prewarm.externalActivityProvider = { [weak analyzeViewModel, weak uninstallViewModel, weak installersViewModel] in
+            prewarm.externalActivityProvider = { [weak analyzeViewModel, weak uninstallViewModel, weak installersViewModel, weak cleanViewModel] in
                 (analyzeViewModel?.isScanning ?? false)
                     || (uninstallViewModel?.isListing ?? false)
                     || (installersViewModel?.isListing ?? false)
+                    || (cleanViewModel?.preview != nil)
+                    || (cleanViewModel?.isConfirmationPresented ?? false)
             }
             prewarm.cleanPreviewActiveProvider = { [weak cleanViewModel] in
                 guard let cleanViewModel else { return false }
@@ -706,22 +722,75 @@ final class AppDependencies: ObservableObject {
                     || cleanViewModel.isPreviewing
             }
             // Published changes fire before the mutation lands; hop one main
-            // actor turn so the idle check reads the new values.
+            // actor turn so the idle check reads the new values. A short
+            // coalescing window keeps scan-time publish storms from spawning
+            // one MainActor task per change.
+            let coalescer = ActivityCoalescer(prewarm: prewarm)
             prewarmSubscriptions = [
-                analyzeViewModel.objectWillChange.sink { [weak prewarm] _ in
-                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                analyzeViewModel.objectWillChange.sink { _ in
+                    Task { @MainActor in coalescer.notify() }
                 },
-                uninstallViewModel.objectWillChange.sink { [weak prewarm] _ in
-                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                uninstallViewModel.objectWillChange.sink { _ in
+                    Task { @MainActor in coalescer.notify() }
                 },
-                installersViewModel.objectWillChange.sink { [weak prewarm] _ in
-                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                installersViewModel.objectWillChange.sink { _ in
+                    Task { @MainActor in coalescer.notify() }
                 },
-                cleanViewModel.objectWillChange.sink { [weak prewarm] _ in
-                    Task { @MainActor in prewarm?.noteActivityChanged() }
+                cleanViewModel.objectWillChange.sink { _ in
+                    Task { @MainActor in coalescer.notify() }
                 }
             ]
             prewarm.noteActivityChanged()
+        }
+
+        if !configuration.isEnabled {
+            installShutdownHandler()
+        }
+    }
+
+    /// Cancels every active command lane and stream at app termination,
+    /// waiting up to two seconds so destructive children (bash/rm) cannot
+    /// outlive the GUI.
+    private func installShutdownHandler() {
+        let processLanes = lanes.allProcessLanes
+        let streams = lanes.allStreams
+        AppDelegate.shutdownHandler = {
+            let semaphore = DispatchSemaphore(value: 0)
+            Task.detached {
+                await withTaskGroup(of: Void.self) { group in
+                    for lane in processLanes {
+                        group.addTask { await lane.cancel() }
+                    }
+                    for stream in streams {
+                        group.addTask { await stream.cancel() }
+                    }
+                }
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 2)
+        }
+    }
+}
+
+/// Coalesces activity-change notifications into one prewarm poke per short
+/// window so high-frequency publishes cannot flood the main actor.
+@MainActor
+private final class ActivityCoalescer {
+    private weak var prewarm: PrewarmService?
+    private var pending: Task<Void, Never>?
+    private static let windowNanoseconds: UInt64 = 200_000_000
+
+    init(prewarm: PrewarmService) {
+        self.prewarm = prewarm
+    }
+
+    func notify() {
+        guard pending == nil else { return }
+        pending = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.windowNanoseconds)
+            guard let self else { return }
+            self.pending = nil
+            self.prewarm?.noteActivityChanged()
         }
     }
 }

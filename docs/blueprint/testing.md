@@ -6,7 +6,7 @@
 
 ## doctor_cmd
 
-环境前置检查：模板工具链可收集；`md_kx` 在 PATH。完整 Xcode（含 `xcodebuild`）在工程落地后纳入本检查；当前本机若仅有 Command Line Tools，不在此硬失败。
+环境前置检查：模板工具链可收集；`md_kx` 在 PATH；完整 Xcode（`xcodebuild`）与 XcodeGen 为当前门禁必需项。图标单测还依赖 `bash`、`swift`、`sips`、`iconutil`（见 `AppIconTests`）。
 
 ```bash
 pytest .repo_template/tests -q --collect-only -m contract
@@ -18,7 +18,7 @@ xcodegen generate
 
 ## test_cmd
 
-日常测试（红/绿）。Xcode 工程与单测 target 落地前，业务侧写「无」；落地后改为：
+日常测试（红/绿）：
 
 ```bash
 xcodegen generate
@@ -29,7 +29,7 @@ bash tests/integration/installer_interface_test.sh
 bash tests/integration/uninstall_stream_test.sh
 ```
 
-当前阶段以模板工具链测试为主；业务 Swift 测试随首个实现 task 接入本命令。填本命令时按「门禁类别清单」逐类覆盖；项目不适用某类写「无」并说明理由。
+门禁按「门禁类别清单」逐类覆盖；业务 Swift 单测与三条集成脚本均已接入本命令。
 
 ## blackbox_verify
 
@@ -51,9 +51,11 @@ xcodebuild test -scheme Zmole -destination 'platform=macOS' \
   -only-testing:ZmoleTests/StatusStreamTests
 ```
 
-该测试仅使用 streaming fixture，验证首帧渐进字段、暂停/恢复、离页停止、断流和磁盘 I/O warming；不调用真实 mole。真实只读黑盒路径由 Bridge 层以 `status --json` / `status --watch` 夹具验证，禁止将破坏性命令纳入 blackbox smoke。
+该测试仅使用 streaming fixture，验证首帧渐进字段、零值、网络聚合、共享流与有界趋势、断流重试与 pause/stop 取消底层流；不调用真实 mole。真实只读黑盒路径由 Bridge 层以 `status --watch` 夹具验证，禁止将破坏性命令纳入 blackbox smoke。
 
 真实只读黑盒仅允许检测捆绑入口并运行 `--version`、`status --json` 等命令；破坏性命令只用 dry-run 或测试夹具。Demo smoke 不得检测或启动 PATH 中的 `mo`。
+
+视觉验收截图证据存放于 `docs/guides/visual_acceptance/`（按 `<语言>_<外观>_<尺寸>_<页面>.png` 命名，附 README 说明构建版本、覆盖范围与已知边界）。
 
 ## Release zip
 

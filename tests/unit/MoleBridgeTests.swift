@@ -83,6 +83,44 @@ final class MoleBridgeTests: XCTestCase {
         XCTAssertEqual(result.stderr.utf8.count, 1_048_576)
     }
 
+    func testAggregateStdoutOverLimitFails() async throws {
+        let executable = try makeExecutable(
+            """
+            #!/bin/sh
+            head -c 17825792 /dev/zero | tr '\\0' o
+            """
+        )
+        let bridge = try MoleBridge(executableURL: executable)
+
+        do {
+            _ = try await bridge.run(timeout: 60)
+            XCTFail("expected outputLimitExceeded")
+        } catch let error as MoleBridgeError {
+            guard case let .outputLimitExceeded(channel, limit) = error else {
+                return XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(channel, "stdout")
+            XCTAssertEqual(limit, 16 * 1024 * 1024)
+        }
+    }
+
+    func testVersionWithEmptyOutputFails() async throws {
+        let executable = try makeExecutable(
+            """
+            #!/bin/sh
+            exit 0
+            """
+        )
+        let bridge = try MoleBridge(executableURL: executable)
+
+        do {
+            _ = try await bridge.version()
+            XCTFail("expected emptyOutput")
+        } catch let error as MoleBridgeError {
+            XCTAssertEqual(error, .emptyOutput)
+        }
+    }
+
     func testNonZeroExitReturnsDisplayableError() async throws {
         let executable = try makeExecutable(
             """

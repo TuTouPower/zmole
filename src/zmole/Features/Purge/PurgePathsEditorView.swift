@@ -27,6 +27,7 @@ struct PurgePathsEditorView: View {
                 Button("purge.paths.cancel") { onClose() }
                 Button("purge.paths.save") { viewModel.save() }
                     .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.isLoaded)
             }
         }
         .padding(20)

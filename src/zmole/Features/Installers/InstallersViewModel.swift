@@ -10,6 +10,7 @@ final class InstallersViewModel: ObservableObject {
     @Published private(set) var isRemoving = false
     @Published private(set) var isConfirmationPresented = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessageKey: String?
     @Published private(set) var showBusyNotice = false
     @Published private(set) var listCapturedAt: Date?
 
@@ -21,6 +22,7 @@ final class InstallersViewModel: ObservableObject {
     private let coordinator: OperationCoordinator
     private weak var prewarm: (any PrewarmResultProviding)?
     private var lease: OperationLease?
+    private var removalCancelled = false
 
     init(
         interface: InstallerInterface,
@@ -67,6 +69,7 @@ final class InstallersViewModel: ObservableObject {
         prewarm?.userDidRescan(.installerList)
         isListing = true
         errorMessage = nil
+        errorMessageKey = nil
         showBusyNotice = false
         failures = []
         listCapturedAt = nil
@@ -85,7 +88,8 @@ final class InstallersViewModel: ObservableObject {
             candidates = []
             lastListing = []
             selectedPaths.removeAll()
-            errorMessage = error.localizedDescription
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
         }
     }
 
@@ -128,6 +132,12 @@ final class InstallersViewModel: ObservableObject {
         isConfirmationPresented = false
     }
 
+    /// Stops the batch after the item that is currently being removed.
+    func cancelRemoval() {
+        guard isRemoving else { return }
+        removalCancelled = true
+    }
+
     func confirmRemoval() async {
         guard isConfirmationPresented, canConfirm else { return }
         let batch = selectedCandidates
@@ -140,9 +150,11 @@ final class InstallersViewModel: ObservableObject {
         lease = newLease
         showBusyNotice = false
         isRemoving = true
+        removalCancelled = false
         isConfirmationPresented = false
         defer {
             isRemoving = false
+            removalCancelled = false
             lease?.release()
             lease = nil
             coordinator.invalidatePreviews()
@@ -150,10 +162,16 @@ final class InstallersViewModel: ObservableObject {
 
         var rejected: [InstallerRemovalFailure] = []
         var removedPaths: Set<String> = []
-        for candidate in batch {
+        removal: for candidate in batch {
+            if removalCancelled { break removal }
             switch await interface.remove(candidate) {
             case .removed:
                 removedPaths.insert(candidate.path)
+            case .busy:
+                // Transient contention: stop the batch, keep the remaining
+                // selection, and surface the recoverable notice.
+                showBusyNotice = true
+                break removal
             case let .failed(reason):
                 rejected.append(InstallerRemovalFailure(path: candidate.path, reason: reason))
             }

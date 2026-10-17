@@ -341,13 +341,15 @@ final class DiskExplorerTests: XCTestCase {
             name: "sub", path: "/root/sub", isDirectory: true, value: .computing
         ))
 
-        XCTAssertNil(viewModel.level)
-        XCTAssertNotNil(viewModel.errorMessage)
+        // A failed listing keeps the previous level on screen and shows the
+        // error banner instead of blanking the whole browse state.
+        XCTAssertEqual(viewModel.level?.path, "/root")
+        XCTAssertNotNil(viewModel.errorMessageKey)
         XCTAssertTrue(viewModel.canGoBack)
 
         await viewModel.goBack()
         XCTAssertEqual(viewModel.level?.path, "/root")
-        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(viewModel.errorMessageKey)
     }
 
     func testRevealForwardsTheEntryPath() async throws {

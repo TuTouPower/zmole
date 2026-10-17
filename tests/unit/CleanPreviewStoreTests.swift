@@ -46,6 +46,22 @@ final class CleanPreviewStoreTests: XCTestCase {
         }
     }
 
+    func testVerifyChangedContentsMapToChangedSincePreview() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("clean-list.txt")
+        let store = CleanPreviewStore(fileURL: fileURL)
+        let generation = try store.begin()
+        try "/tmp/cache # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
+        let snapshot = try store.read(generation)
+        // Same-length overwrite: only the content equality gate can catch it.
+        try "/tmp/other # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try store.verifyUnchanged(snapshot)) { error in
+            XCTAssertEqual(error as? CleanPreviewStoreError, .changedSincePreview)
+        }
+    }
+
     @MainActor
     func testCleanConfirmationSurfacesMissingPreviewKey() async throws {
         let directory = try makeTemporaryDirectory()

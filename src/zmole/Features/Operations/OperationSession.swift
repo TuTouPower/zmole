@@ -27,10 +27,6 @@ struct OperationResult: Equatable, Sendable {
         self.summary = summary
         self.errorKey = errorKey
     }
-
-    var isCancelled: Bool { status == .cancelled }
-    var isPartial: Bool { status == .partial }
-    var isFailure: Bool { status == .failed }
 }
 
 enum OperationState<Preview: Equatable & Sendable>: Equatable, Sendable {

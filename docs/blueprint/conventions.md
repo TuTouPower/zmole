@@ -10,9 +10,9 @@
 - **并发**：优先 `async/await`；Bridge 内 `Process` I/O 勿堵主线程
 - **目录**（Xcode 工程落地后）：
     - `src/zmole/App/` — 入口与 App 级场景
-    - `src/zmole/Features/<Feature>/` — 功能页
+    - `src/zmole/Features/<Feature>/` — 功能页；跨功能共享的小工具（如 `HumanSizeParser`、`MaintenanceOutput`）就近放 `Features/` 根
     - `src/zmole/MoleBridge/` — CLI 桥接
-    - `src/zmole/Models/` — 共享模型
+    - `src/zmole/Models/` — 预留共享模型落点；当前为空目录，值类型按 Feature 就近存放
     - `tests/unit/` — 纯逻辑单测（Bridge 解析、参数拼装等）
     - `tests/integration/` — 对捆绑 mole 或假二进制的集成
 - **工程文件**：根目录 `project.yml`，XcodeGen 生成 `Zmole.xcodeproj`；禁止手写损坏的 pbxproj
@@ -27,11 +27,11 @@
 
 - 应用图标源为矢量 SVG：`assets/app_icon_source.svg`（彩色主版，唯一构建源）与 `assets/app_icon_source_mono.svg`（黑白备用，不入构建）。
 - `src/zmole/Resources/AppIcon.icns` 是生成产物；改源后运行 `scripts/build_app_icon.sh` 重新生成并随源一起提交（同一源渲染可复现）。SVG 经系统 SVG 支持（`scripts/svg_to_png.swift`，ImageIO/AppKit）输出透明背景 PNG；不得使用 `qlmanage -t`（白底文档预览会破坏图标透明度）。构建引用为 `project.yml` 的资源项与 `Info.plist` 的 `CFBundleIconFile=AppIcon.icns`。
-- 运行期侧栏图标经 `NSApp.applicationIconImage` 读取 bundle 图标，不单独维护图片资源。
+- 运行期侧栏图标优先直读 bundle 内 `AppIcon.icns`，失败时回退 `NSApp.applicationIconImage`。
 
 ## schema 类型落点
 
-按消费方决定落点，`schemas/` 只放跨服务契约。
+按消费方决定落点，`schemas/` 只放跨服务契约。说明：本仓当前未启用 `schemas/`、`config/` 与 `docs/schemas/` 目录（无跨服务契约、无 env 配置）；下表为落点规则，目录按需再建。
 
 |类型|例子|落点|
 |---|---|---|

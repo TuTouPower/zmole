@@ -2,15 +2,10 @@ import AppKit
 import SwiftUI
 
 enum UtilityStyle {
-    /// Accent family matches the app icon's blue gradients (see MoleTheme).
-    static let accent = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.31, green: 0.675, blue: 0.996, alpha: 1)
-            : NSColor(srgbRed: 0.0, green: 0.447, blue: 1.0, alpha: 1)
-    })
+    /// Accent family is the shared theme accent (app icon blue gradients).
+    static let accent = MoleTheme.accent
     static let surface = Color(nsColor: .textBackgroundColor)
     static let background = Color(nsColor: .windowBackgroundColor)
-    static let secondarySurface = Color(nsColor: .controlBackgroundColor)
     static let separator = Color.primary.opacity(0.09)
     static let selection = accent.opacity(0.10)
 
@@ -131,6 +126,20 @@ struct UtilityEmptyState: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Shared busy placeholder with a fixed height so plan/output panels do not
+/// jump while a preview or execution is running.
+struct UtilityBusyState: View {
+    let title: LocalizedStringKey
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(title).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 }
 

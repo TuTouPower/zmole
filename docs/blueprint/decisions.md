@@ -67,4 +67,13 @@
     2. 在捆绑 installer 上增加非交互接口：`--list-json` 列出候选（绝对路径、字节大小、来源、身份），`--remove <path>` 只接受本次列出的路径并核对身份与大小，删除显式置 `MOLE_DELETE_MODE=trash`
     3. 在 Swift 里重写扫描
 - 结论：选 2。扫描规则仍用捆绑 installer 的现有目录、深度与 ZIP 判断；删除失败保留原文件，不退回永久删除；界面（t023）只消费该接口。补丁限于捆绑 installer 脚本并标注 `zmole local patch (t022)`，上游 tag 升级时重放。
+- 替代：004 中「installer park」部分（004 其余结论仍有效）
+
+## 009 强调色改为应用图标蓝系（2026-10-17）
+
+- 背景：设计基线原以 demo HTML 的绿色 `#2f8f68` 为视觉权威；实现批（4ed8314）已把 accent 改为与应用图标一致的蓝系（浅色 `#0072FF`、深色 `#4FACFE`），并同步了图标源与生成脚本。
+- 选项：
+    1. 维持 HTML 绿色
+    2. 确认蓝系：HTML 降为布局参考，色彩以应用图标为准
+- 结论：选 2。`MoleTheme.accent`/`accentStrong` 为唯一色源，`UtilityStyle.accent` 直接引用 `MoleTheme.accent`；`ui_contract.md` 的参考资料声明同步更新。
 - 替代：无

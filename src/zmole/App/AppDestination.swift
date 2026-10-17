@@ -85,9 +85,3 @@ enum WindowMetrics {
     static let minWidth: CGFloat = 1100
     static let minHeight: CGFloat = 700
 }
-
-/// Chrome contract. The shell keeps the system title bar and never draws
-/// red/yellow/green traffic lights inside the content area.
-enum ShellChrome {
-    static let drawsCustomTrafficLights = false
-}

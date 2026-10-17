@@ -7,18 +7,21 @@ final class CommandConcurrencyTests: XCTestCase {
 
     func testCommandBridgesAreDistinct() throws {
         let bridges = try XCTUnwrap(MoleCommandLanes.makeCommandBridges())
-        XCTAssertEqual(bridges.count, MoleCommandLanes.commandLaneCount)
-        let identities = bridges.map { ObjectIdentifier($0 as AnyObject) }
-        XCTAssertEqual(Set(identities).count, bridges.count, "each one-shot lane must be a distinct bridge")
+        let oneShots: [any MoleProcessControlling] = [
+            bridges.history, bridges.uninstall, bridges.installer,
+            bridges.cleanCommand, bridges.optimize, bridges.purge, bridges.estimate
+        ] + bridges.estimateExtras
+        let identities = oneShots.map { ObjectIdentifier($0 as AnyObject) }
+        XCTAssertEqual(Set(identities).count, oneShots.count, "each one-shot lane must be a distinct bridge")
     }
 
     func testAppDependenciesWiresDistinctLanes() {
         let dependencies = AppDependencies()
         let lanes = [
             dependencies.lanes.history, dependencies.lanes.uninstall,
-            dependencies.lanes.installer, dependencies.lanes.statusCommand, dependencies.lanes.cleanCommand,
-            dependencies.lanes.optimize, dependencies.lanes.purge, dependencies.lanes.estimate
-        ]
+            dependencies.lanes.installer, dependencies.lanes.cleanCommand,
+            dependencies.lanes.optimize, dependencies.lanes.purge
+        ] + dependencies.lanes.estimatePool
         let identities = lanes.map { ObjectIdentifier($0 as AnyObject) }
         XCTAssertEqual(
             Set(identities).count, lanes.count,
@@ -100,11 +103,14 @@ final class CommandConcurrencyTests: XCTestCase {
         func bridge() throws -> any MoleProcessControlling {
             try MoleBridge(executableURL: sleepURL)
         }
+        let estimateBridges: [any MoleProcessControlling] = [try bridge(), try bridge(), try bridge()]
         return MoleCommandLanes(
             history: try bridge(), uninstall: try bridge(),
             uninstallStream: try MoleBridge(executableURL: sleepURL),
-            installer: try bridge(), statusCommand: try bridge(), cleanCommand: try bridge(),
-            optimize: try bridge(), purge: try bridge(), estimate: try bridge(),
+            installer: try bridge(), cleanCommand: try bridge(),
+            optimize: try bridge(), purge: try bridge(),
+            estimate: estimateBridges[0],
+            estimatePool: estimateBridges,
             prewarm: try MoleBridge(executableURL: sleepURL),
             statusStream: try MoleBridge(executableURL: sleepURL),
             cleanStream: try MoleBridge(executableURL: sleepURL)

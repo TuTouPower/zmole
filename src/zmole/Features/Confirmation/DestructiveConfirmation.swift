@@ -1,24 +1,5 @@
 import SwiftUI
 
-final class DestructiveConfirmationFlow {
-    private let executeAction: () -> Void
-    private(set) var isPending = true
-
-    init(executeAction: @escaping () -> Void) {
-        self.executeAction = executeAction
-    }
-
-    func cancel() {
-        isPending = false
-    }
-
-    func confirm() {
-        guard isPending else { return }
-        isPending = false
-        executeAction()
-    }
-}
-
 struct DestructiveConfirmationView: View {
     let title: LocalizedStringKey
     let summary: LocalizedStringKey

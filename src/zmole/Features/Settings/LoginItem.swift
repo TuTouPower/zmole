@@ -31,7 +31,7 @@ struct SMAppServiceLoginItem: LoginItemControlling {
     }
 
     func unregister() throws {
-        try? SMAppService.mainApp.unregister()
+        try SMAppService.mainApp.unregister()
     }
 
     func isEnabled() -> Bool {

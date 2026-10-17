@@ -15,7 +15,7 @@ struct UninstallAppListing: Equatable, Identifiable, Sendable {
 
     var id: String { path }
 
-    var sizeBytes: Int64? { UninstallSizeParser.bytes(from: sizeText) }
+    var sizeBytes: Int64? { HumanSizeParser.bytes(from: sizeText) }
 
     /// Both identity fields resolved; only then can the row be previewed.
     var isResolved: Bool { bundleID != nil && uninstallName != nil }
@@ -35,37 +35,107 @@ struct UninstallAppListing: Equatable, Identifiable, Sendable {
     }
 }
 
+enum UninstallListStreamError: Error, Equatable, LocalizedError, Sendable {
+    /// Every JSON-looking row failed to decode; surface an error instead of a
+    /// false "no apps" list when the CLI output format drifts.
+    case malformedRows(skipped: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .malformedRows(skipped):
+            return "mole 卸载列表输出无法解析（跳过 \(skipped) 行）"
+        }
+    }
+}
+
+private struct RawListingRow: Decodable {
+    let event: String?
+    let path: String?
+    let name: String?
+    let bundleID: String?
+    let uninstallName: String?
+    let source: String?
+    let size: SizeField?
+    let version: String?
+    let lastUsedEpoch: Double?
+
+    /// `size` may arrive as a string ("12.3MB") or a raw number.
+    struct SizeField: Decodable {
+        let text: String?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let value = try? container.decode(String.self) {
+                text = value
+            } else if let value = try? container.decode(Int64.self) {
+                text = String(value)
+            } else if let value = try? container.decode(Double.self) {
+                text = String(value)
+            } else {
+                text = nil
+            }
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case event
+        case path
+        case name
+        case bundleID = "bundle_id"
+        case uninstallName = "uninstall_name"
+        case source
+        case size
+        case version
+        case lastUsedEpoch = "last_used_epoch"
+    }
+}
+
 enum UninstallListStreamParser {
-    /// Parses one JSON-lines row. Returns nil for stream markers and malformed
-    /// lines, which the caller skips.
-    static func listing(from line: String) -> UninstallAppListing? {
+    /// Three-way parse outcome so the stream layer can tell benign markers
+    /// from malformed JSON rows (which it counts and may surface as an error).
+    enum Outcome: Equatable {
+        case listing(UninstallAppListing)
+        case marker
+        case malformed
+    }
+
+    static func outcome(from line: String) -> Outcome {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("{"), let data = trimmed.data(using: .utf8) else { return nil }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
+        guard !trimmed.isEmpty else { return .marker }
+        guard trimmed.hasPrefix("{"),
+              let data = trimmed.data(using: .utf8),
+              let row = try? JSONDecoder().decode(RawListingRow.self, from: data) else {
+            return .malformed
         }
-        if object["event"] != nil { return nil }
-        guard let path = object["path"] as? String, !path.isEmpty else { return nil }
+        if row.event != nil { return .marker }
+        guard let path = row.path, !path.isEmpty else { return .malformed }
 
-        let name = (object["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rawSize = (object["size"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sizeText = rawSize.flatMap { UninstallSizeParser.bytes(from: $0) != nil ? $0 : nil }
-        let version = (object["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = row.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawSize = row.size?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sizeText = rawSize.flatMap { HumanSizeParser.bytes(from: $0) != nil ? $0 : nil }
+        let version = row.version?.trimmingCharacters(in: .whitespacesAndNewlines)
         var lastUsed: Date?
-        if let epoch = object["last_used_epoch"] as? NSNumber, epoch.doubleValue > 0 {
-            lastUsed = Date(timeIntervalSince1970: epoch.doubleValue)
+        if let epoch = row.lastUsedEpoch, epoch > 0 {
+            lastUsed = Date(timeIntervalSince1970: epoch)
         }
 
-        return UninstallAppListing(
+        return .listing(UninstallAppListing(
             path: path,
             name: (name?.isEmpty == false) ? name! : URL(fileURLWithPath: path).lastPathComponent,
-            bundleID: nonEmpty(object["bundle_id"] as? String),
-            uninstallName: nonEmpty(object["uninstall_name"] as? String),
-            source: nonEmpty(object["source"] as? String),
+            bundleID: nonEmpty(row.bundleID),
+            uninstallName: nonEmpty(row.uninstallName),
+            source: nonEmpty(row.source),
             sizeText: sizeText,
             version: nonEmpty(version),
             lastUsed: lastUsed
-        )
+        ))
+    }
+
+    /// Parses one JSON-lines row. Returns nil for stream markers and malformed
+    /// lines, which the caller skips.
+    static func listing(from line: String) -> UninstallAppListing? {
+        guard case let .listing(listing) = outcome(from: line) else { return nil }
+        return listing
     }
 
     private static func nonEmpty(_ value: String?) -> String? {
@@ -115,16 +185,30 @@ struct UninstallListStream: Sendable {
             )
             return AsyncThrowingStream { continuation in
                 let task = Task {
+                    var parsedCount = 0
+                    var skippedCount = 0
                     do {
                         for try await event in events {
-                            guard case let .stdoutLine(data) = event,
-                                  let line = String(data: data, encoding: .utf8),
-                                  let listing = UninstallListStreamParser.listing(from: line) else {
+                            guard case let .stdoutLine(data) = event else { continue }
+                            guard let line = String(data: data, encoding: .utf8) else {
+                                skippedCount += 1
                                 continue
                             }
-                            continuation.yield(listing)
+                            switch UninstallListStreamParser.outcome(from: line) {
+                            case let .listing(listing):
+                                parsedCount += 1
+                                continuation.yield(listing)
+                            case .marker:
+                                continue
+                            case .malformed:
+                                skippedCount += 1
+                            }
                         }
-                        continuation.finish()
+                        if parsedCount == 0, skippedCount > 0 {
+                            continuation.finish(throwing: UninstallListStreamError.malformedRows(skipped: skippedCount))
+                        } else {
+                            continuation.finish()
+                        }
                     } catch {
                         continuation.finish(throwing: error)
                     }

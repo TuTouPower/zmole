@@ -11,6 +11,17 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 head
+                if let errorKey = viewModel.errorMessageKey {
+                    VStack(spacing: 10) {
+                        UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                        Button("overview.retry") { Task { await viewModel.refreshHistory() } }
+                    }
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(spacing: 10) {
+                        UtilityNotice(title: "overview.error_title", detail: errorMessage, isError: true)
+                        Button("overview.retry") { Task { await viewModel.refreshHistory() } }
+                    }
+                }
                 if viewModel.showBusyNotice {
                     RecoverableBusyNotice()
                 }
@@ -29,15 +40,23 @@ struct OverviewView: View {
             await viewModel.refreshHistory()
             // The estimate renders from cache immediately and only scans in the
             // background (on its own lane) when the cache is missing or stale.
-            for _ in 0..<120 where usedBytes == nil {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
+            await waitForUsedBytes()
+            guard !Task.isCancelled else { return }
             viewModel.primeEstimate(usedBytes: usedBytes)
             await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes)
         }
         .onChange(of: viewModel.estimateInvalidated) { invalidated in
             guard invalidated else { return }
             Task { await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes) }
+        }
+    }
+
+    /// Event-driven wait for the first status sample that exposes the primary
+    /// disk; ends when the page task is cancelled.
+    private func waitForUsedBytes() async {
+        guard usedBytes == nil else { return }
+        for await _ in statusViewModel.$snapshot.values {
+            if usedBytes != nil || Task.isCancelled { return }
         }
     }
 

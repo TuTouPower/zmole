@@ -12,12 +12,12 @@ final class BatchUninstallTests: XCTestCase {
     }
 
     func testSizeParserSeparatesDecimalAndIECUnitsAndUnknown() {
-        XCTAssertEqual(UninstallSizeParser.bytes(from: "1 KB"), 1_000)
-        XCTAssertEqual(UninstallSizeParser.bytes(from: "1 KiB"), 1_024)
-        XCTAssertEqual(UninstallSizeParser.bytes(from: "2.5 MiB"), 2_621_440)
-        XCTAssertNil(UninstallSizeParser.bytes(from: "Unknown"))
-        XCTAssertNil(UninstallSizeParser.bytes(from: "0"))
-        XCTAssertNil(UninstallSizeParser.bytes(from: "1.2.3 GB"))
+        XCTAssertEqual(HumanSizeParser.bytes(from: "1 KB"), 1_000)
+        XCTAssertEqual(HumanSizeParser.bytes(from: "1 KiB"), 1_024)
+        XCTAssertEqual(HumanSizeParser.bytes(from: "2.5 MiB"), 2_621_440)
+        XCTAssertNil(HumanSizeParser.bytes(from: "Unknown"))
+        XCTAssertNil(HumanSizeParser.bytes(from: "0"))
+        XCTAssertNil(HumanSizeParser.bytes(from: "1.2.3 GB"))
     }
 
     func testSelectionValidatorRejectsDuplicateNamesAndChangedIdentity() throws {

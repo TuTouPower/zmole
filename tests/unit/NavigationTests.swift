@@ -43,19 +43,16 @@ final class NavigationTests: XCTestCase {
 
     func testCommandPaletteOnlyContainsNavigationRows() {
         let items = CommandPaletteItem.all
-        // Every palette row must map onto exactly one sidebar destination. Any
-        // future execution action would have an id outside the destination set
-        // and fail this equality.
+        // Every palette row must map onto exactly one sidebar destination.
+        // CommandPaletteItem carries nothing but a destination, so a future
+        // execution action would have to be a destination and fail this
+        // equality against the navigation-only destination set.
         XCTAssertEqual(items.count, AppDestination.allCases.count)
         XCTAssertEqual(Set(items.map(\.destination)), Set(AppDestination.allCases))
         XCTAssertEqual(Set(items.map(\.id)), Set(AppDestination.allCases.map(\.rawValue)))
-        XCTAssertTrue(items.allSatisfy { !$0.isExecutionAction })
-        XCTAssertTrue(
-            Set(items.map(\.id)).isDisjoint(with: CommandPaletteItem.forbiddenIdentifiers)
-        )
     }
 
-    func testCommandPaletteFiltersByQueryAndPerformsNavigation() {
+    func testCommandPaletteFiltersByQueryAndPerformsNavigation() throws {
         let navigation = NavigationModel()
         navigation.presentCommandPalette()
         XCTAssertTrue(navigation.isCommandPalettePresented)
@@ -69,10 +66,8 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(navigation.filteredPaletteItems.isEmpty)
 
         navigation.commandQuery = ""
-        let item = try? XCTUnwrap(navigation.filteredPaletteItems.first { $0.destination == .history })
-        if let item {
-            navigation.perform(item)
-        }
+        let item = try XCTUnwrap(navigation.filteredPaletteItems.first { $0.destination == .history })
+        navigation.perform(item)
         XCTAssertEqual(navigation.destination, .history)
         XCTAssertFalse(navigation.isCommandPalettePresented)
     }
@@ -84,9 +79,11 @@ final class NavigationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(WindowMetrics.minHeight, 700)
     }
 
-    func testShellKeepsSystemTitleBarWithoutCustomTrafficLights() {
-        XCTAssertFalse(ShellChrome.drawsCustomTrafficLights)
-    }
+    // The former testShellKeepsSystemTitleBarWithoutCustomTrafficLights
+    // asserted the constant ShellChrome.drawsCustomTrafficLights, which was
+    // removed: the shell keeps the system title bar structurally (no custom
+    // chrome exists in the view tree), so a constant asserting its own value
+    // could not catch a real regression.
 
     func testSidebarDestinationsHaveThreeLocalizedLabels() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)

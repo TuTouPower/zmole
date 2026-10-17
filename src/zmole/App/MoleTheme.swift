@@ -24,13 +24,11 @@ enum MoleTheme {
     static let sidebar = adaptive(light: 0xF5F5F7, dark: 0x1C1C1E).opacity(0.82)
     static let selection = adaptive(light: 0xE2E2E6, dark: 0x3A3A3E)
 
-    static let radiusXL: CGFloat = 22
     static let radiusLG: CGFloat = 17
     static let radiusMD: CGFloat = 13
     static let radiusSM: CGFloat = 10
 
     static let sidebarWidth: CGFloat = 236
-    static let titlebarHeight: CGFloat = 54
 
     static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

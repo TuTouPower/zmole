@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let probeLog = Logger(subsystem: "com.tutupower.zmole", category: "StorageEstimate")
 
 /// Five-segment disk estimate for the overview.
 ///
@@ -81,7 +84,9 @@ struct StorageEstimateLoader: Sendable {
     typealias DirectorySize = @Sendable (String) async throws -> Int64?
     typealias SystemChildren = @Sendable () throws -> [String]
 
-    private let directorySize: DirectorySize
+    /// Each channel is an independent analyze runner; probes are distributed
+    /// across channels so several paths can be measured in parallel.
+    private let channels: [DirectorySize]
     private let systemChildren: SystemChildren
 
     init(
@@ -90,12 +95,29 @@ struct StorageEstimateLoader: Sendable {
             try StorageEstimateLoader.directoryChildren(of: "/System")
         }
     ) {
-        self.directorySize = directorySize
+        channels = [directorySize]
         self.systemChildren = systemChildren
     }
 
     init(loader: AnalyzeSnapshotLoader, home: String = NSHomeDirectory()) {
-        directorySize = { path in
+        channels = [Self.directorySize(for: loader, home: home)]
+        systemChildren = {
+            try Self.directoryChildren(of: "/System")
+        }
+    }
+
+    /// Multi-channel initializer: each loader owns an independent analyze
+    /// runner, so probes are distributed across channels and run in parallel.
+    init(loaders: [AnalyzeSnapshotLoader], home: String = NSHomeDirectory()) {
+        precondition(!loaders.isEmpty, "at least one analyze loader is required")
+        channels = loaders.map { Self.directorySize(for: $0, home: home) }
+        systemChildren = {
+            try Self.directoryChildren(of: "/System")
+        }
+    }
+
+    private static func directorySize(for loader: AnalyzeSnapshotLoader, home: String) -> DirectorySize {
+        { path in
             let expanded = path.hasPrefix("~")
                 ? home + path.dropFirst()
                 : path
@@ -105,11 +127,9 @@ struct StorageEstimateLoader: Sendable {
             } catch let error as MoleBridgeError where error == .cancelled {
                 throw CancellationError()
             } catch {
+                probeLog.debug("analyze probe failed for \(path, privacy: .private): \(String(describing: type(of: error)), privacy: .public)")
                 return nil
             }
-        }
-        systemChildren = {
-            try Self.directoryChildren(of: "/System")
         }
     }
 
@@ -130,47 +150,76 @@ struct StorageEstimateLoader: Sendable {
         }
     }
 
-    /// Runs the directory probes sequentially on this lane's bridge. Throws
-    /// `CancellationError` when the scan is cancelled, so callers never treat
-    /// a cancelled pass as a complete result.
+    /// Runs the directory probes concurrently across channels (each channel
+    /// executes at most one command at a time). Throws `CancellationError`
+    /// when the scan is cancelled, so callers never treat a cancelled pass as
+    /// a complete result.
     func loadSums() async throws -> StorageSums {
-        let applications = try await directorySize("/Applications")
-        let system = try await systemSize()
-        let developer = try await directorySize("~/Library/Developer")
-        let users = try await directorySize("/Users")
+        let applicationsPath = "/Applications"
+        let developerPath = "~/Library/Developer"
+        let usersPath = "/Users"
+
+        let systemChildrenNames: [String]
+        do {
+            systemChildrenNames = try systemChildren().filter { $0 != "Volumes" }.sorted()
+        } catch {
+            systemChildrenNames = []
+        }
+        let systemPaths = systemChildrenNames.map { "/System/" + $0 }
+
+        let sizes = try await probeSizes(
+            for: [applicationsPath, developerPath, usersPath] + systemPaths
+        )
+
+        var systemTotal: Int64 = 0
+        var systemComplete = !systemPaths.isEmpty
+        for path in systemPaths {
+            if let size = sizes[path] ?? nil {
+                systemTotal += size
+            } else {
+                systemComplete = false
+                break
+            }
+        }
+
         return StorageSums(
-            applications: applications,
-            system: system,
-            developer: developer,
-            users: users
+            applications: sizes[applicationsPath] ?? nil,
+            system: systemComplete ? systemTotal : nil,
+            developer: sizes[developerPath] ?? nil,
+            users: sizes[usersPath] ?? nil
         )
     }
 
-    /// The `系统` segment only covers the read-only system volume: `/System` is
-    /// summed child by child with `/System/Volumes` (the whole data volume,
-    /// snapshots included) skipped. The value stays `analyze /System`'s
-    /// top-level sum minus `/System/Volumes`, and the data volume is never
-    /// walked, keeping the probe at seconds instead of minutes. A single
-    /// unreadable child makes the whole segment unavailable: a partial sum
-    /// must never masquerade as a complete one.
-    private func systemSize() async throws -> Int64? {
-        let children: [String]
-        do {
-            children = try systemChildren()
-        } catch {
-            return nil
+    /// The `系统` segment only covers the read-only system volume: `/System`
+    /// is summed child by child (round-robin across channels) with
+    /// `/System/Volumes` (the whole data volume, snapshots included) skipped.
+    /// The data volume is never walked, keeping the probe at seconds instead
+    /// of minutes. A single unreadable child makes the whole segment
+    /// unavailable: a partial sum must never masquerade as a complete one.
+    private func probeSizes(for paths: [String]) async throws -> [String: Int64?] {
+        guard !paths.isEmpty else { return [:] }
+        var slices = Array(repeating: [String](), count: channels.count)
+        for (index, path) in paths.enumerated() {
+            slices[index % channels.count].append(path)
         }
-        let probes = children.filter { $0 != "Volumes" }.sorted()
-        guard !probes.isEmpty else { return nil }
-        var total: Int64 = 0
-        for child in probes {
-            try Task.checkCancellation()
-            guard let size = try await directorySize("/System/" + child) else {
-                return nil
+        return try await withThrowingTaskGroup(of: [String: Int64?].self) { group in
+            for (channelIndex, slice) in slices.enumerated() where !slice.isEmpty {
+                let channel = channels[channelIndex]
+                group.addTask {
+                    var results: [String: Int64?] = [:]
+                    for path in slice {
+                        try Task.checkCancellation()
+                        results[path] = try await channel(path)
+                    }
+                    return results
+                }
             }
-            total += size
+            var merged: [String: Int64?] = [:]
+            for try await partial in group {
+                merged.merge(partial) { _, new in new }
+            }
+            return merged
         }
-        return total
     }
 
     func load(usedBytes: Int64?) async throws -> StorageBreakdown {

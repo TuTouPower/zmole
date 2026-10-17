@@ -16,7 +16,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
     let diskIO: DiskIO?
     let network: [NetworkInterface]?
     let topProcesses: [ProcessInfo]?
-    let processCollectedAt: Date?
     let processStale: Bool
     let cpuTemperature: Double?
     let zombieCount: Int?
@@ -210,7 +209,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         case diskIO = "disk_io"
         case network
         case topProcesses = "top_processes"
-        case processCollectedAt = "process_collected_at"
         case processStale = "process_stale"
         case thermal
         case zombieCount = "zombie_count"
@@ -244,7 +242,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         diskIO: DiskIO? = nil,
         network: [NetworkInterface]? = nil,
         topProcesses: [ProcessInfo]? = nil,
-        processCollectedAt: Date? = nil,
         processStale: Bool = true,
         cpuTemperature: Double? = nil,
         zombieCount: Int? = nil
@@ -259,7 +256,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         self.diskIO = diskIO
         self.network = network
         self.topProcesses = topProcesses
-        self.processCollectedAt = processCollectedAt
         self.processStale = processStale
         self.cpuTemperature = cpuTemperature
         self.zombieCount = zombieCount
@@ -287,7 +283,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         network = try? container.decode([NetworkInterface].self, forKey: .network)
         topProcesses = try? container.decode([ProcessInfo].self, forKey: .topProcesses)
         collectedAt = Self.decodeDate(container, key: .collectedAt)
-        processCollectedAt = Self.decodeDate(container, key: .processCollectedAt)
         processStale = (try? container.decode(Bool.self, forKey: .processStale)) ?? (topProcesses == nil)
         cpuTemperature = (try? container.decode(Thermal.self, forKey: .thermal))?.cpuTemp
         zombieCount = try? container.decode(Int.self, forKey: .zombieCount)
@@ -303,7 +298,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         try container.encodeIfPresent(diskIO, forKey: .diskIO)
         try container.encodeIfPresent(network, forKey: .network)
         try container.encodeIfPresent(topProcesses, forKey: .topProcesses)
-        if let processCollectedAt { try container.encode(Self.dateString(processCollectedAt), forKey: .processCollectedAt) }
         try container.encode(processStale, forKey: .processStale)
         if let cpuTemperature { try container.encode(Thermal(cpuTemp: cpuTemperature), forKey: .thermal) }
         try container.encodeIfPresent(zombieCount, forKey: .zombieCount)
@@ -315,8 +309,7 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         guard !physical.isEmpty else {
             return NetworkTotal(
                 rxRateMBs: nil,
-                txRateMBs: nil,
-                isVirtualOnly: true
+                txRateMBs: nil
             )
         }
         let interfaces = physical
@@ -326,8 +319,7 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         let hasTx = interfaces.contains { $0.txRateMBs != nil }
         return NetworkTotal(
             rxRateMBs: hasRx ? rx : nil,
-            txRateMBs: hasTx ? tx : nil,
-            isVirtualOnly: false
+            txRateMBs: hasTx ? tx : nil
         )
     }
 
@@ -343,7 +335,6 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
     struct NetworkTotal: Equatable, Sendable {
         let rxRateMBs: Double?
         let txRateMBs: Double?
-        let isVirtualOnly: Bool
     }
 
     private static func decodeDate<K: CodingKey>(_ container: KeyedDecodingContainer<K>, key: K) -> Date? {
@@ -352,22 +343,31 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
     }
 
     static func parseDate(_ value: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
+        if let date = fractionalFormatter.date(from: value) { return date }
+        return internetFormatter.date(from: value)
     }
 
-    private static func dateString(_ date: Date) -> String {
+    private static let fractionalFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static let internetFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static func dateString(_ date: Date) -> String {
+        fractionalFormatter.string(from: date)
     }
 }
 
-enum StatusSnapshotError: Error, Equatable, LocalizedError, Sendable {
+enum StatusSnapshotError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case invalidJSON
+
+    var errorKey: String { "status.error.invalid_json" }
 
     var errorDescription: String? { "status JSON 无法解析" }
 }
