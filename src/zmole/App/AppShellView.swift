@@ -27,6 +27,13 @@ struct AppShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             dependencies.fullDiskAccessMonitor.refresh()
         }
+        .onReceive(dependencies.statusPolicy.$isEnabled) { enabled in
+            if !enabled {
+                Task { await dependencies.statusViewModel.applyPolicyChange(enabled: false) }
+            } else {
+                updateStatusWatch()
+            }
+        }
         .overlay {
             if navigation.isCommandPalettePresented {
                 CommandPaletteView(navigation: navigation)
@@ -92,7 +99,8 @@ struct AppShellView: View {
                 optimizeWhitelistViewModel: dependencies.optimizeWhitelistViewModel,
                 purgePathsViewModel: dependencies.purgePathsViewModel,
                 loginItemViewModel: dependencies.loginItemViewModel,
-                accessMonitor: dependencies.fullDiskAccessMonitor
+                accessMonitor: dependencies.fullDiskAccessMonitor,
+                statusPolicy: dependencies.statusPolicy
             )
         }
     }
@@ -119,6 +127,10 @@ struct AppShellView: View {
     /// The status watch runs only while the overview or status page is visible.
     /// Navigating away stops the shared process, satisfying the leave-page rule.
     private func updateStatusWatch() {
+        guard dependencies.statusPolicy.isEnabled else {
+            Task { await dependencies.statusViewModel.stop() }
+            return
+        }
         switch navigation.destination {
         case .overview, .status:
             dependencies.statusViewModel.start()

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -22,11 +23,41 @@ final class NavigationModel: ObservableObject {
     @Published var isCommandPalettePresented = false
     @Published var commandQuery = ""
 
-    init(initial: AppDestination = .overview) {
-        destination = initial
+    private let policy: StatusFeaturePolicy?
+    private var policySubscription: AnyCancellable?
+
+    init(initial: AppDestination = .overview, policy: StatusFeaturePolicy? = nil) {
+        self.policy = policy
+        let effectiveInitial: AppDestination
+        if initial == .status && !(policy?.isEnabled ?? true) {
+            effectiveInitial = .overview
+        } else {
+            effectiveInitial = initial
+        }
+        self.destination = effectiveInitial
+
+        policySubscription = policy?.$isEnabled.sink { [weak self] enabled in
+            guard let self else { return }
+            if !enabled && self.destination == .status {
+                self.destination = .overview
+            }
+        }
     }
 
-    var paletteItems: [CommandPaletteItem] { CommandPaletteItem.all }
+    func isDestinationAllowed(_ destination: AppDestination) -> Bool {
+        if destination == .status {
+            return policy?.isEnabled ?? true
+        }
+        return true
+    }
+
+    func visibleDestinations(in section: AppNavigationSection) -> [AppDestination] {
+        section.destinations.filter { isDestinationAllowed($0) }
+    }
+
+    var paletteItems: [CommandPaletteItem] {
+        CommandPaletteItem.all.filter { isDestinationAllowed($0.destination) }
+    }
 
     var filteredPaletteItems: [CommandPaletteItem] {
         let query = commandQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -39,6 +70,7 @@ final class NavigationModel: ObservableObject {
     }
 
     func select(_ destination: AppDestination) {
+        guard isDestinationAllowed(destination) else { return }
         self.destination = destination
     }
 

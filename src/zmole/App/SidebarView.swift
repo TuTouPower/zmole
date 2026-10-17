@@ -19,7 +19,7 @@ struct SidebarView: View {
                     .padding(.top, section == .workspace ? 0 : 14)
                     .padding(.bottom, 7)
                 VStack(spacing: 2) {
-                    ForEach(section.destinations) { destination in
+                    ForEach(navigation.visibleDestinations(in: section)) { destination in
                         navItem(destination)
                     }
                 }
