@@ -3,7 +3,7 @@ import Foundation
 /// One progressively-refined application row from the streaming list scan.
 /// Later rows for the same path supersede earlier ones; nil metadata means the
 /// scan has not resolved it yet (shown as computing, never as zero).
-struct UninstallAppListing: Equatable, Identifiable, Sendable {
+struct UninstallAppListing: Equatable, Codable, Identifiable, Sendable {
     let path: String
     var name: String
     var bundleID: String?
@@ -146,7 +146,7 @@ enum UninstallListStreamParser {
 }
 
 /// Later rows for the same path supersede earlier ones; first-seen order is
-/// kept. Shared by the page ViewModel and the prewarm service.
+/// kept. Shared by the page ViewModel and the background scan service.
 enum UninstallListMerge {
     static func merge(
         _ row: UninstallAppListing,

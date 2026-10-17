@@ -22,7 +22,7 @@ final class UninstallViewModel: ObservableObject {
     private let targetChecker: UninstallTargetChecking
     private let iconProvider: UninstallIconProviding
     private let revealer: FileRevealing
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private weak var scan: (any BackgroundScanProviding)?
 
     private var relatedLoadedIDs: Set<String> = []
     private let session = OperationSession<UninstallPreviewSnapshot>()
@@ -37,7 +37,7 @@ final class UninstallViewModel: ObservableObject {
         targetChecker: UninstallTargetChecking = LiveUninstallTargetChecker(),
         iconProvider: UninstallIconProviding = LiveUninstallIconProvider(),
         revealer: FileRevealing = LiveFileRevealer(),
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
         self.process = process
         self.listStream = listStream
@@ -45,7 +45,7 @@ final class UninstallViewModel: ObservableObject {
         self.targetChecker = targetChecker
         self.iconProvider = iconProvider
         self.revealer = revealer
-        self.prewarm = prewarm
+        self.scan = scan
         leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         leaseCoordinator.onInvalidation = { [weak self] in
@@ -105,7 +105,7 @@ final class UninstallViewModel: ObservableObject {
 
     func loadList() async {
         guard !isListing, !session.isBusy else { return }
-        prewarm?.userDidRescan(.uninstallList)
+        scan?.userDidRescan(.uninstallList)
         leaseCoordinator.release()
         session.invalidate()
         selectedPaths.removeAll()
@@ -193,7 +193,7 @@ final class UninstallViewModel: ObservableObject {
     }
 
     private func adoptPrewarmList() -> Bool {
-        guard let result = prewarm?.takeResult(.uninstallList),
+        guard let result = scan?.result(for: .uninstallList),
               case let .uninstallRows(rows) = result.payload else { return false }
         listings = rows
         hasLoaded = true

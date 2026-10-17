@@ -33,12 +33,12 @@ enum CleanPreviewStoreError: Error, Equatable, LocalizedError, Sendable, ErrorKe
     }
 }
 
-struct CleanPreviewGeneration: Equatable, Sendable {
+struct CleanPreviewGeneration: Equatable, Codable, Sendable {
     let id: UUID
     let fileURL: URL
 }
 
-struct CleanPreviewSnapshot: Equatable, Sendable {
+struct CleanPreviewSnapshot: Equatable, Codable, Sendable {
     let generation: CleanPreviewGeneration
     let contents: String
     let entries: [String]

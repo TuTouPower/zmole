@@ -55,13 +55,16 @@ final class AppDependencies: ObservableObject {
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
     let lanes: MoleCommandLanes
-    let prewarmService: PrewarmService?
+    let scanService: BackgroundScanService?
 
-    private var prewarmSubscriptions: [AnyCancellable] = []
+    private var scanSubscriptions: [AnyCancellable] = []
 
     let demo: DemoConfiguration
 
-    init(configuration: DemoConfiguration = DemoConfiguration()) {
+    init(
+        configuration: DemoConfiguration = DemoConfiguration(),
+        backgroundScanEnabled: Bool = true
+    ) {
         demo = configuration
         let demoDirectory = configuration.dataRoot ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("zmole-demo-\(UUID().uuidString)", isDirectory: true)
@@ -87,11 +90,18 @@ final class AppDependencies: ObservableObject {
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                    let streamBridge = try? MoleBridge(),
                    let cleanBridge = try? MoleBridge(),
-                   let uninstallStreamBridge = try? MoleBridge(),
-                   let prewarmBridge = try? MoleBridge() {
+                   let uninstallStreamBridge = try? MoleBridge() {
             // One bridge per one-shot consumer: a slow read no longer rejects
             // other pages as busy. Writes stay mutually exclusive via the
             // coordinator lease, not the bridge.
+            let scanLanes = BackgroundScanLanes(
+                uninstallStreaming: bridges.scanUninstallStream,
+                installer: InstallerInterface(process: bridges.scanInstaller),
+                installerProcess: bridges.scanInstaller,
+                clean: bridges.scanClean,
+                optimize: bridges.scanOptimize,
+                purge: bridges.scanPurge
+            )
             lanes = MoleCommandLanes(
                 history: bridges.history,
                 uninstall: bridges.uninstall,
@@ -102,7 +112,7 @@ final class AppDependencies: ObservableObject {
                 purge: bridges.purge,
                 estimate: bridges.estimate,
                 estimatePool: [bridges.estimate] + bridges.estimateExtras,
-                prewarm: prewarmBridge,
+                scan: scanLanes,
                 statusStream: streamBridge,
                 cleanStream: cleanBridge
             )
@@ -124,38 +134,41 @@ final class AppDependencies: ObservableObject {
         } else {
             previewStore = .live
         }
-        let prewarm = lanes.prewarm.map { lane in
-            PrewarmService(
-                process: lane,
-                installerInterface: InstallerInterface(process: lane),
+        let scan: BackgroundScanService?
+        if backgroundScanEnabled, let scanLanes = lanes.scan {
+            scan = BackgroundScanService(
+                lanes: scanLanes,
                 cleanPreviewStore: previewStore,
+                cache: .live,
                 coordinator: sharedCoordinator,
                 accessMonitor: accessMonitor
             )
+        } else {
+            scan = nil
         }
-        prewarmService = prewarm
+        scanService = scan
         cleanViewModel = CleanViewModel(
             process: lanes.cleanCommand,
             previewStore: previewStore,
             coordinator: coordinator,
             streaming: lanes.cleanStream,
-            prewarm: prewarm
+            scan: scan
         )
         uninstallViewModel = UninstallViewModel(
             process: lanes.uninstall,
             listStream: UninstallListStream(streaming: lanes.uninstallStream),
             coordinator: coordinator,
-            prewarm: prewarm
+            scan: scan
         )
         optimizeViewModel = OptimizeViewModel(
             process: lanes.optimize,
             coordinator: coordinator,
-            prewarm: prewarm
+            scan: scan
         )
         purgeViewModel = PurgeViewModel(
             process: lanes.purge,
             coordinator: coordinator,
-            prewarm: prewarm
+            scan: scan
         )
         let whitelistURL = configuration.isEnabled
             ? demoDirectory.appendingPathComponent("whitelist")
@@ -200,7 +213,7 @@ final class AppDependencies: ObservableObject {
         installersViewModel = InstallersViewModel(
             interface: InstallerInterface(process: lanes.installer),
             coordinator: coordinator,
-            prewarm: prewarm,
+            scan: scan,
             accessMonitor: accessMonitor
         )
 
@@ -219,46 +232,31 @@ final class AppDependencies: ObservableObject {
             accessMonitor: accessMonitor
         )
 
-        if let prewarm {
-            prewarm.externalActivityProvider = { [weak analyzeViewModel, weak uninstallViewModel, weak installersViewModel, weak cleanViewModel] in
-                (analyzeViewModel?.isScanning ?? false)
-                    || (uninstallViewModel?.isListing ?? false)
-                    || (installersViewModel?.isListing ?? false)
-                    || (cleanViewModel?.preview != nil)
-                    || (cleanViewModel?.isConfirmationPresented ?? false)
-            }
-            prewarm.cleanPreviewActiveProvider = { [weak cleanViewModel] in
+        if let scan {
+            scan.cleanBusyProvider = { [weak cleanViewModel] in
                 guard let cleanViewModel else { return false }
                 return cleanViewModel.preview != nil
                     || cleanViewModel.isConfirmationPresented
                     || cleanViewModel.isPreviewing
+                    || cleanViewModel.isExecuting
             }
             // Published changes fire before the mutation lands; hop one main
-            // actor turn so the idle check reads the new values. A short
-            // coalescing window keeps scan-time publish storms from spawning
-            // one MainActor task per change.
-            let coalescer = ActivityCoalescer(prewarm: prewarm)
-            prewarmSubscriptions = [
-                analyzeViewModel.objectWillChange.sink { _ in
-                    Task { @MainActor in coalescer.notify() }
-                },
-                uninstallViewModel.objectWillChange.sink { _ in
-                    Task { @MainActor in coalescer.notify() }
-                },
-                installersViewModel.objectWillChange.sink { _ in
-                    Task { @MainActor in coalescer.notify() }
-                },
+            // actor turn so the deferred-clean check reads the new values. A
+            // short coalescing window keeps confirmation-time publish storms
+            // from spawning one MainActor task per change.
+            let coalescer = ActivityCoalescer(scan: scan)
+            scanSubscriptions = [
                 cleanViewModel.objectWillChange.sink { _ in
                     Task { @MainActor in coalescer.notify() }
                 },
                 accessMonitor.$isGranted.dropFirst().sink { granted in
                     guard granted else { return }
-                    Task { @MainActor [weak prewarm] in
-                        prewarm?.diskAccessDidChange()
+                    Task { @MainActor [weak scan] in
+                        scan?.diskAccessDidChange()
                     }
                 }
             ]
-            prewarm.noteActivityChanged()
+            scan.noteActivityChanged()
         }
 
         if !configuration.isEnabled {
@@ -290,16 +288,16 @@ final class AppDependencies: ObservableObject {
     }
 }
 
-/// Coalesces activity-change notifications into one prewarm poke per short
+/// Coalesces activity-change notifications into one scan poke per short
 /// window so high-frequency publishes cannot flood the main actor.
 @MainActor
 private final class ActivityCoalescer {
-    private weak var prewarm: PrewarmService?
+    private weak var scan: BackgroundScanService?
     private var pending: Task<Void, Never>?
     private static let windowNanoseconds: UInt64 = 200_000_000
 
-    init(prewarm: PrewarmService) {
-        self.prewarm = prewarm
+    init(scan: BackgroundScanService) {
+        self.scan = scan
     }
 
     func notify() {
@@ -308,7 +306,7 @@ private final class ActivityCoalescer {
             try? await Task.sleep(nanoseconds: Self.windowNanoseconds)
             guard let self else { return }
             self.pending = nil
-            self.prewarm?.noteActivityChanged()
+            self.scan?.noteActivityChanged()
         }
     }
 }
