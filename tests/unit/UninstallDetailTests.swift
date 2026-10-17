@@ -25,10 +25,10 @@ final class UninstallDetailTests: XCTestCase {
         let apps = viewModel.apps
 
         viewModel.toggleSelection(apps[0])
-        viewModel.focus(apps[1])
+        viewModel.focus(path: apps[1].path)
 
         XCTAssertEqual(viewModel.focusedAppID, apps[1].id)
-        XCTAssertEqual(viewModel.selectedIDs, [apps[0].id])
+        XCTAssertEqual(viewModel.selectedPaths, [apps[0].id])
         XCTAssertEqual(viewModel.focusedApp?.path, apps[1].path)
     }
 
@@ -102,9 +102,13 @@ final class UninstallDetailTests: XCTestCase {
         let app = viewModel.apps[0]
 
         viewModel.revealInFinder(app)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        var paths: [String] = []
+        for _ in 0..<200 {
+            paths = await revealer.paths
+            if !paths.isEmpty { break }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
 
-        let paths = await revealer.paths
         XCTAssertEqual(paths, [app.path])
     }
 
@@ -156,7 +160,7 @@ final class UninstallDetailTests: XCTestCase {
 
         let visible = UninstallListFilter.visibleListings(viewModel.listings, search: "Beta", source: "all")
         XCTAssertEqual(visible.map(\.name), ["Beta Tool"])
-        XCTAssertEqual(viewModel.selectedIDs, [apps[0].id])
+        XCTAssertEqual(viewModel.selectedPaths, [apps[0].id])
     }
 
     func testConfirmationExecutesOnlySelectedBatch() async {

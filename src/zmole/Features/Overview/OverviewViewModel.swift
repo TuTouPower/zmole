@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+import os
+
+private let overviewLog = Logger(subsystem: "com.tutupower.zmole", category: "Overview")
 
 /// Formats a status snapshot for the overview headline metrics. Kept as a pure
 /// value type so the mapping can be asserted without rendering SwiftUI.
@@ -15,13 +18,11 @@ struct OverviewMetrics: Equatable, Sendable {
     }
 
     var memoryText: String {
-        if let used = snapshot.memory.used, let total = snapshot.memory.total {
-            return "\(OverviewMetrics.bytes(used)) / \(OverviewMetrics.bytes(total))"
-        }
-        if let percent = snapshot.memory.usedPercent {
-            return String(format: "%.1f%%", percent)
-        }
-        return "—"
+        StatusReadout.memoryText(
+            used: snapshot.memory.used,
+            total: snapshot.memory.total,
+            percent: snapshot.memory.usedPercent
+        )
     }
 
     var primaryDisk: StatusSnapshot.Disk? {
@@ -270,8 +271,8 @@ struct OverviewStorageCard: Equatable, Sendable {
 final class OverviewViewModel: ObservableObject {
     @Published private(set) var breakdown = StorageBreakdown.placeholder
     @Published private(set) var recentOperations: [HistorySession] = []
-    @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessageKey: String?
     /// Set when a write operation invalidated the cached estimate.
     @Published private(set) var estimateInvalidated = false
     @Published private(set) var showBusyNotice = false
@@ -283,7 +284,13 @@ final class OverviewViewModel: ObservableObject {
     private var cacheEntry: StorageEstimateCacheEntry?
     private var isEstimating = false
     private var invalidationCount = 0
+    private var lastEstimateFailureAt: Date?
     private var coordinatorSubscription: AnyCancellable?
+
+    /// Cool-down before a failed estimate is retried, so a persistently
+    /// unreadable path does not restart a multi-process scan on every page
+    /// appearance.
+    static let estimateFailureCooldown: TimeInterval = 30 * 60
 
     init(
         storageLoader: StorageEstimateLoader?,
@@ -327,6 +334,10 @@ final class OverviewViewModel: ObservableObject {
     var estimateNeedsRefresh: Bool {
         guard storageLoader != nil else { return false }
         if estimateInvalidated { return true }
+        if let lastFailureAt = lastEstimateFailureAt,
+           now().timeIntervalSince(lastFailureAt) < Self.estimateFailureCooldown {
+            return false
+        }
         guard let cacheEntry else { return true }
         // A partial cache must not suppress a retry for the failed paths.
         guard cacheEntry.sums.isComplete else { return true }
@@ -339,28 +350,25 @@ final class OverviewViewModel: ObservableObject {
         do {
             recentOperations = try await historyLoader.load(limit: 5).sessions
             errorMessage = nil
+            errorMessageKey = nil
             showBusyNotice = false
         } catch {
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 errorMessage = nil
+                errorMessageKey = nil
                 return
             }
             showBusyNotice = false
             recentOperations = []
-            errorMessage = error.localizedDescription
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
         }
     }
 
     /// Computes the estimate unless a valid, fresh cache already covers it.
     func refreshEstimateIfNeeded(usedBytes: Int64?) async {
         guard estimateNeedsRefresh else { return }
-        await computeEstimate(usedBytes: usedBytes)
-    }
-
-    /// Forced recompute (tests and explicit refresh).
-    func loadEstimate(usedBytes: Int64?) async {
-        guard usedBytes != nil else { return }
         await computeEstimate(usedBytes: usedBytes)
     }
 
@@ -372,8 +380,13 @@ final class OverviewViewModel: ObservableObject {
         do {
             let sums = try await storageLoader.loadSums()
             // A scan that could not read every path is not persisted and never
-            // replaces the live breakdown; the next appearance retries.
-            guard sums.isComplete else { return }
+            // replaces the live breakdown; the next appearance retries after
+            // the failure cool-down.
+            guard sums.isComplete else {
+                lastEstimateFailureAt = now()
+                overviewLog.error("storage estimate incomplete; backing off")
+                return
+            }
             breakdown = sums.breakdown(usedBytes: usedBytes)
             let capturedAt = now()
             storageCache?.save(sums, capturedAt: capturedAt)
@@ -382,6 +395,7 @@ final class OverviewViewModel: ObservableObject {
                 capturedAt: capturedAt,
                 sums: sums
             )
+            lastEstimateFailureAt = nil
             // Keep the estimate marked stale if a write invalidated it mid-scan.
             if invalidationCount == invalidationsAtStart {
                 estimateInvalidated = false
@@ -390,16 +404,10 @@ final class OverviewViewModel: ObservableObject {
             // A cancelled scan must not write a cache later launches would
             // trust, and must not replace the current estimate.
         } catch {
-            // Same rule for unexpected loader failures.
+            // Same rule for unexpected loader failures; record the category
+            // and back off so the page does not rescan on every appearance.
+            lastEstimateFailureAt = now()
+            overviewLog.error("storage estimate failed: \(String(describing: type(of: error)), privacy: .public)")
         }
-    }
-
-    /// Convenience used by tests: load history and, when a used-space value is
-    /// known, the estimate.
-    func refresh(usedBytes: Int64?) async {
-        isLoading = true
-        defer { isLoading = false }
-        await refreshHistory()
-        await loadEstimate(usedBytes: usedBytes)
     }
 }

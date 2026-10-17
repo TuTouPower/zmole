@@ -9,8 +9,17 @@ enum AppLifecycle {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Registered by the app assembly. Runs synchronously at termination and
+    /// must wait (bounded) for active mole child processes to stop.
+    /// Written and read on the main thread only.
+    static var shutdownHandler: (@Sendable () -> Void)?
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         AppLifecycle.terminatesAfterLastWindowClosed
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.shutdownHandler?()
     }
 }
 

@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-enum PurgePathsError: Error, Equatable, LocalizedError, Sendable {
+enum PurgePathsError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case invalidPath(String)
     case invalidUTF8
 
@@ -64,6 +64,9 @@ final class PurgePathsViewModel: ObservableObject {
     @Published var text = ""
     @Published private(set) var errorKey: String?
     @Published private(set) var didSave = false
+    /// False until a load succeeds; `save` is refused so a failed load can
+    /// never overwrite the file with the (possibly empty) editor contents.
+    @Published private(set) var isLoaded = false
 
     private let store: PurgePathsStore
     private let coordinator: OperationCoordinator
@@ -80,8 +83,10 @@ final class PurgePathsViewModel: ObservableObject {
         do {
             text = try store.load().joined(separator: "\n")
             errorKey = nil
+            isLoaded = true
         } catch {
-            errorKey = (error as? PurgePathsError)?.errorKey
+            errorKey = (error as? PurgePathsError)?.errorKey ?? "purge.paths.error.load"
+            isLoaded = false
         }
     }
 
@@ -90,6 +95,7 @@ final class PurgePathsViewModel: ObservableObject {
     /// On failure the edited text stays in the view model.
     @discardableResult
     func save() -> Bool {
+        guard isLoaded else { return false }
         let paths = text
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }

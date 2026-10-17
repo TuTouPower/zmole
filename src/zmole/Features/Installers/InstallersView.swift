@@ -45,7 +45,9 @@ struct InstallersView: View {
                 if viewModel.showBusyNotice {
                     RecoverableBusyNotice()
                 }
-                if let errorMessage = viewModel.errorMessage {
+                if let errorKey = viewModel.errorMessageKey {
+                    UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                } else if let errorMessage = viewModel.errorMessage {
                     UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
                 }
             }
@@ -55,50 +57,37 @@ struct InstallersView: View {
     }
 
     private var head: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("installers.eyebrow")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MoleTheme.accentStrong)
-                    .textCase(.uppercase)
-                Text("installers.title").font(.system(size: 30, weight: .bold))
-                Text("installers.subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
-                if let capturedAt = viewModel.listCapturedAt {
-                    Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 11))
-                        .foregroundStyle(MoleTheme.muted)
-                }
+        MolePageHead(
+            eyebrow: "installers.eyebrow",
+            title: "installers.title",
+            subtitle: "installers.subtitle"
+        ) {
+            if let capturedAt = viewModel.listCapturedAt {
+                Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoleTheme.muted)
             }
-            Spacer()
             Button {
                 Task { await viewModel.scan() }
             } label: {
                 Label("installers.scan", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.borderedProminent)
+            .tint(MoleTheme.accent)
             .disabled(viewModel.isListing || viewModel.isRemoving)
         }
     }
 
     private var statStrip: some View {
         HStack(spacing: 10) {
-            statTile("installers.stat.found", "\(viewModel.candidates.count)")
-            statTile("installers.stat.selected", "\(viewModel.selectedPaths.count)")
-            statTile("installers.stat.size", ByteCountFormatter.string(fromByteCount: viewModel.selectedBytes, countStyle: .file))
-            statTile("installers.stat.destination", String(localized: "installers.stat.trash"))
+            MoleStatTile(value: "\(viewModel.candidates.count)", label: "installers.stat.found")
+            MoleStatTile(value: "\(viewModel.selectedPaths.count)", label: "installers.stat.selected")
+            MoleStatTile(
+                value: ByteCountFormatter.string(fromByteCount: viewModel.selectedBytes, countStyle: .file),
+                label: "installers.stat.size"
+            )
+            MoleStatTile(value: String(localized: "installers.stat.trash"), label: "installers.stat.destination")
         }
-    }
-
-    private func statTile(_ title: LocalizedStringKey, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(verbatim: value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .lineLimit(1).minimumScaleFactor(0.7)
-            Text(title).font(.system(size: 10)).foregroundStyle(MoleTheme.muted)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
-        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusMD).strokeBorder(MoleTheme.line))
     }
 
     private var listCard: some View {
@@ -141,6 +130,9 @@ struct InstallersView: View {
                 HStack {
                     Text("installers.action_footer").font(.system(size: 11)).foregroundStyle(MoleTheme.muted)
                     Spacer()
+                    if viewModel.isRemoving {
+                        Button("installers.cancel_removal") { viewModel.cancelRemoval() }
+                    }
                     Button("installers.remove") { viewModel.requestConfirmation() }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)

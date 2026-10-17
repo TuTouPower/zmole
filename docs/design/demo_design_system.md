@@ -287,6 +287,8 @@ components:
 
 # Zmole Design System
 
+> 历史标注（2026-10-17）：本文的五模式导航与窗口尺寸等约定已被 `docs/design/ui_contract.md` 的十页侧边栏基线取代；保留原文供对照。
+
 ## Overview
 
 Zmole is a **quiet professional Mac utility**, not a dashboard, not a gamified “cleaner,” and not a website wrapped in a desktop window. Its job is to make powerful system operations understandable and trustworthy while preserving the efficiency expected from a native macOS tool.

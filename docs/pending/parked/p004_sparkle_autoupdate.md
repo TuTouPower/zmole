@@ -3,4 +3,4 @@
 - 来源：grilling Q13 选 3
 - 内容：第一版关于页链到 GitHub Releases，手动下载。禁止调用捆绑 mole 的 `update`。
 - 处理：不办
-- 暂搁：第一版确认不做：无稳定机器接口或会破坏捆绑 App / 需开发者账号
+- 暂搁：Sparkle 需要稳定的更新源与签名链路（当前 ad-hoc 签名且不公证），并需要 Apple Developer Program 账号；第一版以 GitHub Releases 手动下载代替

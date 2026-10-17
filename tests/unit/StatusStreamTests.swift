@@ -89,14 +89,42 @@ final class StatusStreamTests: XCTestCase {
         let firstCallCount = await streaming.streamCallCount
         XCTAssertEqual(firstCallCount, 1)
         // A terminal stream also terminates its subscriber. Manual recovery
-        // creates a fresh subscription before asking the service to retry.
+        // creates a fresh subscription before starting the service again.
         let retryStream = await service.subscribe()
-        await service.retry()
+        await service.start()
         await streaming.waitForStream(count: 2)
         let secondCallCount = await streaming.streamCallCount
         XCTAssertEqual(secondCallCount, 2)
         _ = retryStream
         await service.stop()
+    }
+
+    func testPauseAndStopCancelTheUnderlyingStream() async throws {
+        let streaming = FakeStatusStreaming()
+        let service = StatusWatchService(streaming: streaming)
+        let first = await service.subscribe()
+        await service.start()
+        await streaming.waitForStream()
+        let initialCallCount = await streaming.streamCallCount
+        XCTAssertEqual(initialCallCount, 1)
+        let initialCancelCount = await streaming.cancelCallCount
+        XCTAssertEqual(initialCancelCount, 0)
+
+        await service.pause()
+        let pauseCancelCount = await streaming.cancelCallCount
+        XCTAssertGreaterThanOrEqual(pauseCancelCount, 1, "pause must cancel the shared watch process")
+
+        let second = await service.subscribe()
+        await service.start()
+        await streaming.waitForStream(count: 2)
+        let resumedCallCount = await streaming.streamCallCount
+        XCTAssertEqual(resumedCallCount, 2, "resume must spawn a fresh watch stream")
+
+        await service.stop()
+        let stopCancelCount = await streaming.cancelCallCount
+        XCTAssertGreaterThanOrEqual(stopCancelCount, pauseCancelCount + 1, "stop must cancel again")
+        _ = first
+        _ = second
     }
 
     private func sample(collectedAt: String, rx: Double, readRate: Double = 0) -> Data {
@@ -115,6 +143,7 @@ private extension AsyncThrowingStream where Element == StatusWatchUpdate, Failur
 private actor FakeStatusStreaming: MoleStreaming {
     private var continuations: [AsyncThrowingStream<MoleOutputEvent, Error>.Continuation] = []
     private(set) var streamCallCount = 0
+    private(set) var cancelCallCount = 0
 
     func stream(
         _ arguments: [String],
@@ -126,6 +155,10 @@ private actor FakeStatusStreaming: MoleStreaming {
         let stream = AsyncThrowingStream<MoleOutputEvent, Error> { continuation = $0 }
         continuations.append(continuation)
         return stream
+    }
+
+    func cancel() async {
+        cancelCallCount += 1
     }
 
     func emit(_ data: Data) {

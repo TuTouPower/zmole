@@ -14,7 +14,7 @@
 |预跑|prewarm|空闲时的后台只读扫描队列（卸载名单、安装包名单、clean/optimize/purge dry-run）；不占写入租约，写入开始即取消|
 |优化|optimize|有限维护（DNS、Spotlight 等）；其中删除保持永久删除|
 |磁盘分析|disk|只读浏览占用；应用内扫描，不调用 mole；文件按 `st_blocks × 512`，硬链接同一扫描只计一次，符号链接只计自身，跨设备子目录不计入父合计；会话内保留已扫描层级；第一版不在浏览结果上删除|
-|状态|status|只读健康快照（非 live watch）|
+|状态|status|实时只读 watch 流（`status --watch --interval`）；可暂停、离页停止，流错误终态需手动重试|
 |工程产物清理|purge|删除可重建构建产物；非 TTY 执行必须 `--yes`|
 |安装包|installer|扫描下载中的安装包；非交互列出后按路径移入废纸篓|
 |操作历史|history|mole 操作日志|

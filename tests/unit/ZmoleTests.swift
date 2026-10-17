@@ -9,10 +9,12 @@ final class ZmoleTests: XCTestCase {
     // `NavigationTests` against the ten-destination model.
 
     func testDemoConfigurationSelectsPageLanguageAndAppearance() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zmole-demo-data", isDirectory: true)
         let configuration = DemoConfiguration(arguments: [
             "zmole", "--demo", "--demo-page", "analyze",
             "--demo-state", "partial", "--demo-language", "zh-Hans", "--demo-appearance", "light",
-            "--demo-data-root", "/tmp/zmole-demo-data"
+            "--demo-data-root", root.path
         ])
 
         XCTAssertTrue(configuration.isEnabled)
@@ -20,7 +22,26 @@ final class ZmoleTests: XCTestCase {
         XCTAssertEqual(configuration.state, .partial)
         XCTAssertEqual(configuration.language, .simplifiedChinese)
         XCTAssertEqual(configuration.appearance, .light)
-        XCTAssertEqual(configuration.dataRoot?.path, "/tmp/zmole-demo-data")
+        XCTAssertEqual(configuration.dataRoot?.standardizedFileURL, root.standardizedFileURL)
+    }
+
+    func testDemoConfigurationRejectsDataRootOutsideTemporaryDirectory() {
+        let configuration = DemoConfiguration(arguments: [
+            "zmole", "--demo", "--demo-data-root", "/tmp/zmole-demo-data"
+        ])
+
+        XCTAssertTrue(configuration.isEnabled)
+        XCTAssertNil(configuration.dataRoot)
+    }
+
+    func testDemoLanguageFlagsRequireDemoGate() {
+        let configuration = DemoConfiguration(arguments: [
+            "zmole", "--demo-language", "zh-Hans", "--demo-appearance", "light"
+        ])
+
+        XCTAssertFalse(configuration.isEnabled)
+        XCTAssertNil(configuration.language)
+        XCTAssertNil(configuration.appearance)
     }
 
     @MainActor
@@ -82,7 +103,11 @@ final class ZmoleTests: XCTestCase {
         let viewModel = dependencies.statusViewModel
 
         viewModel.start()
-        try await Task.sleep(nanoseconds: 2_700_000_000)
+        // Demo samples arrive every 800ms; wait with an upper bound instead of
+        // a fixed sleep so a slow machine does not flake.
+        for _ in 0..<200 where viewModel.snapshot == nil {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
 
         XCTAssertNotNil(viewModel.snapshot)
         XCTAssertTrue(viewModel.isSampling)
@@ -125,67 +150,12 @@ final class ZmoleTests: XCTestCase {
         )
     }
 
-    func testCancellingDestructiveConfirmationDoesNotExecuteAction() {
-        var executed = false
-        let flow = DestructiveConfirmationFlow { executed = true }
-
-        flow.cancel()
-
-        XCTAssertFalse(executed)
-        XCTAssertFalse(flow.isPending)
-    }
-
-    func testStatusLoaderPassesExplicitJSONArgumentsAndDecodesMetrics() async throws {
-        let recorder = CommandRecorder()
-        let loader = StatusSnapshotLoader { arguments in
-            await recorder.record(arguments)
-            return MoleCommandResult(stdout: Self.statusFixture, stderr: "", exitCode: 0)
-        }
-
-        let snapshot = try await loader.load()
-
-        let arguments = await recorder.arguments
-        XCTAssertEqual(arguments, ["status", "--json"])
-        XCTAssertEqual(snapshot.healthScore, 100)
-        XCTAssertEqual(snapshot.cpu.usage, 33.033730353481815)
-        XCTAssertEqual(snapshot.memory.used, 36_889_788_416)
-        XCTAssertEqual(snapshot.disks.first?.total, 994_662_584_320)
-    }
-
-    @MainActor
-    func testStatusViewModelClearsSuccessDataWhenRefreshFails() async {
-        let sequence = CommandSequence(outputs: [
-            Self.statusFixture,
-            "{not-json"
-        ])
-        let loader = StatusSnapshotLoader { _ in
-            await sequence.next()
-        }
-        let viewModel = StatusViewModel(loader: loader)
-
-        await viewModel.refresh()
-        XCTAssertNotNil(viewModel.snapshot)
-
-        await viewModel.refresh()
-        XCTAssertNil(viewModel.snapshot)
-        XCTAssertNotNil(viewModel.errorMessage)
-        XCTAssertFalse(viewModel.isLoading)
-    }
-
-    @MainActor
-    func testStatusViewModelShowsCommandFailureWithoutStaleData() async {
-        let loader = StatusSnapshotLoader { _ in
-            throw MoleBridgeError.commandFailed(
-                MoleCommandResult(stdout: "", stderr: "status failed", exitCode: 7)
-            )
-        }
-        let viewModel = StatusViewModel(loader: loader)
-
-        await viewModel.refresh()
-
-        XCTAssertNil(viewModel.snapshot)
-        XCTAssertEqual(viewModel.errorMessage, "mole 命令失败（7）：status failed")
-    }
+    // DestructiveConfirmationFlow and the StatusViewModel one-shot refresh
+    // path (with its StatusSnapshotLoader) were removed together with their
+    // only call sites; confirmation now runs through OperationSession and the
+    // status page owns a watch stream (behavior covered by StatusStreamTests
+    // and the OperationSession tests). The former flow/loader/refresh tests
+    // were deleted with those APIs.
 
     func testHistoryLoaderUsesDefaultLimitAndDecodesSessionSummary() async throws {
         let recorder = CommandRecorder()
@@ -259,7 +229,8 @@ final class ZmoleTests: XCTestCase {
         await invalidViewModel.refresh()
 
         XCTAssertNil(invalidViewModel.snapshot)
-        XCTAssertNotNil(invalidViewModel.errorMessage)
+        XCTAssertEqual(invalidViewModel.errorMessageKey, "history.error.invalid_json")
+        XCTAssertNil(invalidViewModel.errorMessage)
 
         let failedLoader = HistorySnapshotLoader { _ in
             throw MoleBridgeError.commandFailed(
@@ -271,7 +242,8 @@ final class ZmoleTests: XCTestCase {
         await failedViewModel.refresh()
 
         XCTAssertNil(failedViewModel.snapshot)
-        XCTAssertEqual(failedViewModel.errorMessage, "mole 命令失败（9）：history failed")
+        XCTAssertEqual(failedViewModel.errorMessageKey, "mole.error.command_failed")
+        XCTAssertNil(failedViewModel.errorMessage)
     }
 
     func testAnalyzeLoaderUsesJSONBeforeOverviewPathAndDecodesEntries() async throws {
@@ -403,26 +375,11 @@ final class ZmoleTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
-    @MainActor
-    func testWhitelistEditorDoesNotRunMoleProcess() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-whitelist-no-process")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let fileURL = directory.appendingPathComponent("whitelist")
-        let spy = WhitelistMoleProcessSpy()
-        let viewModel = WhitelistViewModel(
-            store: WhitelistStore(fileURL: fileURL),
-            moleProcess: spy,
-            coordinator: OperationCoordinator()
-        )
-
-        viewModel.load()
-        viewModel.newPattern = "~/safe"
-        viewModel.addPattern()
-        viewModel.save()
-
-        let invocationCount = await spy.invocations
-        XCTAssertEqual(invocationCount, 0)
-    }
+    // The former testWhitelistEditorDoesNotRunMoleProcess asserted that the
+    // editor never invokes its injected mole process; the unused moleProcess
+    // dependency was removed, so that assertion has no subject anymore. The
+    // "editor writes only the whitelist file" behavior stays covered by
+    // testWhitelistEditorSavesPatternsToStore above.
 
     @MainActor
     func testCleanPreviewUsesDryRunAndCurrentList() async throws {
@@ -745,31 +702,6 @@ private actor CommandRecorder {
 
     func record(_ arguments: [String]) {
         self.arguments = arguments
-    }
-}
-
-private actor CommandSequence {
-    private var outputs: [String]
-
-    init(outputs: [String]) {
-        self.outputs = outputs
-    }
-
-    func next() -> MoleCommandResult {
-        MoleCommandResult(stdout: outputs.removeFirst(), stderr: "", exitCode: 0)
-    }
-}
-
-private actor WhitelistMoleProcessSpy: MoleCommandRunning {
-    private(set) var invocations = 0
-
-    func run(
-        _ arguments: [String],
-        stdin: Data?,
-        timeout: TimeInterval
-    ) async throws -> MoleCommandResult {
-        invocations += 1
-        return MoleCommandResult(stdout: "", stderr: "", exitCode: 0)
     }
 }
 

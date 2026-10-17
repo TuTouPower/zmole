@@ -13,6 +13,7 @@ final class AnalyzeViewModel: ObservableObject {
     @Published private(set) var isListing = false
     @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessageKey: String?
     @Published private(set) var canGoBack = false
 
     let rootPath: String
@@ -20,11 +21,19 @@ final class AnalyzeViewModel: ObservableObject {
     private let scanner: DiskScanning
     private let revealer: FileRevealing
 
+    /// Upper bound for the per-session level cache so measuring a huge subtree
+    /// cannot pin hundreds of megabytes of path strings.
+    private static let maxCachedRecords = 4_000
+
     private var pathStack: [String] = []
     private var records: [String: LevelRecord] = [:]
     private var nextGeneration = 0
     private var pendingMeasurements: [MeasurementRequest] = []
     private var measurementWorker: Task<Void, Never>?
+    private var workerToken = 0
+    private var levelRevision = 0
+    private var visibleCache: (revision: Int, search: String, sort: AnalyzeSort, entries: [DiskEntry])?
+    private var tilesCache: (revision: Int, size: CGSize, tiles: [SpaceMapTile])?
 
     private struct LevelRecord {
         var entries: [DiskEntry]
@@ -37,7 +46,7 @@ final class AnalyzeViewModel: ObservableObject {
         let deduplicator: HardLinkDeduplicator
     }
 
-    private struct MeasurementRequest {
+    private struct MeasurementRequest: Sendable {
         let parent: String
         let child: String
         let generation: Int
@@ -52,6 +61,40 @@ final class AnalyzeViewModel: ObservableObject {
     }
 
     var currentPath: String? { level?.path }
+
+    /// Cached filter+sort for the visible list, keyed by level revision so
+    /// repeated body evaluations do not re-sort (ICU compare) the whole level.
+    func visibleEntries(search: String, sort: AnalyzeSort) -> [DiskEntry] {
+        if let cache = visibleCache,
+           cache.revision == levelRevision,
+           cache.search == search,
+           cache.sort == sort {
+            return cache.entries
+        }
+        let entries = level?.entries ?? []
+        let filtered = entries.filter {
+            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)
+        }
+        let sorted = AnalyzeListOrder.sorted(filtered, by: sort)
+        visibleCache = (levelRevision, search, sort, sorted)
+        return sorted
+    }
+
+    /// Cached space-map layout, keyed by level revision and pane size.
+    func spaceMapTiles(size: CGSize) -> [SpaceMapTile] {
+        guard let level else { return [] }
+        if let cache = tilesCache,
+           cache.revision == levelRevision,
+           cache.size == size {
+            return cache.tiles
+        }
+        let tiles = SpaceMapLayout.tiles(
+            entries: level.entries,
+            in: CGRect(origin: .zero, size: size)
+        )
+        tilesCache = (levelRevision, size, tiles)
+        return tiles
+    }
 
     private var wantsScanningState: Bool {
         isListing || measurementWorker != nil || !pendingMeasurements.isEmpty
@@ -75,6 +118,7 @@ final class AnalyzeViewModel: ObservableObject {
     /// result for that subtree.
     func refreshCurrent() async {
         guard !isListing, let path = level?.path else { return }
+        cancelMeasurements()
         invalidateSubtree(of: path)
         await list(path)
     }
@@ -111,6 +155,7 @@ final class AnalyzeViewModel: ObservableObject {
 
     private func showPath(_ path: String) async {
         errorMessage = nil
+        errorMessageKey = nil
         if let record = records[path] {
             publish(record, path: path)
             return
@@ -149,12 +194,15 @@ final class AnalyzeViewModel: ObservableObject {
                 deduplicator: deduplicator
             )
         } catch {
-            errorMessage = error.localizedDescription
-            level = nil
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
+            // Keep the previous level on screen; the error banner explains why
+            // the requested directory could not be listed.
         }
     }
 
     private func publish(_ record: LevelRecord, path: String) {
+        levelRevision += 1
         level = LevelState(path: path, entries: record.entries, totalSize: record.totalSize)
     }
 
@@ -179,25 +227,62 @@ final class AnalyzeViewModel: ObservableObject {
 
     private func startMeasurementWorker() {
         guard measurementWorker == nil else { return }
+        workerToken += 1
+        let token = workerToken
         measurementWorker = Task { @MainActor [weak self] in
             await self?.processMeasurements()
+            guard let self, self.workerToken == token else { return }
+            self.measurementWorker = nil
+            self.refreshScanState()
         }
         refreshScanState()
     }
 
-    private func processMeasurements() async {
-        while let request = pendingMeasurements.first {
-            pendingMeasurements.removeFirst()
-            guard records[request.parent]?.generation == request.generation else { continue }
-            let result = await scanner.measureSubtree(
-                request.child,
-                deduplicator: request.deduplicator
-            )
-            guard records[request.parent]?.generation == request.generation else { continue }
-            apply(result, parent: request.parent, generation: request.generation)
-        }
+    private func cancelMeasurements() {
+        measurementWorker?.cancel()
         measurementWorker = nil
+        workerToken += 1
+        pendingMeasurements.removeAll()
         refreshScanState()
+    }
+
+    /// Measures pending subdirectories with a small concurrency window so a
+    /// level with dozens of children does not serialize its whole scan.
+    private func processMeasurements() async {
+        await withTaskGroup(of: Void.self) { group in
+            var inFlight = 0
+            let maxConcurrent = 3
+            while let request = pendingMeasurements.first {
+                pendingMeasurements.removeFirst()
+                if Task.isCancelled { break }
+                guard records[request.parent]?.generation == request.generation else { continue }
+                if let existing = records[request.child], existing.generation >= request.generation {
+                    // Already measured by an in-flight parent walk or a later
+                    // list of that same path.
+                    continue
+                }
+                if inFlight >= maxConcurrent {
+                    await group.next()
+                    inFlight -= 1
+                }
+                let scanner = self.scanner
+                inFlight += 1
+                group.addTask { [weak self] in
+                    let result = await scanner.measureSubtree(
+                        request.child,
+                        deduplicator: request.deduplicator
+                    )
+                    guard let self else { return }
+                    await self.applyMeasured(result, request: request)
+                }
+            }
+            await group.waitForAll()
+        }
+    }
+
+    private func applyMeasured(_ result: DiskScanResult, request: MeasurementRequest) {
+        guard records[request.parent]?.generation == request.generation else { return }
+        apply(result, parent: request.parent, generation: request.generation)
     }
 
     private func apply(_ result: DiskScanResult, parent: String, generation: Int) {
@@ -220,6 +305,7 @@ final class AnalyzeViewModel: ObservableObject {
 
         for (path, scannedLevel) in result.levels {
             if let existing = records[path], existing.generation >= generation { continue }
+            if records[path] == nil, records.count >= Self.maxCachedRecords { continue }
             records[path] = LevelRecord(
                 entries: scannedLevel.entries,
                 totalSize: scannedLevel.totalSize,

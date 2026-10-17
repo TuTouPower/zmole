@@ -14,7 +14,8 @@ fail() {
     failures=$((failures + 1))
 }
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d)" || exit 1
+trap 'rm -rf "${WORK:-}"' EXIT
 HOME="$WORK/home"
 export HOME
 SCAN="$WORK/apps"
@@ -97,6 +98,37 @@ if printf '%s' "$OUT" | grep -q '"size": *"N/A (Steam-managed)"'; then
     fail "t029 fixture unexpectedly marked Steam-managed"
 else
     pass "t029 plain app is not Steam-managed"
+fi
+
+# Named-uninstall confirmation protocol: empty stdin aborts, `y\n` proceeds
+# with the dry-run. The fixture app must survive both probes.
+if [[ -d "$SCAN/Foo.app/Contents" ]]; then
+    pass "fixture app exists before named-uninstall probes"
+else
+    fail "fixture app missing before named-uninstall probes"
+fi
+
+EMPTY_OUT="$(MOLE_UNINSTALL_SCAN_ROOT="$SCAN" \
+    MOLE_UNINSTALL_META_CACHE_DIR="$WORK/cache" \
+    bash "$UNINSTALL" Foo --dry-run < /dev/null 2>&1)"
+if printf '%s' "$EMPTY_OUT" | grep -q "Aborted."; then
+    pass "named uninstall aborts on empty stdin"
+else
+    fail "named uninstall empty stdin did not abort: $(printf '%s' "$EMPTY_OUT" | tail -2)"
+fi
+if [[ -d "$SCAN/Foo.app/Contents" ]]; then
+    pass "fixture app survives the aborted dry-run"
+else
+    fail "fixture app disappeared after aborted dry-run"
+fi
+
+RESUME_OUT="$(printf 'y\n' | MOLE_UNINSTALL_SCAN_ROOT="$SCAN" \
+    MOLE_UNINSTALL_META_CACHE_DIR="$WORK/cache" \
+    bash "$UNINSTALL" Foo --dry-run 2>&1)"
+if printf '%s' "$RESUME_OUT" | grep -q "Matched"; then
+    pass "named uninstall dry-run proceeds with y confirm"
+else
+    fail "named uninstall y-confirm dry-run did not proceed: $(printf '%s' "$RESUME_OUT" | tail -2)"
 fi
 
 rm -rf "$WORK"

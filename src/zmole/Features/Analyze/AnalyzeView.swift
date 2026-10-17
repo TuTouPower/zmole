@@ -35,8 +35,7 @@ struct AnalyzeView: View {
     private var entries: [DiskEntry] { viewModel.level?.entries ?? [] }
     private var selected: DiskEntry? { entries.first { $0.path == selectedPath } }
     private var visibleEntries: [DiskEntry] {
-        let filtered = entries.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
-        return AnalyzeListOrder.sorted(filtered, by: sort)
+        viewModel.visibleEntries(search: search, sort: sort)
     }
 
     var body: some View {
@@ -76,13 +75,33 @@ struct AnalyzeView: View {
     @ViewBuilder
     private var content: some View {
         if let level = viewModel.level {
-            splitPanes(level: level)
+            VStack(spacing: 0) {
+                if let errorKey = viewModel.errorMessageKey {
+                    UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                } else if let error = viewModel.errorMessage {
+                    UtilityNotice(title: "analyze.error_title", detail: error, isError: true)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                }
+                splitPanes(level: level)
+            }
         } else if viewModel.isListing {
             VStack(spacing: 12) {
                 ProgressView()
                 Text("analyze.loading").foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorKey = viewModel.errorMessageKey {
+            VStack(spacing: 18) {
+                UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                if viewModel.canGoBack {
+                    Button("analyze.back") { Task { await viewModel.goBack() } }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else if let error = viewModel.errorMessage {
             VStack(spacing: 18) {
                 UtilityNotice(title: "analyze.error_title", detail: error, isError: true)
@@ -291,7 +310,7 @@ struct AnalyzeView: View {
                         }
                     }
                     .accessibilityHidden(true)
-                Text(String(format: "%.1f%%", share * 100))
+                Text(String(format: "%.1f%%", min(1, share) * 100))
                     .font(.system(size: 10))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -319,7 +338,7 @@ struct AnalyzeView: View {
                 UtilityEmptyState(symbol: "folder", title: "analyze.no_sizes", message: "analyze.no_sizes_detail")
             } else {
                 GeometryReader { proxy in
-                    let tiles = SpaceMapLayout.tiles(entries: level.entries, in: CGRect(origin: .zero, size: proxy.size))
+                    let tiles = viewModel.spaceMapTiles(size: proxy.size)
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                             mapTile(tile, index: index)
@@ -399,7 +418,7 @@ struct AnalyzeView: View {
 
     private func shareText(for entry: DiskEntry, total: Int64) -> String {
         guard let share = AnalyzeArea.share(of: entry.knownSize, total: total) else { return "—" }
-        return String(format: "%.1f%%", share * 100)
+        return String(format: "%.1f%%", min(1, share) * 100)
     }
 
     private func openDirectory(_ entry: DiskEntry) {

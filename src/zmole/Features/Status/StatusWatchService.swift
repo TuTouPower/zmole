@@ -33,10 +33,21 @@ struct StatusWatchUpdate: Equatable, Sendable {
     }
 }
 
-enum StatusWatchError: Error, Equatable, LocalizedError, Sendable {
+enum StatusWatchError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case invalidJSON
     case disconnected
     case bufferOverflow
+
+    var errorKey: String {
+        switch self {
+        case .invalidJSON:
+            return "status.error.invalid_json"
+        case .disconnected:
+            return "status.error.disconnected"
+        case .bufferOverflow:
+            return "status.error.buffer_overflow"
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -55,7 +66,6 @@ protocol StatusWatchProviding: Sendable {
     func subscribe() async -> AsyncThrowingStream<StatusWatchUpdate, Error>
     func pause() async
     func stop() async
-    func retry() async
     var snapshot: StatusSnapshot? { get async }
     var series: [StatusSeriesPoint] { get async }
 }
@@ -77,6 +87,10 @@ actor StatusWatchService: StatusWatchProviding {
     private var lastSnapshot: StatusSnapshot?
     private var points: [StatusSeriesPoint] = []
     private var diskIOSampleSeen = false
+    private var malformedLineCount = 0
+
+    /// Consecutive unparseable lines tolerated before the watch terminates.
+    private static let malformedLineLimit = 3
 
     init(
         streaming: any MoleStreaming,
@@ -132,12 +146,6 @@ actor StatusWatchService: StatusWatchProviding {
         await stopProcess()
     }
 
-    func retry() async {
-        wantsRunning = true
-        isPaused = false
-        startProcessIfNeeded()
-    }
-
     private func startProcessIfNeeded() {
         guard wantsRunning, !isPaused, !subscribers.isEmpty, processTask == nil else { return }
         generation += 1
@@ -145,6 +153,7 @@ actor StatusWatchService: StatusWatchProviding {
         let streaming = self.streaming
         let arguments = ["status", "--watch", "--interval", intervalArgument]
         diskIOSampleSeen = false
+        malformedLineCount = 0
         processTask = Task { [weak self] in
             let stream = await streaming.stream(arguments, stdin: nil, timeout: nil)
             do {
@@ -170,9 +179,15 @@ actor StatusWatchService: StatusWatchProviding {
         let line = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
         guard let snapshot = try? JSONDecoder().decode(StatusSnapshot.self, from: Data(line.utf8)) else {
-            await streamEnded(generation: generation, error: StatusWatchError.invalidJSON)
+            // Tolerate isolated bad lines; terminate only when the stream stops
+            // looking like JSON at all.
+            malformedLineCount += 1
+            if malformedLineCount >= Self.malformedLineLimit {
+                await streamEnded(generation: generation, error: StatusWatchError.invalidJSON)
+            }
             return
         }
+        malformedLineCount = 0
         let now = Date()
         let hasDiskIO = snapshot.diskIO != nil
         let diskIOIsWarming = hasDiskIO && !diskIOSampleSeen

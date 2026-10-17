@@ -28,17 +28,14 @@ final class WhitelistViewModel: ObservableObject {
     let filePath: String
     let kind: WhitelistKind
     private let store: WhitelistStore
-    private let moleProcess: (any MoleCommandRunning)?
     private let coordinator: OperationCoordinator
 
     init(
         store: WhitelistStore = .live,
-        moleProcess: (any MoleCommandRunning)? = nil,
         coordinator: OperationCoordinator,
         kind: WhitelistKind = .clean
     ) {
         self.store = store
-        self.moleProcess = moleProcess
         self.coordinator = coordinator
         self.kind = kind
         filePath = store.fileURL.path
@@ -60,40 +57,42 @@ final class WhitelistViewModel: ObservableObject {
             document = nil
             patterns = []
             isDirty = false
-            errorMessage = error.localizedDescription
-            errorMessageKey = nil
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
         }
     }
 
-    func addPattern() {
-        guard document != nil else { return }
+    @discardableResult
+    func addPattern() -> Bool {
+        guard document != nil else { return false }
         let pattern = newPattern.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !pattern.isEmpty else {
             errorMessage = "白名单模式不能为空"
             errorMessageKey = kind.errorKey
-            return
+            return false
         }
         guard !pattern.hasPrefix("#") else {
             errorMessage = "注释不能作为白名单模式"
             errorMessageKey = "whitelist.error.comment"
-            return
+            return false
         }
         if kind == .optimize {
             guard Self.isValidTaskID(pattern) else {
                 errorMessage = "优化白名单只接受任务 id"
                 errorMessageKey = kind.errorKey
-                return
+                return false
             }
         }
         guard !patterns.contains(where: { $0.value == pattern }) else {
             errorMessage = "白名单模式已存在"
             errorMessageKey = "whitelist.error.duplicate"
-            return
+            return false
         }
 
         patterns.append(WhitelistPattern(value: pattern))
         newPattern = ""
         updateDocument()
+        return true
     }
 
     static func isValidTaskID(_ value: String) -> Bool {
@@ -138,8 +137,8 @@ final class WhitelistViewModel: ObservableObject {
             isDirty = false
             didSave = true
         } catch {
-            errorMessage = error.localizedDescription
-            errorMessageKey = nil
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
         }
     }
 

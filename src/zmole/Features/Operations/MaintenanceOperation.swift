@@ -83,6 +83,17 @@ class MaintenanceViewModel: ObservableObject {
     @Published private(set) var showBusyNotice = false
     @Published private(set) var previewCapturedAt: Date?
 
+    /// What the confirmation sheet covers: the number of output rows the
+    /// current preview would act on.
+    var confirmationDetail: String? {
+        guard let preview else { return nil }
+        let lineCount = preview.output
+            .split(whereSeparator: \.isNewline)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .count
+        return String(localized: "maintenance.confirm_detail \(lineCount)")
+    }
+
     /// Shows a finished background prewarm preview without re-running the
     /// scan. Does nothing when the user already has a preview or no prewarm
     /// result is available.
@@ -144,6 +155,7 @@ class MaintenanceViewModel: ObservableObject {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
+                session.invalidate()
                 releaseLease()
                 return
             }
@@ -242,13 +254,6 @@ class MaintenanceViewModel: ObservableObject {
     private var isCurrentPreview: Bool {
         guard let generation = previewCoordinatorGeneration else { return false }
         return coordinator.isCurrent(generation)
-    }
-
-    private func operationID(for state: OperationState<MaintenancePreviewSnapshot>) -> UUID? {
-        switch state {
-        case let .ready(id, _), let .confirming(id, _), let .executing(id, _): return id
-        default: return nil
-        }
     }
 
     private func releaseLease(clearPreviewGeneration: Bool = true) {

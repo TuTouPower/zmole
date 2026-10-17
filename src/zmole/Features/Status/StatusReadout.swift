@@ -16,6 +16,22 @@ enum StatusReadout {
         value.map { String(format: "%.2f MB/s", $0) } ?? unknown
     }
 
+    /// Shared memory readout: "used / total" when both sides are known, the
+    /// percentage as fallback, otherwise the localized unknown placeholder.
+    static func memoryText(used: Int64?, total: Int64?, percent: Double?) -> String {
+        if let used, let total {
+            return "\(bytes(used)) / \(bytes(total))"
+        }
+        if let percent {
+            return String(format: "%.1f%%", percent)
+        }
+        return unknown
+    }
+
+    static func bytes(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+    }
+
     static var unknown: String {
         String(localized: "status.unknown")
     }

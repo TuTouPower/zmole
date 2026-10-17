@@ -1,7 +1,9 @@
 import Foundation
 
-enum WhitelistStoreError: Error, Equatable, LocalizedError, Sendable {
+enum WhitelistStoreError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case invalidUTF8
+
+    var errorKey: String { "whitelist.error.invalid_utf8" }
 
     var errorDescription: String? {
         switch self {

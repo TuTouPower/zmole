@@ -7,24 +7,24 @@ Dry Run Mode, Preview only, no deletions
 
 ⚙ Apple Silicon | Free space: 318.20GB
 ✓ Whitelist: 19 core patterns active
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/ms-playwright*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.gradle/caches/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.gradle/daemon/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/.ollama/models/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.nssurge.surge-mac/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Application Support/com.nssurge.surge-mac/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/org.R-project.R/R/renv/*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/JetBrains*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.jetbrains.toolbox*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/tealdeer/tldr-pages
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Application Support/JetBrains*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.finder
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Mobile Documents*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.FontRegistry*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.spotlight*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.Spotlight*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/CloudKit*
-  ↳ /Users/karson/kar/code/zmole/.scratch/s001/home/Library/Caches/pypoetry/virtualenvs*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/ms-playwright*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/.gradle/caches/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/.gradle/daemon/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/.ollama/models/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.nssurge.surge-mac/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Application Support/com.nssurge.surge-mac/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/org.R-project.R/R/renv/*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/JetBrains*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.jetbrains.toolbox*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/tealdeer/tldr-pages
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Application Support/JetBrains*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.finder
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Mobile Documents*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.FontRegistry*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.spotlight*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/com.apple.Spotlight*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/CloudKit*
+  ↳ /Users/example/kar/code/zmole/.scratch/s001/home/Library/Caches/pypoetry/virtualenvs*
 
 ➤ User essentials
   → User app cache · 38.6MB dry

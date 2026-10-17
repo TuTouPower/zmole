@@ -75,14 +75,11 @@ struct StatusStatValues: Equatable {
     let temperature: String
 
     static func make(from snapshot: StatusSnapshot) -> StatusStatValues {
-        let memory: String
-        if let used = snapshot.memory.used, let total = snapshot.memory.total {
-            memory = "\(bytes(used)) / \(bytes(total))"
-        } else if let percent = snapshot.memory.usedPercent {
-            memory = String(format: "%.1f%%", percent)
-        } else {
-            memory = StatusReadout.unknown
-        }
+        let memory = StatusReadout.memoryText(
+            used: snapshot.memory.used,
+            total: snapshot.memory.total,
+            percent: snapshot.memory.usedPercent
+        )
 
         let diskWrite = snapshot.diskIOIsWarming
             ? String(localized: "status.sampling")
@@ -96,9 +93,5 @@ struct StatusStatValues: Equatable {
             diskWrite: diskWrite,
             temperature: StatusReadout.temperature(snapshot.cpuTemperature)
         )
-    }
-
-    private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 }

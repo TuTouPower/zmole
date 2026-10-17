@@ -36,7 +36,7 @@ enum CleanStageCatalog {
     /// Extracts a stage name from one scan output line, or nil when the line is
     /// not a section header.
     static func stage(fromLine line: String) -> CleanScanStage? {
-        let stripped = stripANSI(line).trimmingCharacters(in: .whitespaces)
+        let stripped = MaintenanceOutput.stripANSI(line).trimmingCharacters(in: .whitespaces)
         guard !stripped.isEmpty else { return nil }
 
         guard let arrow = stripped.range(of: "➤") else {
@@ -54,32 +54,5 @@ enum CleanStageCatalog {
             .split(whereSeparator: \.isNewline)
             .compactMap { stage(fromLine: String($0)) }
             .last
-    }
-
-    static func stripANSI(_ text: String) -> String {
-        var result = ""
-        result.reserveCapacity(text.count)
-        var iterator = text.makeIterator()
-        var pending: Character?
-        while let character = pending ?? iterator.next() {
-            pending = nil
-            guard character == "\u{001B}" else {
-                result.append(character)
-                continue
-            }
-            // Consume an ANSI CSI sequence: ESC [ ... final-byte.
-            guard let next = iterator.next() else { break }
-            guard next == "[" else {
-                if next != "\u{001B}" { result.append(next) }
-                continue
-            }
-            while let byte = iterator.next() {
-                if let scalar = byte.unicodeScalars.first,
-                   (0x40...0x7E).contains(scalar.value) {
-                    break
-                }
-            }
-        }
-        return result
     }
 }

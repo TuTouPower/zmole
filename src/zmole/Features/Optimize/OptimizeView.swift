@@ -6,8 +6,7 @@ struct OptimizeView: View {
     var onOpenSettings: () -> Void = {}
 
     private var rows: [OptimizePlanRow] {
-        guard let preview = viewModel.preview else { return [] }
-        return OptimizePlanParser.rows(from: preview.output)
+        viewModel.planRows()
     }
 
     var body: some View {
@@ -16,6 +15,7 @@ struct OptimizeView: View {
                 DestructiveConfirmationView(
                     title: "optimize.confirm_title",
                     summary: "optimize.confirm_summary",
+                    detail: viewModel.confirmationDetail,
                     onConfirm: { Task { await viewModel.confirmExecution() } },
                     onCancel: { viewModel.cancelConfirmation() }
                 )
@@ -25,35 +25,17 @@ struct OptimizeView: View {
         }
         .navigationTitle("sidebar.optimize")
         .task { viewModel.adoptPrewarmPreviewIfAvailable() }
-        .toolbar {
-            ToolbarItem {
-                if viewModel.isPreviewing {
-                    Button("optimize.cancel") { Task { await viewModel.cancelPreview() } }
-                } else if viewModel.isExecuting {
-                    Button("optimize.cancel") { Task { await viewModel.cancelExecution() } }
-                } else {
-                    Button {
-                        Task { await viewModel.previewOptimize() }
-                    } label: {
-                        Label("optimize.preview", systemImage: "eye")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MoleTheme.accent)
-                }
-            }
-        }
     }
 
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("optimize.eyebrow")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(MoleTheme.accentStrong)
-                        .textCase(.uppercase)
-                    Text("optimize.title").font(.system(size: 30, weight: .bold))
-                    Text("optimize.subtitle").font(.system(size: 12)).foregroundStyle(MoleTheme.muted)
+                MolePageHead(
+                    eyebrow: "optimize.eyebrow",
+                    title: "optimize.title",
+                    subtitle: "optimize.subtitle"
+                ) {
+                    previewOrCancelButton
                     if let capturedAt = viewModel.previewCapturedAt {
                         Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
                             .font(.system(size: 11))
@@ -71,9 +53,9 @@ struct OptimizeView: View {
                 }
 
                 if viewModel.isPreviewing {
-                    busyState(title: "optimize.previewing")
+                    UtilityBusyState(title: "optimize.previewing")
                 } else if viewModel.isExecuting {
-                    busyState(title: "optimize.executing")
+                    UtilityBusyState(title: "optimize.executing")
                 } else if viewModel.preview != nil {
                     planCard
                 } else {
@@ -89,13 +71,33 @@ struct OptimizeView: View {
                 } else if let errorMessage = viewModel.errorMessage {
                     UtilityNotice(title: "optimize.error_title", detail: errorMessage, isError: true)
                 }
-                if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+                if let executionSummary = viewModel.executionSummary,
+                   !executionSummary.isEmpty,
+                   viewModel.result?.status == .succeeded {
                     UtilityNotice(title: "optimize.result", detail: executionSummary, symbol: "checkmark.circle")
                 }
             }
             .padding(24)
         }
         .background(MoleTheme.background)
+    }
+
+    /// Page action: preview, or cancel whatever the page is currently doing.
+    @ViewBuilder
+    private var previewOrCancelButton: some View {
+        if viewModel.isPreviewing {
+            Button("optimize.cancel") { Task { await viewModel.cancelPreview() } }
+        } else if viewModel.isExecuting {
+            Button("optimize.cancel") { Task { await viewModel.cancelExecution() } }
+        } else {
+            Button {
+                Task { await viewModel.previewOptimize() }
+            } label: {
+                Label("optimize.preview", systemImage: "eye")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MoleTheme.accent)
+        }
     }
 
     private var planCard: some View {
@@ -165,13 +167,5 @@ struct OptimizeView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-    }
-
-    private func busyState(title: LocalizedStringKey) -> some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text(title).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
     }
 }

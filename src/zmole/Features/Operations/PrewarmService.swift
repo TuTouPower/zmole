@@ -30,6 +30,16 @@ protocol PrewarmResultProviding: AnyObject {
     /// The user started their own scan of this item: cancel the prewarm run
     /// and drop its result so the user's scan becomes authoritative.
     func userDidRescan(_ item: PrewarmItem)
+    /// Like `userDidRescan`, but resolves after the cancelled prewarm process
+    /// has fully terminated, so the caller can safely rewrite a shared file
+    /// (such as clean-list.txt) without racing a dying prewarm writer.
+    func userDidRescanAndWaitForTermination(_ item: PrewarmItem) async
+}
+
+extension PrewarmResultProviding {
+    func userDidRescanAndWaitForTermination(_ item: PrewarmItem) async {
+        userDidRescan(item)
+    }
 }
 
 /// Idle-time read-only scan queue. The service never executes a write command
@@ -48,9 +58,11 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
     private(set) var results: [PrewarmItem: PrewarmResult] = [:]
     private var queue: [PrewarmItem] = []
     private var retryItems: Set<PrewarmItem> = []
+    private var deferredItems: Set<PrewarmItem> = []
     private var droppedItems: Set<PrewarmItem> = []
     private var resultGeneration = 0
     private var worker: Task<Void, Never>?
+    private var terminationWait: Task<Void, Never>?
     private var wasIdle = false
     private var coordinatorSubscription: AnyCancellable?
     private var invalidationSubscription: AnyCancellable?
@@ -93,6 +105,7 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
     func userDidRescan(_ item: PrewarmItem) {
         results.removeValue(forKey: item)
         retryItems.remove(item)
+        deferredItems.remove(item)
         droppedItems.insert(item)
         queue.removeAll { $0 == item }
         if runningItem == item {
@@ -100,11 +113,27 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         }
     }
 
+    func userDidRescanAndWaitForTermination(_ item: PrewarmItem) async {
+        userDidRescan(item)
+        await terminationWait?.value
+    }
+
     // MARK: - Control
 
     /// Called on every activity change. Starting an activity cancels the
     /// current prewarm run; going idle resumes the queue and retries failures.
     func noteActivityChanged() {
+        // A deferred clean item is retried as soon as the user's clean
+        // preview closes, even though that transition does not change the
+        // idle state.
+        if !cleanPreviewActiveProvider(),
+           deferredItems.contains(.cleanDryRun),
+           !droppedItems.contains(.cleanDryRun) {
+            deferredItems.remove(.cleanDryRun)
+            if !queue.contains(.cleanDryRun) {
+                queue.append(.cleanDryRun)
+            }
+        }
         if isIdle() {
             if !wasIdle {
                 // A cancelled item can be both requeued and marked for retry;
@@ -145,7 +174,7 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         if requeue, !queue.contains(item) {
             queue.insert(item, at: 0)
         }
-        Task { [process, uninstallStream] in
+        terminationWait = Task { [process, uninstallStream] in
             await uninstallStream.cancel()
             await process.cancel()
         }
@@ -155,6 +184,7 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         results.removeAll()
         queue = PrewarmItem.allCases
         retryItems.removeAll()
+        deferredItems.removeAll()
         droppedItems.removeAll()
         resultGeneration += 1
         poke()
@@ -162,7 +192,7 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
 
     private func run(_ item: PrewarmItem) async {
         if item == .cleanDryRun, cleanPreviewActiveProvider() {
-            retryItems.insert(item)
+            deferredItems.insert(item)
             return
         }
         let generation = resultGeneration
@@ -171,11 +201,11 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         do {
             let payload = try await payload(for: item)
             guard generation == resultGeneration else { return }
+            if item == .cleanDryRun, cleanPreviewActiveProvider() {
+                deferredItems.insert(item)
+                return
+            }
             results[item] = PrewarmResult(capturedAt: Date(), payload: payload)
-        } catch is CancellationError {
-            noteFailure(item)
-        } catch MoleBridgeError.cancelled {
-            noteFailure(item)
         } catch {
             // Continue with the remaining items; the failed item is retried on
             // the next idle transition.

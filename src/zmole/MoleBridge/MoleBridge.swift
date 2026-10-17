@@ -1,5 +1,8 @@
 import Darwin
 import Foundation
+import os
+
+private let moleLog = Logger(subsystem: "com.tutupower.zmole", category: "MoleBridge")
 
 enum MoleBundleLocator {
     static let relativeExecutablePath = "mole/mole"
@@ -172,6 +175,8 @@ private final class MoleProcessRunner: @unchecked Sendable {
     private let timeout: TimeInterval?
     private let streamContinuation: AsyncThrowingStream<MoleOutputEvent, Error>.Continuation?
     private let onFinished: (@Sendable () -> Void)?
+    private let subcommand: String
+    private let startedAt = DispatchTime.now()
     private let lock = NSLock()
 
     private var continuation: CheckedContinuation<MoleCommandResult, Error>?
@@ -206,10 +211,16 @@ private final class MoleProcessRunner: @unchecked Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
         process.standardInput = stdinPipe
+        var environment = ProcessInfo.processInfo.environment
+        for key in environment.keys where key.hasPrefix("MOLE_") {
+            environment.removeValue(forKey: key)
+        }
+        process.environment = environment
         self.stdin = stdin
         self.timeout = timeout.map { max(0.01, $0) }
         self.streamContinuation = streamContinuation
         self.onFinished = onFinished
+        self.subcommand = arguments.first ?? ""
     }
 
     func run() async throws -> MoleCommandResult {
@@ -310,10 +321,12 @@ private final class MoleProcessRunner: @unchecked Sendable {
         }
 
         DispatchQueue.global(qos: .utility).async { [stdinPipe, stdin] in
+            let writeHandle = stdinPipe.fileHandleForWriting
+            _ = fcntl(writeHandle.fileDescriptor, F_SETNOSIGPIPE, 1)
             if let stdin {
-                stdinPipe.fileHandleForWriting.write(stdin)
+                try? writeHandle.write(contentsOf: stdin)
             }
-            stdinPipe.fileHandleForWriting.closeFile()
+            try? writeHandle.close()
         }
         startOutputReader(stdoutPipe.fileHandleForReading, channel: .stdout)
         startOutputReader(stderrPipe.fileHandleForReading, channel: .stderr)
@@ -351,12 +364,22 @@ private final class MoleProcessRunner: @unchecked Sendable {
     }
 
     private func terminateProcessGroup() {
+        lock.lock()
+        let alreadyFinished = finished
+        lock.unlock()
+        guard !alreadyFinished else { return }
+
         let pid = process.processIdentifier
         guard pid > 0, process.isRunning else { return }
 
-        if processGroupConfigured {
+        if processGroupConfigured, getpgid(pid) == pid {
             _ = kill(-pid, SIGTERM)
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.25) {
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                let done = self.finished
+                self.lock.unlock()
+                guard !done, self.process.isRunning, getpgid(pid) == pid else { return }
                 _ = kill(-pid, SIGKILL)
             }
         } else {
@@ -424,30 +447,53 @@ private final class MoleProcessRunner: @unchecked Sendable {
         switch channel {
         case .stdout:
             guard shouldParseStdout else { return }
-            for byte in data {
-                if byte == 0x0A {
-                    lock.lock()
-                    let line = stdoutLineBuffer.last == 0x0D
-                        ? stdoutLineBuffer.dropLast()
-                        : stdoutLineBuffer[...]
-                    let lineData = Data(line)
-                    stdoutLineBuffer.removeAll(keepingCapacity: true)
-                    lock.unlock()
-                    emit(.stdoutLine(lineData))
-                } else {
-                    lock.lock()
-                    stdoutLineBuffer.append(byte)
-                    let tooLong = stdoutLineBuffer.count > Self.maxLineBytes
-                    lock.unlock()
-                    if tooLong {
-                        fail(.outputLimitExceeded(channel: "stdout line", limit: Self.maxLineBytes))
-                        return
-                    }
-                }
-            }
+            consumeStdoutLines(data)
         case .stderr:
             emit(.stderr(data))
         }
+    }
+
+    private func consumeStdoutLines(_ data: Data) {
+        var fragmentStart = data.startIndex
+        while fragmentStart < data.endIndex {
+            guard let newlineIndex = data[fragmentStart...].firstIndex(of: 0x0A) else {
+                appendStdoutFragment(data[fragmentStart...])
+                return
+            }
+            appendStdoutFragment(data[fragmentStart..<newlineIndex])
+            emitBufferedStdoutLine()
+            fragmentStart = data.index(after: newlineIndex)
+        }
+    }
+
+    private func appendStdoutFragment(_ fragment: Data.SubSequence) {
+        guard !fragment.isEmpty else { return }
+        lock.lock()
+        guard !finished, !outputAborted else {
+            lock.unlock()
+            return
+        }
+        stdoutLineBuffer.append(contentsOf: fragment)
+        let tooLong = stdoutLineBuffer.count > Self.maxLineBytes
+        lock.unlock()
+        if tooLong {
+            fail(.outputLimitExceeded(channel: "stdout line", limit: Self.maxLineBytes))
+        }
+    }
+
+    private func emitBufferedStdoutLine() {
+        lock.lock()
+        guard !finished, !outputAborted else {
+            lock.unlock()
+            return
+        }
+        let line = stdoutLineBuffer.last == 0x0D
+            ? stdoutLineBuffer.dropLast()
+            : stdoutLineBuffer[...]
+        let lineData = Data(line)
+        stdoutLineBuffer.removeAll(keepingCapacity: true)
+        lock.unlock()
+        emit(.stdoutLine(lineData))
     }
 
     private func outputDidReachEOF(_ channel: OutputChannel) {
@@ -552,10 +598,47 @@ private final class MoleProcessRunner: @unchecked Sendable {
             continuation?.resume(throwing: error)
             streamContinuation?.finish(throwing: error)
         }
+        logCompletion(outcome)
         for waiter in terminationWaiters {
             waiter.resume()
         }
         onFinished?()
+    }
+
+    private func logCompletion(_ outcome: Result<MoleCommandResult, Error>) {
+        let elapsedMilliseconds = (DispatchTime.now().uptimeNanoseconds &- startedAt.uptimeNanoseconds) / 1_000_000
+        switch outcome {
+        case let .success(result):
+            moleLog.debug("mole \(self.subcommand, privacy: .public) exit=\(result.exitCode) elapsed_ms=\(elapsedMilliseconds)")
+        case let .failure(error):
+            moleLog.error("mole \(self.subcommand, privacy: .public) failed=\(Self.errorLabel(error), privacy: .public) elapsed_ms=\(elapsedMilliseconds)")
+        }
+    }
+
+    private static func errorLabel(_ error: Error) -> String {
+        guard let bridgeError = error as? MoleBridgeError else {
+            return String(describing: type(of: error))
+        }
+        switch bridgeError {
+        case .busy:
+            return "busy"
+        case .cancelled:
+            return "cancelled"
+        case let .commandFailed(result):
+            return "commandFailed(exit=\(result.exitCode))"
+        case .emptyOutput:
+            return "emptyOutput"
+        case .executableNotFound:
+            return "executableNotFound"
+        case .launchFailed:
+            return "launchFailed"
+        case let .outputLimitExceeded(channel, _):
+            return "outputLimitExceeded(\(channel))"
+        case .outputReadFailed:
+            return "outputReadFailed"
+        case .timedOut:
+            return "timedOut"
+        }
     }
 
     private func appendDiagnosticTail(_ data: Data, to buffer: inout Data) {

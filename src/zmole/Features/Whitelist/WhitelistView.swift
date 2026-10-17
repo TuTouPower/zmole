@@ -14,14 +14,19 @@ struct WhitelistView: View {
         Group {
             if viewModel.isLoading {
                 ProgressView("whitelist.loading")
-            } else if let errorMessage = viewModel.errorMessage, viewModel.document == nil {
+            } else if viewModel.document == nil,
+                      viewModel.errorMessageKey != nil || viewModel.errorMessage != nil {
                 VStack(spacing: 12) {
                     Text("whitelist.error_title")
                         .font(.title)
-                    Text(errorMessage)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    if let errorKey = viewModel.errorMessageKey {
+                        Text(LocalizedStringKey(errorKey))
+                    } else if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                    }
                 }
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let document = viewModel.document {
                 List {

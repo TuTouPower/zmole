@@ -10,11 +10,13 @@ final class MoleCommandLanes {
     let uninstall: any MoleProcessControlling
     let uninstallStream: any MoleStreaming
     let installer: any MoleProcessControlling
-    let statusCommand: any MoleProcessControlling
     let cleanCommand: any MoleProcessControlling
     let optimize: any MoleProcessControlling
     let purge: any MoleProcessControlling
     let estimate: any MoleProcessControlling
+    /// Independent estimate lanes used to probe several paths in parallel
+    /// (one command in flight per lane). The first entry is the primary lane.
+    let estimatePool: [any MoleProcessControlling]
     let prewarm: (any MoleProcessControlling & MoleStreaming)?
     let statusStream: any MoleStreaming
     let cleanStream: (any MoleStreaming)?
@@ -24,11 +26,11 @@ final class MoleCommandLanes {
         uninstall: any MoleProcessControlling,
         uninstallStream: any MoleStreaming,
         installer: any MoleProcessControlling,
-        statusCommand: any MoleProcessControlling,
         cleanCommand: any MoleProcessControlling,
         optimize: any MoleProcessControlling,
         purge: any MoleProcessControlling,
         estimate: any MoleProcessControlling,
+        estimatePool: [any MoleProcessControlling]? = nil,
         prewarm: (any MoleProcessControlling & MoleStreaming)?,
         statusStream: any MoleStreaming,
         cleanStream: (any MoleStreaming)?
@@ -37,26 +39,62 @@ final class MoleCommandLanes {
         self.uninstall = uninstall
         self.uninstallStream = uninstallStream
         self.installer = installer
-        self.statusCommand = statusCommand
         self.cleanCommand = cleanCommand
         self.optimize = optimize
         self.purge = purge
         self.estimate = estimate
+        self.estimatePool = estimatePool ?? [estimate]
         self.prewarm = prewarm
         self.statusStream = statusStream
         self.cleanStream = cleanStream
     }
 
-    /// One-shot lanes, in the order the `init` expects them.
-    nonisolated static let commandLaneCount = 8
+    /// Every command lane, for shutdown cancellation.
+    var allProcessLanes: [any MoleProcessControlling] {
+        [history, uninstall, installer, cleanCommand, optimize, purge]
+            + estimatePool
+            + (prewarm.map { [$0] } ?? [])
+    }
 
-    static func makeCommandBridges(count: Int = commandLaneCount) -> [any MoleProcessControlling]? {
-        var bridges: [any MoleProcessControlling] = []
-        for _ in 0..<count {
-            guard let bridge = try? MoleBridge() else { return nil }
-            bridges.append(bridge)
-        }
-        return bridges
+    var allStreams: [any MoleStreaming] {
+        [uninstallStream, statusStream] + (cleanStream.map { [$0] } ?? [])
+    }
+
+    /// Named one-shot lanes. Named fields replace positional array mapping so
+    /// adding or reordering lanes cannot silently cross-wire consumers.
+    struct CommandBridges {
+        let history: any MoleProcessControlling
+        let uninstall: any MoleProcessControlling
+        let installer: any MoleProcessControlling
+        let cleanCommand: any MoleProcessControlling
+        let optimize: any MoleProcessControlling
+        let purge: any MoleProcessControlling
+        let estimate: any MoleProcessControlling
+        /// Extra estimate lanes for parallel overview probes.
+        let estimateExtras: [any MoleProcessControlling]
+    }
+
+    static func makeCommandBridges() -> CommandBridges? {
+        func makeBridge() -> (any MoleProcessControlling)? { try? MoleBridge() }
+        guard let history = makeBridge(),
+              let uninstall = makeBridge(),
+              let installer = makeBridge(),
+              let cleanCommand = makeBridge(),
+              let optimize = makeBridge(),
+              let purge = makeBridge(),
+              let estimate = makeBridge(),
+              let estimateExtra1 = makeBridge(),
+              let estimateExtra2 = makeBridge() else { return nil }
+        return CommandBridges(
+            history: history,
+            uninstall: uninstall,
+            installer: installer,
+            cleanCommand: cleanCommand,
+            optimize: optimize,
+            purge: purge,
+            estimate: estimate,
+            estimateExtras: [estimateExtra1, estimateExtra2]
+        )
     }
 
     static func demo(
@@ -66,7 +104,7 @@ final class MoleCommandLanes {
     ) -> MoleCommandLanes {
         MoleCommandLanes(
             history: process, uninstall: process, uninstallStream: uninstallStream,
-            installer: process, statusCommand: process, cleanCommand: process,
+            installer: process, cleanCommand: process,
             optimize: process, purge: process, estimate: process,
             prewarm: nil,
             statusStream: streaming,
@@ -78,7 +116,7 @@ final class MoleCommandLanes {
         let process = UnavailableMoleProcess()
         return MoleCommandLanes(
             history: process, uninstall: process, uninstallStream: UnavailableMoleStreaming(),
-            installer: process, statusCommand: process, cleanCommand: process,
+            installer: process, cleanCommand: process,
             optimize: process, purge: process, estimate: process,
             prewarm: nil,
             statusStream: UnavailableMoleStreaming(),

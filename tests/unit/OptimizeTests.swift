@@ -27,7 +27,8 @@ final class OptimizeTests: XCTestCase {
             .appendingPathComponent("src/zmole/Features/Optimize/OptimizeView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
         XCTAssertTrue(source.contains("ScrollView"))
-        XCTAssertTrue(source.contains("preview.output"))
+        XCTAssertTrue(source.contains("viewModel.preview?.output"))
+        XCTAssertTrue(source.contains("planRows()"))
     }
 
     @MainActor

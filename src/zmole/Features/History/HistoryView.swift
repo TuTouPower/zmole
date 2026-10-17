@@ -38,14 +38,26 @@ struct HistoryView: View {
                     ProgressView("history.loading")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 80)
+                } else if let snapshot = viewModel.snapshot {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let errorKey = viewModel.errorMessageKey {
+                            UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                        } else if let errorMessage = viewModel.errorMessage {
+                            UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
+                        }
+                        HistorySnapshotContent(snapshot: snapshot)
+                        UtilityNotice(title: "history.info_note", symbol: "shield", isInfo: true)
+                    }
+                } else if let errorKey = viewModel.errorMessageKey {
+                    VStack(spacing: 12) {
+                        UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                    }
+                    .frame(maxWidth: 560, alignment: .leading)
                 } else if let errorMessage = viewModel.errorMessage {
                     VStack(spacing: 12) {
                         UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
                     }
                     .frame(maxWidth: 560, alignment: .leading)
-                } else if let snapshot = viewModel.snapshot {
-                    HistorySnapshotContent(snapshot: snapshot)
-                    UtilityNotice(title: "history.info_note", symbol: "shield", isInfo: true)
                 } else {
                     ProgressView("history.loading")
                         .frame(maxWidth: .infinity)

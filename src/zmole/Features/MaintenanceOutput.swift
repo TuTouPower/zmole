@@ -9,7 +9,7 @@ enum MaintenanceOutput {
             .joined(separator: "\n")
     }
 
-    private static func stripANSI(_ text: String) -> String {
+    static func stripANSI(_ text: String) -> String {
         var output = ""
         var iterator = text.makeIterator()
 

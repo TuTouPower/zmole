@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// A command palette row. The palette only navigates; it never carries a
-/// destructive or execution action.
+/// destructive or execution action (the type holds nothing but a destination).
 struct CommandPaletteItem: Identifiable, Equatable, Sendable {
     let destination: AppDestination
 
@@ -11,16 +11,7 @@ struct CommandPaletteItem: Identifiable, Equatable, Sendable {
     var subtitleKey: LocalizedStringKey { destination.subtitleKey }
     var symbol: String { destination.symbol }
 
-    /// The palette must not expose any action that runs clean, uninstall,
-    /// optimize, purge or installer removal. Rows are navigation only.
-    var isExecutionAction: Bool { false }
-
     static let all: [CommandPaletteItem] = AppDestination.allCases.map(CommandPaletteItem.init)
-
-    /// Identifiers that must never appear in the palette.
-    static let forbiddenIdentifiers: Set<String> = [
-        "clean-run", "uninstall-run", "optimize-run", "purge-run", "installer-remove"
-    ]
 }
 
 /// Navigation state shared by the window shell and the app menu, so the
@@ -77,9 +68,5 @@ final class NavigationModel: ObservableObject {
             .reduce(into: [String]()) { result, value in
                 if !result.contains(value) { result.append(value) }
             }
-    }
-
-    func displayName(for destination: AppDestination) -> String {
-        displayNames(for: destination).first ?? destination.titleKeyString
     }
 }

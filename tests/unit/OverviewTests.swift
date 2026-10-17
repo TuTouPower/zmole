@@ -112,7 +112,8 @@ final class OverviewTests: XCTestCase {
         }
         let viewModel = OverviewViewModel(storageLoader: loader, historyLoader: historyLoader)
 
-        await viewModel.refresh(usedBytes: 100)
+        await viewModel.refreshHistory()
+        await viewModel.refreshEstimateIfNeeded(usedBytes: 100)
         XCTAssertEqual(viewModel.breakdown.applicationsBytes, 10)
         XCTAssertTrue(viewModel.hasRecentOperations)
         XCTAssertEqual(viewModel.recentOperations.first?.command, "clean")
@@ -121,7 +122,7 @@ final class OverviewTests: XCTestCase {
             MoleCommandResult(stdout: Self.emptyHistoryFixture, stderr: "", exitCode: 0)
         }
         let emptyViewModel = OverviewViewModel(storageLoader: loader, historyLoader: emptyLoader)
-        await emptyViewModel.refresh(usedBytes: nil)
+        await emptyViewModel.refreshHistory()
         XCTAssertFalse(emptyViewModel.hasRecentOperations)
     }
 
@@ -148,7 +149,7 @@ final class OverviewTests: XCTestCase {
 
     func testStatusViewModelStopEndsSamplingAndStopsTheSharedService() async {
         let service = WatchServiceSpy()
-        let viewModel = StatusViewModel(service: service, loader: nil)
+        let viewModel = StatusViewModel(service: service)
         viewModel.start()
         try? await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertTrue(viewModel.isSampling)
@@ -163,7 +164,7 @@ final class OverviewTests: XCTestCase {
     @MainActor
     func testOverviewRefreshResamplesByRestartingTheSubscription() async {
         let service = WatchServiceSpy()
-        let viewModel = StatusViewModel(service: service, loader: nil)
+        let viewModel = StatusViewModel(service: service)
         viewModel.start()
         try? await Task.sleep(nanoseconds: 100_000_000)
 

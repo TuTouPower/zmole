@@ -1,5 +1,7 @@
 # plan：zmole 第一版
 
+> 历史快照（2026-09-21 定稿，2026-10-17 标注）：本计划已由实现取代；t001–t013 及后续 task 全部归档，现行真相以 `docs/blueprint/` 与 `docs/specs_index.md` 为准。保留原文供追溯。
+
 2026-09-21 需求 grilling 已确认。本文是第一版切分；落地后以 `docs/tasks/` 与 `docs/blueprint/` 为准。
 
 对照源码：`~/kar/github_repo/mole` 仅研究。**捆绑钉上游 tag `V1.55.0`（commit `69ab325d`）** 的 Bash 树 + 同 tag Go helper。不要用研究仓 `main`（曾见 `0659e906`）打进 App。

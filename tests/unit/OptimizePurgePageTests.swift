@@ -43,7 +43,7 @@ final class OptimizePurgePageTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("docs/spikes/s001_mole_cli_fixtures/samples/optimize_dry_run.txt")
+            .appendingPathComponent("docs/archive/spikes/s001_mole_cli_fixtures/samples/optimize_dry_run.txt")
         let sample = try String(contentsOf: sampleURL, encoding: .utf8)
         let rows = OptimizePlanParser.rows(from: sample)
 
@@ -130,6 +130,7 @@ final class OptimizePurgePageTests: XCTestCase {
         await purgeViewModel.previewPurge()
         XCTAssertTrue(purgeViewModel.canConfirm)
 
+        pathsViewModel.load()
         pathsViewModel.text = "~/Projects"
         XCTAssertTrue(pathsViewModel.save())
         XCTAssertFalse(purgeViewModel.canConfirm)

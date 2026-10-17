@@ -53,27 +53,20 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var rawJSON: String?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessageKey: String?
     @Published private(set) var showBusyNotice = false
 
     private let loader: HistorySnapshotLoader?
     private let limit: Int
-    private let initializationError: String?
 
     init(loader: HistorySnapshotLoader, limit: Int = 20) {
         self.loader = loader
         self.limit = limit
-        initializationError = nil
     }
 
     init(limit: Int = 20) {
         self.limit = limit
-        if let bridge = try? MoleBridge() {
-            loader = HistorySnapshotLoader(bridge: bridge)
-            initializationError = nil
-        } else {
-            loader = nil
-            initializationError = "找不到捆绑 mole"
-        }
+        loader = (try? MoleBridge()).map { HistorySnapshotLoader(bridge: $0) }
     }
 
     func refresh() async {
@@ -82,12 +75,13 @@ final class HistoryViewModel: ObservableObject {
         snapshot = nil
         rawJSON = nil
         errorMessage = nil
+        errorMessageKey = nil
         showBusyNotice = false
         isLoading = true
         defer { isLoading = false }
 
         guard let loader else {
-            errorMessage = initializationError
+            errorMessageKey = "mole.error.executable_not_found"
             return
         }
 
@@ -103,7 +97,8 @@ final class HistoryViewModel: ObservableObject {
                 return
             }
             rawJSON = nil
-            errorMessage = error.localizedDescription
+            errorMessageKey = error.localizationKey
+            errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
         }
     }
 
@@ -115,6 +110,7 @@ final class HistoryViewModel: ObservableObject {
             try rawJSON.write(to: url, atomically: true, encoding: .utf8)
             return true
         } catch {
+            errorMessageKey = nil
             errorMessage = error.localizedDescription
             return false
         }

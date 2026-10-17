@@ -1,6 +1,6 @@
 import Foundation
 
-enum CleanPreviewStoreError: Error, Equatable, LocalizedError, Sendable {
+enum CleanPreviewStoreError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
     case missingFile
     case emptyFile
     case invalidUTF8

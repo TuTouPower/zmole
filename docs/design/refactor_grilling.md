@@ -2,7 +2,9 @@
 
 日期：2026-10-16
 
-对照物：`docs/design/mole_desktop_demo_cn_final.html`（来源 `/Users/karson/Downloads/mole-desktop-demo-cn-final.html`，SHA-1 `c63069df99bf58b3d9f946b17f7e8f78c30293eb`）。不要用 `docs/design/demo_reference.html`。
+> 历史标注（2026-10-17）：本文是重构前的决策记录，所列各题与「已核对的事实」已被实现取代（清理改废纸篓、安装包接口、侧边栏基线等均已落地）；保留原文供追溯，现行真相以 `docs/design/ui_contract.md` 与 `docs/blueprint/` 为准。
+
+对照物：`docs/design/mole_desktop_demo_cn_final.html`（来源：本地下载的 demo HTML，SHA-1 `c63069df99bf58b3d9f946b17f7e8f78c30293eb`）。不要用 `docs/design/demo_reference.html`。
 
 这份文档是重构前的决策清单。还没有改产品代码。每题的推荐都写在 **推荐** 一行。回复「是」即接受该题推荐。
 
@@ -557,5 +559,5 @@ demo 的「菜单栏伴侣」指一个停在屏幕顶部菜单栏里的小图标
 - `docs/design/ui_contract.md`：顶部五模式改为这份侧边栏基线。
 - `docs/blueprint/architecture.md`：导航、安装包接口、两份白名单。
 - `docs/blueprint/domain.md`：安装包从非目标改为范围内；写明清理不可子集执行。
-- `docs/blueprint/decisions.md`：追加安装包机器接口和 optimize 白名单两条，不改写 001 到 006 的原文。
-- `docs/tasks/t014_refine_app_visual_design/`：标记被新 task 取代，不在 t014 里做这套新界面。
+- `docs/blueprint/decisions.md`：追加安装包机器接口和 optimize 白名单两条，不改写 001 到 006 的原文。（后续：安装包接口已落为决策 008、强调色已落为 009；optimize 白名单已实现于设置页，不再单列 ADR。）
+- `docs/archive/tasks/t014_refine_app_visual_design/`：标记被新 task 取代，不在 t014 里做这套新界面。

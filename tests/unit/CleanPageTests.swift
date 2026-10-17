@@ -47,9 +47,13 @@ final class CleanPageTests: XCTestCase {
     }
 
     func testReclaimBytesParseHumanSizes() {
+        XCTAssertEqual(CleanPreviewParser.parseHumanSize("2.40GB"), 2_400_000_000)
+        XCTAssertEqual(CleanPreviewParser.parseHumanSize("512MB, 18 items"), 512_000_000)
+        XCTAssertEqual(CleanPreviewParser.parseHumanSize("123KB"), 123_000)
+        XCTAssertEqual(CleanPreviewParser.parseHumanSize("512B"), 512)
         XCTAssertEqual(CleanPreviewParser.parseHumanSize("2.4 GB"), 2_400_000_000)
-        XCTAssertEqual(CleanPreviewParser.parseHumanSize("512 MB, 18 items"), 512_000_000)
         XCTAssertNil(CleanPreviewParser.parseHumanSize("size unknown"))
+        XCTAssertNil(CleanPreviewParser.parseHumanSize("99999999999999999999999TB"))
     }
 
     func testPreviewUsesDryRunAndExecutesOnlyAfterConfirmation() async throws {
@@ -245,9 +249,9 @@ final class CleanPageTests: XCTestCase {
     private static let fixture = """
     # Mole Cleanup Preview
     === Browsers ===
-    /Users/example/Library/Caches/a  # 2.4 GB, 18 items
+    /Users/example/Library/Caches/a  # 2.40GB, 18 items
     === Developer tools ===
-    /Users/example/.npm  # 512 MB
+    /Users/example/.npm  # 512MB
     """
 
     private func makeTemporaryDirectory(prefix: String) throws -> URL {

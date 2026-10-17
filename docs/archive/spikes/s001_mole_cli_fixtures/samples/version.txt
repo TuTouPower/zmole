@@ -1,6 +1,6 @@
 
 Mole version 1.55.0
-macOS: 26.5.2
+macOS: 15.6
 Architecture: arm64
 Kernel: 25.5.0
 SIP: Enabled

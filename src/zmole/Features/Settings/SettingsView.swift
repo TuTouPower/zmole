@@ -88,7 +88,11 @@ struct SettingsView: View {
                     Text("settings.cli.title")
                     Spacer()
                     Text(verbatim: cliVersionText).font(.system(size: 12, design: .monospaced))
-                    Text("settings.cli.connected").font(.caption).foregroundStyle(.green)
+                    if BundledMoleInfo.executableURL() != nil {
+                        Text("settings.cli.connected").font(.caption).foregroundStyle(.green)
+                    } else {
+                        Text("settings.cli.missing").font(.caption).foregroundStyle(.red)
+                    }
                 }
                 if let path = BundledMoleInfo.executableURL()?.path {
                     Text(verbatim: path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

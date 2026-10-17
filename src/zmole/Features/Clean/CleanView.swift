@@ -9,6 +9,8 @@ struct CleanView: View {
     @ObservedObject var viewModel: CleanViewModel
     @ObservedObject var whitelistViewModel: WhitelistViewModel
     var onOpenWhitelist: () -> Void = {}
+    @State private var protectErrorKey: String?
+    @State private var protectErrorDetail: String?
 
     var body: some View {
         Group {
@@ -16,6 +18,7 @@ struct CleanView: View {
                 DestructiveConfirmationView(
                     title: "clean.confirm_title",
                     summary: "clean.confirm_summary",
+                    detail: viewModel.confirmationDetail,
                     onConfirm: { Task { await viewModel.confirmExecution() } },
                     onCancel: { viewModel.cancelConfirmation() }
                 )
@@ -47,64 +50,36 @@ struct CleanView: View {
     }
 
     private var head: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("clean.eyebrow")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(MoleTheme.accentStrong)
-                .textCase(.uppercase)
-            Text("clean.title")
-                .font(.system(size: 30, weight: .bold))
-            Text("clean.subtitle")
-                .font(.system(size: 12))
-                .foregroundStyle(MoleTheme.muted)
-            HStack(spacing: 8) {
-                if viewModel.isPreviewing {
-                    Button("clean.cancel") { Task { await viewModel.cancelPreview() } }
-                } else if viewModel.isExecuting {
-                    Button("clean.cancel") { Task { await viewModel.cancelExecution() } }
-                } else {
-                    Button {
-                        Task { await viewModel.previewClean() }
-                    } label: {
-                        Label("clean.preview", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MoleTheme.accent)
-                    .disabled(viewModel.isConfirmationPresented)
+        MolePageHead(eyebrow: "clean.eyebrow", title: "clean.title", subtitle: "clean.subtitle") {
+            if viewModel.isPreviewing {
+                Button("clean.cancel") { Task { await viewModel.cancelPreview() } }
+            } else if viewModel.isExecuting {
+                Button("clean.cancel") { Task { await viewModel.cancelExecution() } }
+            } else {
+                Button {
+                    Task { await viewModel.previewClean() }
+                } label: {
+                    Label("clean.preview", systemImage: "arrow.clockwise")
                 }
-                if let capturedAt = viewModel.previewCapturedAt {
-                    Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 11))
-                        .foregroundStyle(MoleTheme.muted)
-                }
+                .buttonStyle(.borderedProminent)
+                .tint(MoleTheme.accent)
+                .disabled(viewModel.isConfirmationPresented)
             }
-            .padding(.top, 6)
+            if let capturedAt = viewModel.previewCapturedAt {
+                Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoleTheme.muted)
+            }
         }
     }
 
     private var statStrip: some View {
         HStack(spacing: 10) {
-            statTile("clean.stat.reclaimable", viewModel.preview?.reclaimText ?? "—")
-            statTile("clean.stat.categories", "\(viewModel.preview?.sections.count ?? 0)")
-            statTile("clean.stat.items", "\(viewModel.preview?.entries.count ?? 0)")
-            statTile("clean.stat.destination", String(localized: "clean.stat.trash"))
+            MoleStatTile(value: viewModel.preview?.reclaimText ?? "—", label: "clean.stat.reclaimable")
+            MoleStatTile(value: "\(viewModel.preview?.sections.count ?? 0)", label: "clean.stat.categories")
+            MoleStatTile(value: "\(viewModel.preview?.entries.count ?? 0)", label: "clean.stat.items")
+            MoleStatTile(value: String(localized: "clean.stat.trash"), label: "clean.stat.destination")
         }
-    }
-
-    private func statTile(_ title: LocalizedStringKey, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(verbatim: value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(title)
-                .font(.system(size: 10))
-                .foregroundStyle(MoleTheme.muted)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusMD))
-        .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusMD).strokeBorder(MoleTheme.line))
     }
 
     private var listCard: some View {
@@ -128,10 +103,12 @@ struct CleanView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 200)
             } else if let preview = viewModel.preview {
-                ForEach(preview.sections) { section in
-                    sectionHeader(section)
-                    ForEach(section.entries) { entry in
-                        entryRow(entry)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(preview.sections) { section in
+                        sectionHeader(section)
+                        ForEach(section.entries) { entry in
+                            entryRow(entry)
+                        }
                     }
                 }
             } else {
@@ -270,14 +247,40 @@ struct CleanView: View {
         } else if let errorMessage = viewModel.errorMessage {
             UtilityNotice(title: "clean.error_title", detail: errorMessage, isError: true)
         }
-        if let executionSummary = viewModel.executionSummary, !executionSummary.isEmpty {
+        if let executionSummary = viewModel.executionSummary,
+           !executionSummary.isEmpty,
+           viewModel.result?.status == .succeeded {
             UtilityNotice(title: "clean.result", detail: executionSummary, symbol: "checkmark.circle")
+        }
+        if let protectErrorKey {
+            UtilityNotice(
+                title: LocalizedStringKey(protectErrorKey),
+                detail: protectErrorDetail,
+                isError: true
+            )
         }
     }
 
     private func protect(_ entry: CleanPreviewEntry) {
         whitelistViewModel.newPattern = entry.path
-        whitelistViewModel.addPattern()
+        guard whitelistViewModel.addPattern() else {
+            reflectProtectFailure()
+            return
+        }
         whitelistViewModel.save()
+        reflectProtectFailure()
+    }
+
+    private func reflectProtectFailure() {
+        if let key = whitelistViewModel.errorMessageKey {
+            protectErrorKey = key
+            protectErrorDetail = nil
+        } else if let message = whitelistViewModel.errorMessage {
+            protectErrorKey = "clean.protect_failed"
+            protectErrorDetail = message
+        } else {
+            protectErrorKey = nil
+            protectErrorDetail = nil
+        }
     }
 }

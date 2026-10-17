@@ -1,16 +1,16 @@
 {
   "collected_at": "2026-09-21T13:07:56.625037+08:00",
   "host": "host.local",
-  "platform": "darwin 26.5.2",
+  "platform": "darwin 24.6.0",
   "uptime": "1h 26m",
   "uptime_seconds": 5195,
   "procs": 962,
   "hardware": {
-    "model": "MacBook Pro",
-    "cpu_model": "Apple M1 Max",
-    "total_ram": "64.0 GB",
-    "disk_size": "926.4 GB",
-    "os_version": "macOS 26.5.2",
+    "model": "MacBook",
+    "cpu_model": "Apple Silicon",
+    "total_ram": "36.0 GB",
+    "disk_size": "512.0 GB",
+    "os_version": "macOS 15.6",
     "refresh_rate": "120Hz"
   },
   "health_score": 100,
@@ -32,7 +32,7 @@
   },
   "gpu": [
     {
-      "name": "Apple M1 Max",
+      "name": "Apple Silicon",
       "usage": -1,
       "memory_used": 0,
       "memory_total": 0,
@@ -84,7 +84,7 @@
       "name": "en0",
       "rx_rate_mbs": 0.000820159912109375,
       "tx_rate_mbs": 0.000743865966796875,
-      "ip": "192.168.31.142"
+      "ip": "192.0.2.10"
     },
     {
       "name": "en4",
@@ -104,7 +104,7 @@
   "proxy": {
     "enabled": true,
     "type": "HTTP",
-    "host": "127.0.0.1:7890"
+    "host": "127.0.0.1:8080"
   },
   "batteries": [
     {
@@ -112,8 +112,8 @@
       "status": "charged",
       "time_left": "0:00",
       "health": "Good",
-      "cycle_count": 195,
-      "capacity": 86
+      "cycle_count": 120,
+      "capacity": 92
     }
   ],
   "thermal": {

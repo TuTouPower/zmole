@@ -1885,8 +1885,10 @@ main() {
 
         printf '\n'
         printf "Proceed with uninstallation? [y/N] "
-        local confirm
-        read -r confirm
+        # zmole local patch: default to "" so EOF (empty stdin) aborts cleanly
+        # under `set -u` instead of dying with "unbound variable".
+        local confirm=""
+        read -r confirm || true
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
             echo "Aborted."
             return 0
