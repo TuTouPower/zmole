@@ -325,6 +325,7 @@ final class OverviewViewModel: ObservableObject {
     private var sums: StorageSums?
     private var lastUsedBytes: Int64?
     private var isEstimating = false
+    private var estimateGeneration = 0
     private var estimateTask: Task<Void, Never>?
     private var incompleteRetryTask: Task<Void, Never>?
     private var incompleteRetryScheduled = false
@@ -485,6 +486,8 @@ final class OverviewViewModel: ObservableObject {
         guard let storageLoader, !isEstimating else { return }
         isEstimating = true
         let invalidationsAtStart = invalidationCount
+        estimateGeneration += 1
+        let generation = estimateGeneration
         defer { isEstimating = false }
         do {
             // A write invalidation always forces a full rescan, even for the
@@ -494,8 +497,16 @@ final class OverviewViewModel: ObservableObject {
             let includeUsers = diskAccessGranted
             let merged = try await storageLoader.loadSums(
                 filling: partial,
-                includingUsers: includeUsers
+                includingUsers: includeUsers,
+                onProgress: { [weak self] progressiveSums in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.estimateGeneration == generation else { return }
+                        self.sums = progressiveSums
+                        self.breakdown = progressiveSums.breakdown(usedBytes: self.lastUsedBytes)
+                    }
+                }
             )
+            guard estimateGeneration == generation else { return }
             sums = merged
             breakdown = merged.breakdown(usedBytes: lastUsedBytes)
             // A fill-only scan reuses resolved segments, so it must not
@@ -526,6 +537,13 @@ final class OverviewViewModel: ObservableObject {
         } catch is CancellationError {
             // A cancelled scan must not write a cache later launches would
             // trust, and must not replace the current estimate.
+            if let cacheEntry {
+                sums = cacheEntry.sums
+                breakdown = cacheEntry.sums.breakdown(usedBytes: lastUsedBytes)
+            } else {
+                sums = nil
+                breakdown = .placeholder
+            }
         } catch {
             overviewLog.error("storage estimate failed: \(String(describing: type(of: error)), privacy: .public)")
         }
