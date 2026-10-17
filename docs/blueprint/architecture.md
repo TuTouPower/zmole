@@ -35,7 +35,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 ```
 
 - 破坏性命令：本次预览成功 → 界面确认（对象与预览一致）→ 再 spawn 执行。预览失败、取消、目标变化后禁止执行。确认前不创建**执行**用 `Process`（预览 spawn 允许）。
-- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是预览快照，执行时 mole 会重扫；UI 须写明。只展示**本次** dry-run 写入的内容，禁止沿用旧文件。用户预览开始前会等待被取消的预跑进程完全退出，避免两侧并发写同一文件。
+- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是扫描快照，执行时 mole 会重扫；UI 须写明。只展示**本次** dry-run 写入的内容，禁止沿用旧文件。用户预览或执行开始前会取消后台 clean 扫描并等待其进程完全退出，避免两侧并发写同一文件。
 - 白名单：读写 `~/.config/mole/whitelist`（及 optimize 对应文件），不跑 whitelist TUI。
 - App 设置（语言覆盖等）存本应用容器；mole 配置仍在 `~/.config/mole/`。
 - mole 配置文件（`purge_paths`、`whitelist`、`whitelist_optimize`）在本仓视为纯数据：GUI 逐行校验形状后原样写入，由 mole 负责解释与展开安全；GUI 不做 shell 转义（也不按 shell 求值）。
@@ -50,15 +50,15 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。写端管道忽略 SIGPIPE（fd 级 `F_SETNOSIGPIPE`），SIGTERM→SIGKILL 前复核进程组身份（`getpgid(pid) == pid`）；应用退出时由 AppDelegate 取消全部活跃 runner，限时等待 2 秒。子进程环境在启动时剥离全部 `MOLE_*` 变量，其余继承。
 
-`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、clean 执行、optimize、purge、概览估算）各持独立 `MoleBridge`，互不阻塞；概览估算持 3 条通道以并发探测多个目录（单通道内串行）；卸载名单流与空闲预跑各持独立实例；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、clean 执行、optimize、purge、概览估算）各持独立 `MoleBridge`，互不阻塞；概览估算持 3 条通道以并发探测多个目录（单通道内串行）；卸载名单流与后台扫描各持独立实例（后台五类扫描每种一条通道，可并行）；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
 
 ### 卸载名单与确认
 
 卸载名单走 `uninstall --list-stream`：先输出已发现的应用身份（名称/路径），再按应用输出完整行（bundle id、卸载名、来源、大小、版本、上次使用时间来自同一次扫描；版本读目标自身 Info.plist，不用 Spotlight）。界面先列名单、大小随后补上，尚无大小的行不显示为 0；图标在列表可交互后异步补上。同一次会话的预览与确认复用这份名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。
 
-### 空闲预跑
+### 后台扫描
 
-`PrewarmService` 在空闲时按固定顺序各跑一次只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；任意时刻只有一个在跑，不获取写入租约。空闲 = 无写入租约、无用户可见的页面扫描（含磁盘页扫描与正在查看的清理预览）。写入开始取消当前预跑；写入成功后作废全部预跑结果，回到空闲再跑一遍。用户重新扫描某一项会取消当前预跑并把该项交给用户扫描。失败的项跳过继续、下一次空闲重试。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。页面打开时若有对应预跑结果则直接显示并标出扫描时间，不立刻重扫；确认框开着时新结果不替换正在确认的一份。demo 模式不启动预跑。
+`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 预览/执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`；schema 不匹配或损坏时整文件忽略。写入成功后作废全部结果并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
 
 ## 捆绑与进程边界
 

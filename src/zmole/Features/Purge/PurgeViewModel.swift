@@ -5,9 +5,9 @@ final class PurgeViewModel: MaintenanceViewModel {
     init(
         process: any MoleProcessControlling,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
-        super.init(kind: .purge, process: process, coordinator: coordinator, prewarm: prewarm)
+        super.init(kind: .purge, process: process, coordinator: coordinator, scan: scan)
     }
 
     func previewPurge() async { await previewMaintenance() }

@@ -15,20 +15,20 @@ final class CleanViewModel: ObservableObject {
     @Published private(set) var showBusyNotice = false
     @Published private(set) var previewCapturedAt: Date?
 
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private weak var scan: (any BackgroundScanProviding)?
 
     init(
         process: any MoleProcessControlling,
         previewStore: CleanPreviewStore,
         coordinator: OperationCoordinator,
         streaming: (any MoleStreaming)? = nil,
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
         self.process = process
         self.previewStore = previewStore
         self.coordinator = coordinator
         self.streaming = streaming
-        self.prewarm = prewarm
+        self.scan = scan
         leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         leaseCoordinator.onInvalidation = { [weak self] in
@@ -72,12 +72,12 @@ final class CleanViewModel: ObservableObject {
         return String(localized: "clean.confirm_detail \(preview.entries.count) \(preview.reclaimText)")
     }
 
-    /// Shows a finished background prewarm preview without re-running the
-    /// scan. Does nothing when the user already has a preview or no prewarm
-    /// result is available.
+    /// Shows a finished background scan result without re-running the scan.
+    /// Does nothing when the user already has a preview or no result is
+    /// available.
     func adoptPrewarmPreviewIfAvailable() {
         guard session.preview == nil, !session.isBusy else { return }
-        guard let result = prewarm?.takeResult(.cleanDryRun),
+        guard let result = scan?.result(for: .clean),
               case let .cleanPreview(snapshot) = result.payload else { return }
         leaseCoordinator.captureGeneration()
         session.adoptPreview(snapshot)
@@ -87,7 +87,7 @@ final class CleanViewModel: ObservableObject {
 
     func previewClean() async {
         guard !session.isBusy else { return }
-        await prewarm?.userDidRescanAndWaitForTermination(.cleanDryRun)
+        await scan?.userDidRescanAndWaitForTermination(.clean)
         previewCapturedAt = nil
         leaseCoordinator.release()
         session.invalidate()
@@ -221,6 +221,9 @@ final class CleanViewModel: ObservableObject {
         guard session.isConfirmationPresented, canConfirm,
               let snapshot = session.preview,
               let previewID = PreviewOperationID.from(session.state) else { return }
+        // The background clean scan writes the same list file; stop it and wait
+        // for the process to die before verifying or spawning the execution.
+        await scan?.userDidRescanAndWaitForTermination(.clean)
         do {
             try previewStore.verifyUnchanged(snapshot)
         } catch {

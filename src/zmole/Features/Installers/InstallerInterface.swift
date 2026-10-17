@@ -19,7 +19,7 @@ struct InstallerCandidate: Equatable, Sendable, Identifiable {
     }
 }
 
-extension InstallerCandidate: Decodable {
+extension InstallerCandidate: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         path = try container.decode(String.self, forKey: .path)

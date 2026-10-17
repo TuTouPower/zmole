@@ -9,24 +9,93 @@ final class CommandConcurrencyTests: XCTestCase {
         let bridges = try XCTUnwrap(MoleCommandLanes.makeCommandBridges())
         let oneShots: [any MoleProcessControlling] = [
             bridges.history, bridges.uninstall, bridges.installer,
-            bridges.cleanCommand, bridges.optimize, bridges.purge, bridges.estimate
+            bridges.cleanCommand, bridges.optimize, bridges.purge, bridges.estimate,
+            bridges.scanInstaller, bridges.scanClean, bridges.scanOptimize, bridges.scanPurge
         ] + bridges.estimateExtras
         let identities = oneShots.map { ObjectIdentifier($0 as AnyObject) }
         XCTAssertEqual(Set(identities).count, oneShots.count, "each one-shot lane must be a distinct bridge")
     }
 
-    func testAppDependenciesWiresDistinctLanes() {
-        let dependencies = AppDependencies()
-        let lanes = [
+    func testAppDependenciesWiresDistinctLanes() throws {
+        let dependencies = AppDependencies(backgroundScanEnabled: false)
+        var lanes: [any MoleProcessControlling] = [
             dependencies.lanes.history, dependencies.lanes.uninstall,
             dependencies.lanes.installer, dependencies.lanes.cleanCommand,
             dependencies.lanes.optimize, dependencies.lanes.purge
-        ] + dependencies.lanes.estimatePool
+        ]
+        lanes += dependencies.lanes.estimatePool
+        let scan = try XCTUnwrap(dependencies.lanes.scan)
+        lanes += [scan.installerProcess, scan.clean, scan.optimize, scan.purge]
         let identities = lanes.map { ObjectIdentifier($0 as AnyObject) }
         XCTAssertEqual(
             Set(identities).count, lanes.count,
             "production assembly must give each one-shot consumer its own lane"
         )
+    }
+
+    // AC-010 (background scan): every background lane is part of the shutdown
+    // cancellation set.
+    func testShutdownCoversBackgroundScanLanes() throws {
+        let lanes = try makeSleepLanes()
+        let scan = try XCTUnwrap(lanes.scan)
+        let processIdentities = lanes.allProcessLanes.map { ObjectIdentifier($0 as AnyObject) }
+        for lane in [scan.installerProcess, scan.clean, scan.optimize, scan.purge] {
+            XCTAssertTrue(
+                processIdentities.contains(ObjectIdentifier(lane as AnyObject)),
+                "shutdown must cancel the background scan lane"
+            )
+        }
+        let streamIdentities = lanes.allStreams.map { ObjectIdentifier($0 as AnyObject) }
+        XCTAssertTrue(
+            streamIdentities.contains(ObjectIdentifier(scan.uninstallStreaming as AnyObject)),
+            "shutdown must cancel the background uninstall stream"
+        )
+    }
+
+    // AC-010 (background scan): the shutdown cancellation set actually stops
+    // in-flight background scan processes.
+    func testShutdownCancelsInFlightBackgroundScanProcesses() async throws {
+        let lanes = try makeSleepLanes()
+        let scan = try XCTUnwrap(lanes.scan)
+        guard let clean = scan.clean as? MoleBridge,
+              let optimize = scan.optimize as? MoleBridge,
+              let purge = scan.purge as? MoleBridge,
+              let installer = scan.installerProcess as? MoleBridge else {
+            return XCTFail("expected MoleBridge scan lanes")
+        }
+        func canceledError(_ bridge: MoleBridge) async -> Error? {
+            do {
+                _ = try await bridge.run(["60"], stdin: nil, timeout: 120)
+                return nil
+            } catch {
+                return error
+            }
+        }
+        let tasks = [
+            Task { await canceledError(clean) },
+            Task { await canceledError(optimize) },
+            Task { await canceledError(purge) },
+            Task { await canceledError(installer) }
+        ]
+        for bridge in [clean, optimize, purge, installer] {
+            try await waitUntilBusy(bridge)
+        }
+
+        for lane in lanes.allProcessLanes {
+            await lane.cancel()
+        }
+
+        for bridge in [clean, optimize, purge, installer] {
+            try await waitUntilNotBusy(bridge)
+        }
+        for task in tasks {
+            let error = await task.value
+            XCTAssertEqual(
+                error as? MoleBridgeError,
+                .cancelled,
+                "shutdown must cancel the process instead of letting it finish"
+            )
+        }
     }
 
     // AC-001: a busy read lane must not reject another read lane.
@@ -148,6 +217,15 @@ final class CommandConcurrencyTests: XCTestCase {
             try MoleBridge(executableURL: sleepURL)
         }
         let estimateBridges: [any MoleProcessControlling] = [try bridge(), try bridge(), try bridge()]
+        let scanInstaller = try bridge()
+        let scan = BackgroundScanLanes(
+            uninstallStreaming: try MoleBridge(executableURL: sleepURL),
+            installer: InstallerInterface(process: scanInstaller),
+            installerProcess: scanInstaller,
+            clean: try bridge(),
+            optimize: try bridge(),
+            purge: try bridge()
+        )
         return MoleCommandLanes(
             history: try bridge(), uninstall: try bridge(),
             uninstallStream: try MoleBridge(executableURL: sleepURL),
@@ -155,7 +233,7 @@ final class CommandConcurrencyTests: XCTestCase {
             optimize: try bridge(), purge: try bridge(),
             estimate: estimateBridges[0],
             estimatePool: estimateBridges,
-            prewarm: try MoleBridge(executableURL: sleepURL),
+            scan: scan,
             statusStream: try MoleBridge(executableURL: sleepURL),
             cleanStream: try MoleBridge(executableURL: sleepURL)
         )
@@ -167,6 +245,14 @@ final class CommandConcurrencyTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTFail("bridge never became busy")
+    }
+
+    private func waitUntilNotBusy(_ bridge: MoleBridge) async throws {
+        for _ in 0..<500 {
+            if await !bridge.isBusy { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("bridge never became idle")
     }
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// One candidate row from a clean dry-run preview.
-struct CleanPreviewEntry: Equatable, Sendable, Identifiable {
+struct CleanPreviewEntry: Equatable, Codable, Sendable, Identifiable {
     let path: String
     let sizeBytes: Int64?
     let itemNote: String?
@@ -16,7 +16,7 @@ struct CleanPreviewEntry: Equatable, Sendable, Identifiable {
 }
 
 /// Candidate rows grouped under the dry-run section header (`=== Name ===`).
-struct CleanPreviewSection: Equatable, Sendable, Identifiable {
+struct CleanPreviewSection: Equatable, Codable, Sendable, Identifiable {
     let name: String
     let entries: [CleanPreviewEntry]
 

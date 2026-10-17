@@ -130,7 +130,7 @@ func makeUninstallViewModel(
     targetChecker: UninstallTargetChecking = FixedTargetChecker(matches: true),
     iconProvider: UninstallIconProviding = NoopIconProvider(),
     revealer: FileRevealing = NoopRevealer(),
-    prewarm: (any PrewarmResultProviding)? = nil
+    scan: (any BackgroundScanProviding)? = nil
 ) -> UninstallViewModel {
     UninstallViewModel(
         process: process,
@@ -139,7 +139,7 @@ func makeUninstallViewModel(
         targetChecker: targetChecker,
         iconProvider: iconProvider,
         revealer: revealer,
-        prewarm: prewarm
+        scan: scan
     )
 }
 

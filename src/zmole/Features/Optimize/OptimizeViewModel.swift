@@ -7,9 +7,9 @@ final class OptimizeViewModel: MaintenanceViewModel {
     init(
         process: any MoleProcessControlling,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
-        super.init(kind: .optimize, process: process, coordinator: coordinator, prewarm: prewarm)
+        super.init(kind: .optimize, process: process, coordinator: coordinator, scan: scan)
     }
 
     /// Dry-run rows parsed once per preview output so repeated body

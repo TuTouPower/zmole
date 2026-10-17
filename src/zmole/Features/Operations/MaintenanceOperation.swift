@@ -41,19 +41,19 @@ class MaintenanceViewModel: ObservableObject {
     private let coordinator: OperationCoordinator
     private let kind: MaintenanceKind
     private let session = OperationSession<MaintenancePreviewSnapshot>()
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private weak var scan: (any BackgroundScanProviding)?
     private let leaseCoordinator: PreviewLeaseCoordinator
 
     init(
         kind: MaintenanceKind,
         process: any MoleProcessControlling,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
         self.kind = kind
         self.process = process
         self.coordinator = coordinator
-        self.prewarm = prewarm
+        self.scan = scan
         leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         leaseCoordinator.onInvalidation = { [weak self] in
@@ -90,13 +90,13 @@ class MaintenanceViewModel: ObservableObject {
         return String(localized: "maintenance.confirm_detail \(lineCount)")
     }
 
-    /// Shows a finished background prewarm preview without re-running the
-    /// scan. Does nothing when the user already has a preview or no prewarm
-    /// result is available.
+    /// Shows a finished background scan result without re-running the scan.
+    /// Does nothing when the user already has a preview or no result is
+    /// available.
     func adoptPrewarmPreviewIfAvailable() {
         guard session.preview == nil, !session.isBusy else { return }
-        guard let item = kind.prewarmItem,
-              let result = prewarm?.takeResult(item),
+        guard let item = kind.scanItem,
+              let result = scan?.result(for: item),
               case let .maintenance(output) = result.payload else { return }
         leaseCoordinator.captureGeneration()
         session.adoptPreview(MaintenancePreviewSnapshot(generation: UUID(), output: output))
@@ -105,8 +105,8 @@ class MaintenanceViewModel: ObservableObject {
 
     func previewMaintenance() async {
         guard !session.isBusy else { return }
-        if let item = kind.prewarmItem {
-            prewarm?.userDidRescan(item)
+        if let item = kind.scanItem {
+            scan?.userDidRescan(item)
         }
         previewCapturedAt = nil
         leaseCoordinator.release()
@@ -253,10 +253,10 @@ private extension MaintenanceKind {
         }
     }
 
-    var prewarmItem: PrewarmItem? {
+    var scanItem: BackgroundScanItem? {
         switch self {
-        case .optimize: return .optimizeDryRun
-        case .purge: return .purgeDryRun
+        case .optimize: return .optimize
+        case .purge: return .purge
         }
     }
 }
