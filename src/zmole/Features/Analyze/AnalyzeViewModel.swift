@@ -1,6 +1,17 @@
 import Combine
 import Foundation
 
+/// One visible list row: a level entry or an inline-expanded descendant.
+struct AnalyzeRow: Equatable, Sendable, Identifiable {
+    let entry: DiskEntry
+    let depth: Int
+    /// Total of the row's immediate parent, used for the "% of parent" column.
+    /// Nil while the parent's own size is still computing.
+    let parentTotal: Int64?
+
+    var id: String { entry.path }
+}
+
 @MainActor
 final class AnalyzeViewModel: ObservableObject {
     struct LevelState: Equatable, Sendable {
@@ -15,6 +26,8 @@ final class AnalyzeViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var errorMessageKey: String?
     @Published private(set) var canGoBack = false
+    /// Directories expanded inline in the left list (paths, not navigation).
+    @Published private(set) var expandedPaths: Set<String> = []
 
     let rootPath: String
 
@@ -27,12 +40,13 @@ final class AnalyzeViewModel: ObservableObject {
 
     private var pathStack: [String] = []
     private var records: [String: LevelRecord] = [:]
+    private var childCache: [String: [DiskEntry]] = [:]
     private var nextGeneration = 0
     private var pendingMeasurements: [MeasurementRequest] = []
     private var measurementWorker: Task<Void, Never>?
     private var workerToken = 0
     private var levelRevision = 0
-    private var visibleCache: (revision: Int, search: String, sort: AnalyzeSort, entries: [DiskEntry])?
+    private var visibleRowsCache: (revision: Int, search: String, sort: AnalyzeSort, rows: [AnalyzeRow])?
     private var tilesCache: (revision: Int, size: CGSize, tiles: [SpaceMapTile])?
 
     private struct LevelRecord {
@@ -64,20 +78,91 @@ final class AnalyzeViewModel: ObservableObject {
 
     /// Cached filter+sort for the visible list, keyed by level revision so
     /// repeated body evaluations do not re-sort (ICU compare) the whole level.
-    func visibleEntries(search: String, sort: AnalyzeSort) -> [DiskEntry] {
-        if let cache = visibleCache,
+    /// Expanded directories contribute their children as indented rows.
+    func visibleRows(search: String, sort: AnalyzeSort) -> [AnalyzeRow] {
+        if let cache = visibleRowsCache,
            cache.revision == levelRevision,
            cache.search == search,
            cache.sort == sort {
-            return cache.entries
+            return cache.rows
         }
-        let entries = level?.entries ?? []
-        let filtered = entries.filter {
-            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)
+        var rows: [AnalyzeRow] = []
+        appendRows(from: level?.entries ?? [], depth: 0, parentTotal: level?.totalSize, into: &rows, search: search, sort: sort)
+        visibleRowsCache = (levelRevision, search, sort, rows)
+        return rows
+    }
+
+    private func appendRows(
+        from entries: [DiskEntry],
+        depth: Int,
+        parentTotal: Int64?,
+        into rows: inout [AnalyzeRow],
+        search: String,
+        sort: AnalyzeSort
+    ) {
+        for entry in AnalyzeListOrder.sorted(entries, by: sort) {
+            if search.isEmpty || entry.name.localizedCaseInsensitiveContains(search) {
+                rows.append(AnalyzeRow(entry: entry, depth: depth, parentTotal: parentTotal))
+            }
+            guard entry.isDirectory,
+                  expandedPaths.contains(entry.path),
+                  let children = childCache[entry.path] else { continue }
+            appendRows(
+                from: children,
+                depth: depth + 1,
+                parentTotal: entry.knownSize,
+                into: &rows,
+                search: search,
+                sort: sort
+            )
         }
-        let sorted = AnalyzeListOrder.sorted(filtered, by: sort)
-        visibleCache = (levelRevision, search, sort, sorted)
-        return sorted
+    }
+
+    /// The inline-expanded state of a row's disclosure control.
+    func isExpanded(_ entry: DiskEntry) -> Bool {
+        entry.isDirectory && expandedPaths.contains(entry.path)
+    }
+
+    /// Looks a row up in the current level or any inline-expanded run, so the
+    /// inspector keeps working for nested rows.
+    func entry(for path: String) -> DiskEntry? {
+        if let entry = level?.entries.first(where: { $0.path == path }) {
+            return entry
+        }
+        for entries in childCache.values {
+            if let entry = entries.first(where: { $0.path == path }) {
+                return entry
+            }
+        }
+        return nil
+    }
+
+    /// Expands or collapses a directory inline. Expansion never navigates: the
+    /// current level, selection and breadcrumb stay put. Children are listed on
+    /// first expansion and then served from the session cache.
+    func toggleExpanded(_ entry: DiskEntry) async {
+        guard entry.isDirectory else { return }
+        if expandedPaths.contains(entry.path) {
+            expandedPaths.remove(entry.path)
+            visibleRowsCache = nil
+            return
+        }
+        if childCache[entry.path] == nil {
+            do {
+                let children = try await scanner.listDirectory(entry.path)
+                // A background measurement may have filled the cache while the
+                // listing was in flight; its entries carry real sizes and win.
+                if childCache[entry.path] == nil {
+                    childCache[entry.path] = children
+                }
+            } catch {
+                errorMessageKey = error.localizationKey
+                errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
+                return
+            }
+        }
+        expandedPaths.insert(entry.path)
+        visibleRowsCache = nil
     }
 
     /// Cached space-map layout, keyed by level revision and pane size.
@@ -186,6 +271,7 @@ final class AnalyzeViewModel: ObservableObject {
                 deduplicator: deduplicator
             )
             records[path] = record
+            childCache[path] = entries
             publish(record, path: path)
             enqueueMeasurements(
                 parent: path,
@@ -313,11 +399,17 @@ final class AnalyzeViewModel: ObservableObject {
                 generation: generation,
                 deduplicator: parentRecord.deduplicator
             )
+            childCache[path] = scannedLevel.entries
             touched.insert(path)
         }
 
         if let current = level?.path, touched.contains(current) {
             publish(records[current]!, path: current)
+        } else if !touched.isDisjoint(with: expandedPaths) {
+            // An expanded subtree got fresh sizes: rebuild the visible rows.
+            levelRevision += 1
+            visibleRowsCache = nil
+            objectWillChange.send()
         }
     }
 
@@ -326,6 +418,13 @@ final class AnalyzeViewModel: ObservableObject {
         records = records.filter { key, _ in
             key != path && !key.hasPrefix(prefix)
         }
+        childCache = childCache.filter { key, _ in
+            key != path && !key.hasPrefix(prefix)
+        }
+        expandedPaths = expandedPaths.filter { key in
+            key != path && !key.hasPrefix(prefix)
+        }
+        visibleRowsCache = nil
     }
 
     private static func countedFilesTotal(
