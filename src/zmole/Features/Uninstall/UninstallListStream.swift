@@ -9,13 +9,55 @@ struct UninstallAppListing: Equatable, Codable, Identifiable, Sendable {
     var bundleID: String?
     var uninstallName: String?
     var source: String?
-    var sizeText: String?
+    var sizeText: String? {
+        didSet {
+            sizeBytes = HumanSizeParser.bytes(from: sizeText)
+        }
+    }
+    /// Stored normalized byte count; computed once upon creation or update (t055)
+    private(set) var sizeBytes: Int64?
     var version: String?
     var lastUsed: Date?
 
     var id: String { path }
 
-    var sizeBytes: Int64? { HumanSizeParser.bytes(from: sizeText) }
+    init(
+        path: String,
+        name: String,
+        bundleID: String? = nil,
+        uninstallName: String? = nil,
+        source: String? = nil,
+        sizeText: String? = nil,
+        version: String? = nil,
+        lastUsed: Date? = nil
+    ) {
+        self.path = path
+        self.name = name
+        self.bundleID = bundleID
+        self.uninstallName = uninstallName
+        self.source = source
+        self.sizeText = sizeText
+        self.sizeBytes = HumanSizeParser.bytes(from: sizeText)
+        self.version = version
+        self.lastUsed = lastUsed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        name = try container.decode(String.self, forKey: .name)
+        bundleID = try container.decodeIfPresent(String.self, forKey: .bundleID)
+        uninstallName = try container.decodeIfPresent(String.self, forKey: .uninstallName)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        sizeText = try container.decodeIfPresent(String.self, forKey: .sizeText)
+        sizeBytes = HumanSizeParser.bytes(from: sizeText)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+        lastUsed = try container.decodeIfPresent(Date.self, forKey: .lastUsed)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case path, name, bundleID, uninstallName, source, sizeText, version, lastUsed
+    }
 
     /// Both identity fields resolved; only then can the row be previewed.
     var isResolved: Bool { bundleID != nil && uninstallName != nil }

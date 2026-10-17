@@ -1,0 +1,40 @@
+{
+  "tid": "t055",
+  "attempt": 1,
+  "execution_id": "1bdd1991fbcb40ddbb964456115c387b",
+  "status": "done",
+  "branch": "t055_uninstall_size_sort_cache",
+  "base_sha": "90e4427b9a5b264c5d6a6d7b624effc56003de66",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (336 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "single: review_general.md PASS round 1, reviewed_scope 5f2dfdb2eb6d58b6, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Uninstall/UninstallListStream.swift UninstallAppListing.sizeBytes",
+      "src/zmole/Features/Uninstall/UninstallSnapshot.swift UninstallListOrder.sorted",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC001_500RecordsSortFollowsRulesWithZeroParserCalls"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Uninstall/UninstallViewModel.swift contentVersion / visibleListingsCache",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC002_IconUpdateDoesNotCallSortFunction"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Uninstall/UninstallViewModel.swift icon(forPath:)",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC003_SingleRowIconUpdateReflectsImmediatelyWithoutAffectingOrder"
+    ],
+    "AC-004": [
+      "src/zmole/Features/Uninstall/UninstallSnapshot.swift UninstallSelectionSummary.calculate",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC004_SelectionTotalWithKnownAndUnknownSizes"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Uninstall/UninstallViewModel.swift visibleListings",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC005_ChangesCauseReDerivationAndStreamMergeUpdatesSort"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Uninstall/UninstallSnapshot.swift UninstallListOrder.sorted locale",
+      "tests/unit/UninstallSizeSortCacheTests.swift testAC006_LocaleChangeRebuildsSortAndIdenticalKeysAreStable"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

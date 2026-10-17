@@ -4,7 +4,12 @@ import Foundation
 
 @MainActor
 final class UninstallViewModel: ObservableObject {
-    @Published private(set) var listings: [UninstallAppListing] = []
+    @Published private(set) var listings: [UninstallAppListing] = [] {
+        didSet {
+            contentVersion += 1
+        }
+    }
+    @Published private(set) var contentVersion: Int = 0
     @Published private(set) var selectedPaths: Set<String> = []
     @Published private(set) var hasLoaded = false
     @Published private(set) var isListing = false
@@ -96,6 +101,46 @@ final class UninstallViewModel: ObservableObject {
     func icon(for app: UninstallApp) -> NSImage? { iconsByPath[app.path] }
 
     func icon(forPath path: String) -> NSImage? { iconsByPath[path] }
+
+    private var visibleListingsCache: (
+        version: Int,
+        search: String,
+        source: String,
+        sort: UninstallSort,
+        locale: String,
+        result: [UninstallAppListing]
+    )?
+
+    /// Returns the filtered and sorted visible rows, cached by (contentVersion, search, source, sort, locale).
+    /// Updating icons does not invalidate this cache, preventing unnecessary re-sorting.
+    func visibleListings(
+        search: String,
+        source: String,
+        sort: UninstallSort,
+        locale: Locale = .current
+    ) -> [UninstallAppListing] {
+        let locId = locale.identifier
+        if let cache = visibleListingsCache,
+           cache.version == contentVersion,
+           cache.search == search,
+           cache.source == source,
+           cache.sort == sort,
+           cache.locale == locId {
+            return cache.result
+        }
+        let filtered = UninstallListFilter.visibleListings(listings, search: search, source: source)
+        let sorted = UninstallListOrder.sorted(filtered, by: sort, locale: locale)
+        visibleListingsCache = (contentVersion, search, source, sort, locId, sorted)
+        return sorted
+    }
+
+    func setListingsForTesting(_ listings: [UninstallAppListing]) {
+        self.listings = listings
+    }
+
+    func setIconForTesting(_ image: NSImage, forPath path: String) {
+        iconsByPath[path] = image
+    }
 
     // MARK: - Listing
 

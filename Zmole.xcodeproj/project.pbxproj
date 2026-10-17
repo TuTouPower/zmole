@@ -110,6 +110,7 @@
 		E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */; };
 		E2783DDFAABCEE64712BA702 /* CleanPreviewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40246A3663BB2BEB8EB3935 /* CleanPreviewModel.swift */; };
 		E57CCCF61B0AE5B7270FF70F /* FullDiskAccessViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E39EA9A819D9F8505D41D11 /* FullDiskAccessViews.swift */; };
+		E6D5D7F12DAF7A5CEC66A024 /* UninstallSizeSortCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE6739D8E4650B9B5F3987 /* UninstallSizeSortCacheTests.swift */; };
 		E8A8D37CD2ED8337535B60C2 /* OverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76D4F97CC2D295465B4473E /* OverviewTests.swift */; };
 		E91656D19AE4797AF9AD7ADB /* BackgroundScanTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDCC922F5D447EFB08034C9 /* BackgroundScanTestSupport.swift */; };
 		E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */; };
@@ -276,6 +277,7 @@
 		EFF06BD69D5E2DD87C328B82 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		F0F155DB1A34BDD42384DD4A /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeError.swift; sourceTree = "<group>"; };
+		F5DE6739D8E4650B9B5F3987 /* UninstallSizeSortCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallSizeSortCacheTests.swift; sourceTree = "<group>"; };
 		F671ADAC51BDECD8FC8FA2A3 /* OverviewLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewLayoutTests.swift; sourceTree = "<group>"; };
 		F68DF34EE2CF39B9814D0F4D /* AppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearance.swift; sourceTree = "<group>"; };
 		F8B3146102CA598B7C7281C1 /* PrewarmPageAttachTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrewarmPageAttachTests.swift; sourceTree = "<group>"; };
@@ -408,6 +410,7 @@
 				D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */,
 				C6BA32F548776AA51F9BBB91 /* UiPolishViewportTests.swift */,
 				5B730F405584390AA384CFB6 /* UninstallDetailTests.swift */,
+				F5DE6739D8E4650B9B5F3987 /* UninstallSizeSortCacheTests.swift */,
 				97FDB94D6FF5B64C4FC810DB /* UninstallStreamTests.swift */,
 				85FA0BA2B2FDEE2AEA4FA9AC /* UninstallTargetCheckerTests.swift */,
 				D3909A9F9948552E8947D86D /* UninstallTests.swift */,
@@ -730,6 +733,7 @@
 				EAACD30EFE7EC87C6933A0CF /* UiAlignmentTests.swift in Sources */,
 				D57708BBD8D38E4EB86AFDA9 /* UiPolishViewportTests.swift in Sources */,
 				EC42409FF166D2F145E7FF7E /* UninstallDetailTests.swift in Sources */,
+				E6D5D7F12DAF7A5CEC66A024 /* UninstallSizeSortCacheTests.swift in Sources */,
 				5BC879CA1125434D19C191D5 /* UninstallStreamTests.swift in Sources */,
 				2D3C6CCC525E7A7F2B0B1669 /* UninstallTargetCheckerTests.swift in Sources */,
 				99F59D60FAF2DD3D6CCBA30F /* UninstallTestSupport.swift in Sources */,

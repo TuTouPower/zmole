@@ -7,6 +7,7 @@ struct UninstallApp: Decodable, Equatable, Hashable, Identifiable, Sendable {
     let path: String
     let source: String?
     let size: String?
+    let sizeBytes: Int64?
     let version: String?
     let lastUsed: Date?
 
@@ -14,10 +15,6 @@ struct UninstallApp: Decodable, Equatable, Hashable, Identifiable, Sendable {
     /// path/bundle-id/uninstall-name triplet is still validated separately
     /// before any destructive step.
     var id: String { path }
-
-    var sizeBytes: Int64? {
-        HumanSizeParser.bytes(from: size)
-    }
 
     /// Normalized size text, or nil when the size cannot be parsed (shown as
     /// "unknown" instead of a raw or zero value).
@@ -53,6 +50,7 @@ struct UninstallApp: Decodable, Equatable, Hashable, Identifiable, Sendable {
         self.path = path
         self.source = source
         self.size = size
+        self.sizeBytes = HumanSizeParser.bytes(from: size)
         self.version = version
         self.lastUsed = lastUsed
     }
@@ -73,6 +71,7 @@ struct UninstallApp: Decodable, Equatable, Hashable, Identifiable, Sendable {
         } else {
             size = nil
         }
+        sizeBytes = HumanSizeParser.bytes(from: size)
         version = try? container.decodeIfPresent(String.self, forKey: .version)
         if let epoch = try? container.decodeIfPresent(Double.self, forKey: .lastUsedEpoch), epoch > 0 {
             lastUsed = Date(timeIntervalSince1970: epoch)
@@ -126,6 +125,72 @@ enum UninstallViewModelError: Error, Equatable, Sendable, ErrorKeyProviding {
         case .invalidName:
             return "uninstall.error.invalid_name"
         }
+    }
+}
+
+enum UninstallSort: String, CaseIterable, Identifiable, Sendable {
+    case name
+    case size
+    case source
+
+    var id: Self { self }
+}
+
+enum UninstallListOrder {
+    static func sorted(
+        _ listings: [UninstallAppListing],
+        by sort: UninstallSort,
+        locale: Locale = .current
+    ) -> [UninstallAppListing] {
+        listings.sorted { lhs, rhs in
+            switch sort {
+            case .name:
+                let cmp = lhs.name.compare(rhs.name, options: [.caseInsensitive, .numeric], range: nil, locale: locale)
+                if cmp == .orderedSame {
+                    return lhs.path < rhs.path
+                }
+                return cmp == .orderedAscending
+            case .size:
+                switch (lhs.sizeBytes, rhs.sizeBytes) {
+                case let (l?, r?):
+                    if l != r { return l > r }
+                    let cmp = lhs.name.compare(rhs.name, options: [.caseInsensitive, .numeric], range: nil, locale: locale)
+                    if cmp == .orderedSame { return lhs.path < rhs.path }
+                    return cmp == .orderedDescending
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    let cmp = lhs.name.compare(rhs.name, options: [.caseInsensitive, .numeric], range: nil, locale: locale)
+                    if cmp == .orderedSame { return lhs.path < rhs.path }
+                    return cmp == .orderedDescending
+                }
+            case .source:
+                let s1 = lhs.source ?? ""
+                let s2 = rhs.source ?? ""
+                if s1 != s2 {
+                    return s1 < s2
+                }
+                let cmp = lhs.name.compare(rhs.name, options: [.caseInsensitive, .numeric], range: nil, locale: locale)
+                if cmp == .orderedSame {
+                    return lhs.path < rhs.path
+                }
+                return cmp == .orderedAscending
+            }
+        }
+    }
+}
+
+struct UninstallSelectionSummary: Equatable, Sendable {
+    let count: Int
+    let knownBytes: Int64
+    let hasUnknownSize: Bool
+
+    static func calculate(for apps: [UninstallApp]) -> UninstallSelectionSummary {
+        let known = apps.compactMap(\.sizeBytes).reduce(0, +)
+        let unknown = apps.contains { $0.sizeBytes == nil }
+        return UninstallSelectionSummary(count: apps.count, knownBytes: known, hasUnknownSize: unknown)
     }
 }
 

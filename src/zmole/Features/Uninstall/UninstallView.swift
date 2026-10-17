@@ -10,6 +10,7 @@ enum UninstallAccessibility {
 @MainActor
 struct UninstallView: View {
     @ObservedObject var viewModel: UninstallViewModel
+    @Environment(\.locale) private var locale
     @State private var search = ""
     @State private var source = "all"
     @State private var sort: UninstallSort = .name
@@ -20,29 +21,23 @@ struct UninstallView: View {
     }
 
     private var visibleListings: [UninstallAppListing] {
-        UninstallListFilter.visibleListings(viewModel.listings, search: search, source: source)
-            .sorted { lhs, rhs in
-                switch sort {
-                case .name:
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                case .size:
-                    return (lhs.sizeBytes ?? -1, lhs.name) > (rhs.sizeBytes ?? -1, rhs.name)
-                case .source:
-                    return (lhs.source ?? "", lhs.name) < (rhs.source ?? "", rhs.name)
-                }
-            }
+        viewModel.visibleListings(search: search, source: source, sort: sort, locale: locale)
     }
 
     private var selectedApps: [UninstallApp] {
         viewModel.selectedApps
     }
 
+    private var selectionSummary: UninstallSelectionSummary {
+        UninstallSelectionSummary.calculate(for: selectedApps)
+    }
+
     private var knownSelectedBytes: Int64 {
-        selectedApps.compactMap(\.sizeBytes).reduce(0, +)
+        selectionSummary.knownBytes
     }
 
     private var hasUnknownSize: Bool {
-        selectedApps.contains { $0.sizeBytes == nil }
+        selectionSummary.hasUnknownSize
     }
 
     var body: some View {
@@ -436,13 +431,7 @@ struct UninstallView: View {
     }
 }
 
-private enum UninstallSort: String, CaseIterable, Identifiable {
-    case name
-    case size
-    case source
-
-    var id: Self { self }
-
+extension UninstallSort {
     var titleKey: LocalizedStringKey {
         switch self {
         case .name: "uninstall.sort_name"
