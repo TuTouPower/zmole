@@ -28,9 +28,10 @@ pytest .repo_template/tests -q -m contract
 bash tests/integration/clean_trash_test.sh
 bash tests/integration/installer_interface_test.sh
 bash tests/integration/uninstall_stream_test.sh
+bash tests/integration/brew_cask_index_test.sh
 ```
 
-门禁按「门禁类别清单」逐类覆盖；业务 Swift 单测与三条集成脚本均已接入本命令。
+门禁按「门禁类别清单」逐类覆盖；业务 Swift 单测与四条集成脚本均已接入本命令。
 
 ## blackbox_verify
 

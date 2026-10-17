@@ -1,6 +1,6 @@
 # 卸载（uninstall）
 
-- 来源 task：t009、t019、t029、t043、t044、t053
+- 来源 task：t009、t019、t029、t043、t044、t053、t054
 - 生效范围：卸载页、名单流、确认协议、关联文件
 - 最后更新：2026-10-18
 
@@ -8,6 +8,7 @@
 
 - 名单走 `uninstall --list-stream`：由扫描服务统一持有；渐进行先出名称/路径，随后补 bundle id、卸载名、来源、大小、版本、最近使用（同一扫描）；流式产生行最长 100 ms 聚合发布，流停止时 100 ms 内交付尾批；尚无大小的行不显示为 0（显示计算中）；图标在列表可交互后异步补上。名单未成功完成前禁止确认执行。
 - `--list-stream` 元数据解析受父命令管理：并发 worker 必须登记并在完成时等待、取消时退出，stdin 为 `/dev/null`，关闭继承的写端 fd 3；不启动脱离父进程生命周期的后台 disown 任务；同一名单行大小只探测一次；元数据不可读时保留显式未知，致命错误不输出成功 done。
+- Homebrew cask 索引与来源判定：在名单扫描父级建立只读索引，installed token 集合至多查询一次，每个 Caskroom 根至多遍历一次并在当次扫描内复用；全部应用走路径快判时 Caskroom 遍历为 0；真实路径或文件身份（`-ef`）唯一对应已安装 cask 时直接确认 token，不再调用 `brew info`；仅名称命中作为候选，当缺少所有权、存在多个候选或悬空链接时做定向 `brew info` 核验，未经确认不返回任何 token；brew 不可用时不调用 brew 命令。
 - 刷新经扫描服务统一请求；会话内确认复用同一份名单，不重跑全量大小扫描。页面离开仅解除订阅，不影响底层共享任务。
 - 选择：真多选；搜索只过滤显示不清空选择；未选择不能确认执行。
 - 选择后「卸载…」直接打开确认 sheet，不再生成或展示预览结果；不运行 `uninstall --dry-run` 作为执行门禁。
@@ -24,3 +25,4 @@
 
 - `tests/unit/UninstallTests.swift`、`tests/unit/UninstallDetailTests.swift`、`tests/unit/BatchUninstallTests.swift`、`tests/unit/UninstallStreamTests.swift`、`tests/unit/BackgroundScanTests.swift`
 - `tests/integration/uninstall_stream_test.sh`（含命名卸载空 stdin 中止与 `y\n` dry-run 真实协议；dry-run 仍用于「检查关联文件」）
+- `tests/integration/brew_cask_index_test.sh`（Cask 索引单次遍历、快路径零遍历、定向核验与超时隔离）
