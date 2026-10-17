@@ -91,6 +91,7 @@
 		B0B89D7CB6CB13D7CDE630B6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2377F13EED7F8922B2C7B691 /* SettingsView.swift */; };
 		B23C8523A2D1887D261F60E1 /* OptimizeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2E26A8585164DF7D799D70 /* OptimizeViewModel.swift */; };
 		B3F3667A661632F5DE0B4F6E /* DiskMeasurementSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077938261256A5757ADCD877 /* DiskMeasurementSessionTests.swift */; };
+		B593A9D21000D3CB979988F9 /* DiskPrefetchBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9874D8E42D1F032A564A6C1 /* DiskPrefetchBenchmarkTests.swift */; };
 		B66DA1D990793C807317E6D5 /* MoleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8A8DE64794BD0226809316 /* MoleTheme.swift */; };
 		B81EF9A19CD2FABA82222715 /* AppIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */; };
 		B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */; };
@@ -284,6 +285,7 @@
 		D5FD027CC14DB7508BBB3566 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
 		D6BB5FB7D0FC87D1421A0B7D /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
 		D83AB8EAD531D259EE035696 /* DiskSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskSessionStore.swift; sourceTree = "<group>"; };
+		D9874D8E42D1F032A564A6C1 /* DiskPrefetchBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskPrefetchBenchmarkTests.swift; sourceTree = "<group>"; };
 		DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconTests.swift; sourceTree = "<group>"; };
 		E40246A3663BB2BEB8EB3935 /* CleanPreviewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreviewModel.swift; sourceTree = "<group>"; };
 		E75D2F971AB0AF22C45A07EE /* CleanPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPageTests.swift; sourceTree = "<group>"; };
@@ -406,6 +408,7 @@
 				B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */,
 				6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */,
 				077938261256A5757ADCD877 /* DiskMeasurementSessionTests.swift */,
+				D9874D8E42D1F032A564A6C1 /* DiskPrefetchBenchmarkTests.swift */,
 				6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */,
 				7DB7A53427073C2EC46CB33C /* DiskWalkMemoryBudgetTests.swift */,
 				BD40B825DE6986CFED698AEC /* EstimateWorkQueueTests.swift */,
@@ -736,6 +739,7 @@
 				A16BD324EF1D18D53E361A2F /* CommandConcurrencyTests.swift in Sources */,
 				B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */,
 				B3F3667A661632F5DE0B4F6E /* DiskMeasurementSessionTests.swift in Sources */,
+				B593A9D21000D3CB979988F9 /* DiskPrefetchBenchmarkTests.swift in Sources */,
 				7CD4372C0CACFC2D9E655E19 /* DiskScannerTests.swift in Sources */,
 				B010DBA296FF8D6BD9B90369 /* DiskWalkMemoryBudgetTests.swift in Sources */,
 				6D64A6EC55F2265CDF58581E /* EstimateWorkQueueTests.swift in Sources */,
