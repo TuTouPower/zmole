@@ -80,6 +80,7 @@
 		B66DA1D990793C807317E6D5 /* MoleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8A8DE64794BD0226809316 /* MoleTheme.swift */; };
 		B81EF9A19CD2FABA82222715 /* AppIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA51FA12C3BF233A1DD54CE /* AppIconTests.swift */; };
 		B8AAF4E1636CDBF8605DE4F2 /* DiskExplorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAFC196C49312AB6BFDF620 /* DiskExplorerTests.swift */; };
+		B8F63B6BCA88B663D8BE40EB /* FullDiskAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8845053E3C5C1DDB77222B99 /* FullDiskAccess.swift */; };
 		BACD90EDCA744B467D6EAD69 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8420B1435B244B9A28B385F9 /* AppLinks.swift */; };
 		BCCA1C51075D5E6BD35DC549 /* UninstallSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BDF529B031AFD7E61F256 /* UninstallSnapshot.swift */; };
 		BD30E5D75EF21A1E4DA2466A /* NavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD6E9DDA001E4C3C32A8A33 /* NavigationModel.swift */; };
@@ -100,6 +101,7 @@
 		DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE334F91E7FFB8672701E61E /* StatusViewModel.swift */; };
 		E240D3AAC9A78766AD157046 /* MoleBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */; };
 		E2783DDFAABCEE64712BA702 /* CleanPreviewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40246A3663BB2BEB8EB3935 /* CleanPreviewModel.swift */; };
+		E57CCCF61B0AE5B7270FF70F /* FullDiskAccessViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E39EA9A819D9F8505D41D11 /* FullDiskAccessViews.swift */; };
 		E8A8D37CD2ED8337535B60C2 /* OverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76D4F97CC2D295465B4473E /* OverviewTests.swift */; };
 		E936516E4DD67FEDB641BAD1 /* AnalyzeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */; };
 		EAACD30EFE7EC87C6933A0CF /* UiAlignmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */; };
@@ -149,6 +151,7 @@
 		0A9B2282FE55EB1F2EF86557 /* MaintenanceOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceOperation.swift; sourceTree = "<group>"; };
 		0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridgeTests.swift; sourceTree = "<group>"; };
 		0CF699D95E09A155B564D7B7 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		0E39EA9A819D9F8505D41D11 /* FullDiskAccessViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullDiskAccessViews.swift; sourceTree = "<group>"; };
 		0FC19536CC569B11F1791854 /* CleanPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanPreview.swift; sourceTree = "<group>"; };
 		14254B56FF84870F0CDD6FD4 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		19456FFB028A34FE9AA2561B /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
@@ -198,6 +201,7 @@
 		8420B1435B244B9A28B385F9 /* AppLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLinks.swift; sourceTree = "<group>"; };
 		85FA0BA2B2FDEE2AEA4FA9AC /* UninstallTargetCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallTargetCheckerTests.swift; sourceTree = "<group>"; };
 		871EBE00BFBB6DF33A7DF7BF /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		8845053E3C5C1DDB77222B99 /* FullDiskAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullDiskAccess.swift; sourceTree = "<group>"; };
 		8959DBDEE031AFAD75B0E0B1 /* PrewarmTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrewarmTests.swift; sourceTree = "<group>"; };
 		8A1348BF0D9D377144BA2ACA /* MoleCommandResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleCommandResult.swift; sourceTree = "<group>"; };
 		8AE94A720F89803BAB0BFED2 /* CleanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanViewModel.swift; sourceTree = "<group>"; };
@@ -416,6 +420,7 @@
 			children = (
 				EFF06BD69D5E2DD87C328B82 /* .gitkeep */,
 				4FF1A9DFF48387C5C2420068 /* ErrorKeyProviding.swift */,
+				0E39EA9A819D9F8505D41D11 /* FullDiskAccessViews.swift */,
 				083616DA57E8CAAE8AD16279 /* HumanSizeParser.swift */,
 				3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */,
 				D509E460B4BF5E50857F5819 /* UtilityUI.swift */,
@@ -475,6 +480,7 @@
 				2BBBC813AB644453186DEC8B /* AppShellView.swift */,
 				A20B2FF8C842174A39D87371 /* CommandPaletteView.swift */,
 				FC60DD5581A261943D967B60 /* DemoSupport.swift */,
+				8845053E3C5C1DDB77222B99 /* FullDiskAccess.swift */,
 				EE8F461882BFAAD473673459 /* MoleCommandLanes.swift */,
 				AA8A8DE64794BD0226809316 /* MoleTheme.swift */,
 				3BD6E9DDA001E4C3C32A8A33 /* NavigationModel.swift */,
@@ -619,6 +625,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					65FDDBB7069D2A8B10530076 = {
+						ProvisioningStyle = Manual;
+					};
+					A2AAD937EBAF531CFD28392C = {
+						ProvisioningStyle = Manual;
+					};
 				};
 			};
 			buildConfigurationList = 4ABD56495F1E1CF3D3311A4A /* Build configuration list for PBXProject "Zmole" */;
@@ -720,6 +732,8 @@
 				C9600ED9EDDC583BE4110B20 /* DestructiveConfirmation.swift in Sources */,
 				FC42F47C457B5840D87EC034 /* DiskScanner.swift in Sources */,
 				436025AEF4986E60BADF0603 /* ErrorKeyProviding.swift in Sources */,
+				B8F63B6BCA88B663D8BE40EB /* FullDiskAccess.swift in Sources */,
+				E57CCCF61B0AE5B7270FF70F /* FullDiskAccessViews.swift in Sources */,
 				F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */,
 				47C413712EF1B93809099416 /* HistoryView.swift in Sources */,
 				740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */,
@@ -839,7 +853,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Zmole Local Signing";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -957,7 +972,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Zmole Local Signing";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";

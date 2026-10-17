@@ -38,6 +38,7 @@ private final class MoleProcessBox: @unchecked Sendable {
 @MainActor
 final class AppDependencies: ObservableObject {
     let coordinator: OperationCoordinator
+    let fullDiskAccessMonitor: FullDiskAccessMonitor
     let cleanViewModel: CleanViewModel
     let uninstallViewModel: UninstallViewModel
     let optimizeViewModel: OptimizeViewModel
@@ -111,6 +112,10 @@ final class AppDependencies: ObservableObject {
 
         let sharedCoordinator = OperationCoordinator()
         coordinator = sharedCoordinator
+        let accessMonitor = configuration.isEnabled
+            ? FullDiskAccessMonitor(probe: { true })
+            : FullDiskAccessMonitor()
+        fullDiskAccessMonitor = accessMonitor
         let previewStore: CleanPreviewStore
         if configuration.isEnabled {
             previewStore = CleanPreviewStore(
@@ -124,7 +129,8 @@ final class AppDependencies: ObservableObject {
                 process: lane,
                 installerInterface: InstallerInterface(process: lane),
                 cleanPreviewStore: previewStore,
-                coordinator: sharedCoordinator
+                coordinator: sharedCoordinator,
+                accessMonitor: accessMonitor
             )
         }
         prewarmService = prewarm
@@ -194,7 +200,8 @@ final class AppDependencies: ObservableObject {
         installersViewModel = InstallersViewModel(
             interface: InstallerInterface(process: lanes.installer),
             coordinator: coordinator,
-            prewarm: prewarm
+            prewarm: prewarm,
+            accessMonitor: accessMonitor
         )
 
         let estimateLoaders = lanes.estimatePool.map { lane in
@@ -208,7 +215,8 @@ final class AppDependencies: ObservableObject {
             storageLoader: storageLoader,
             historyLoader: historyLoader,
             storageCache: configuration.isEnabled ? nil : .live,
-            coordinator: coordinator
+            coordinator: coordinator,
+            accessMonitor: accessMonitor
         )
 
         if let prewarm {
@@ -242,6 +250,12 @@ final class AppDependencies: ObservableObject {
                 },
                 cleanViewModel.objectWillChange.sink { _ in
                     Task { @MainActor in coalescer.notify() }
+                },
+                accessMonitor.$isGranted.dropFirst().sink { granted in
+                    guard granted else { return }
+                    Task { @MainActor [weak prewarm] in
+                        prewarm?.diskAccessDidChange()
+                    }
                 }
             ]
             prewarm.noteActivityChanged()

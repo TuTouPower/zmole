@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -27,6 +28,9 @@ struct AppShellView: View {
         .animation(.easeInOut(duration: 0.18), value: navigation.destination)
         .onAppear { updateStatusWatch() }
         .onChange(of: navigation.destination) { _ in updateStatusWatch() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            dependencies.fullDiskAccessMonitor.refresh()
+        }
         .overlay {
             if navigation.isCommandPalettePresented {
                 CommandPaletteView(navigation: navigation)
@@ -52,7 +56,8 @@ struct AppShellView: View {
                 statusViewModel: dependencies.statusViewModel,
                 viewModel: dependencies.overviewViewModel,
                 cleanViewModel: dependencies.cleanViewModel,
-                navigation: navigation
+                navigation: navigation,
+                accessMonitor: dependencies.fullDiskAccessMonitor
             )
         case .clean:
             CleanView(
@@ -78,7 +83,10 @@ struct AppShellView: View {
                 onOpenSettings: { navigation.select(.settings) }
             )
         case .installers:
-            InstallersView(viewModel: dependencies.installersViewModel)
+            InstallersView(
+                viewModel: dependencies.installersViewModel,
+                accessMonitor: dependencies.fullDiskAccessMonitor
+            )
         case .history:
             HistoryView(viewModel: dependencies.historyViewModel)
         case .settings:
@@ -87,7 +95,8 @@ struct AppShellView: View {
                 whitelistViewModel: dependencies.whitelistViewModel,
                 optimizeWhitelistViewModel: dependencies.optimizeWhitelistViewModel,
                 purgePathsViewModel: dependencies.purgePathsViewModel,
-                loginItemViewModel: dependencies.loginItemViewModel
+                loginItemViewModel: dependencies.loginItemViewModel,
+                accessMonitor: dependencies.fullDiskAccessMonitor
             )
         }
     }

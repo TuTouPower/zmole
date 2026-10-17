@@ -32,6 +32,31 @@ final class PrewarmTests: XCTestCase {
         XCTAssertNotNil(service.results[.cleanDryRun])
     }
 
+    func testMissingFullDiskAccessDefersInstallerPrewarmUntilGranted() async throws {
+        let previewURL = temporaryPreviewURL()
+        let permission = MutableFlag(false)
+        let monitor = FullDiskAccessMonitor(probe: { permission.value })
+        let spy = PrewarmLaneSpy(previewFileURL: previewURL)
+        let service = PrewarmService(
+            process: spy,
+            cleanPreviewStore: CleanPreviewStore(fileURL: previewURL),
+            coordinator: OperationCoordinator(),
+            accessMonitor: monitor
+        )
+
+        service.noteActivityChanged()
+        try await waitUntil { await spy.calls.count == 4 }
+        let skippedCalls = await spy.calls.filter { $0.arguments == ["installer", "--list-json"] }.count
+        XCTAssertEqual(skippedCalls, 0, "without Full Disk Access the installer prewarm must not run")
+        XCTAssertNil(service.results[.installerList])
+
+        permission.value = true
+        monitor.refresh()
+        service.diskAccessDidChange()
+        try await waitUntil { await spy.calls.count == 5 }
+        XCTAssertNotNil(service.results[.installerList])
+    }
+
     func testCancelledItemIsRequeuedExactlyOnce() async throws {
         let previewURL = temporaryPreviewURL()
         let spy = PrewarmLaneSpy(
@@ -369,6 +394,29 @@ final class PrewarmTests: XCTestCase {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTFail("condition not met within \(timeout)s")
+    }
+}
+
+/// Mutable permission flag so a test can grant Full Disk Access mid-run.
+private final class MutableFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Bool
+
+    init(_ value: Bool) {
+        storage = value
+    }
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            storage = newValue
+            lock.unlock()
+        }
     }
 }
 

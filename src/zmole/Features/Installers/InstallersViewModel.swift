@@ -20,6 +20,7 @@ final class InstallersViewModel: ObservableObject {
 
     private let interface: InstallerInterface
     private let coordinator: OperationCoordinator
+    private let accessMonitor: FullDiskAccessMonitor?
     private weak var prewarm: (any PrewarmResultProviding)?
     private var lease: OperationLease?
     private var removalCancelled = false
@@ -27,11 +28,17 @@ final class InstallersViewModel: ObservableObject {
     init(
         interface: InstallerInterface,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil
+        prewarm: (any PrewarmResultProviding)? = nil,
+        accessMonitor: FullDiskAccessMonitor? = nil
     ) {
         self.interface = interface
         self.coordinator = coordinator
         self.prewarm = prewarm
+        self.accessMonitor = accessMonitor
+    }
+
+    private var diskAccessGranted: Bool {
+        accessMonitor?.isGranted ?? true
     }
 
     var selectedCandidates: [InstallerCandidate] {
@@ -59,12 +66,14 @@ final class InstallersViewModel: ObservableObject {
     /// Uses the background prewarm result when it exists; otherwise scans now.
     /// The session list is kept until the user re-scans or a removal updates it.
     func loadListIfNeeded() async {
+        guard diskAccessGranted else { return }
         guard candidates.isEmpty, !isListing, !isRemoving else { return }
         if adoptPrewarmList() { return }
         await scan()
     }
 
     func scan() async {
+        guard diskAccessGranted else { return }
         guard !isListing, !isRemoving else { return }
         prewarm?.userDidRescan(.installerList)
         isListing = true

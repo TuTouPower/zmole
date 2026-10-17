@@ -280,6 +280,7 @@ final class OverviewViewModel: ObservableObject {
     private let storageLoader: StorageEstimateLoader?
     private let historyLoader: HistorySnapshotLoader?
     private let storageCache: StorageEstimateCache?
+    private let accessMonitor: FullDiskAccessMonitor?
     private let now: @Sendable () -> Date
     private let incompleteRetryDelay: TimeInterval
     private var cacheEntry: StorageEstimateCacheEntry?
@@ -301,12 +302,14 @@ final class OverviewViewModel: ObservableObject {
         historyLoader: HistorySnapshotLoader?,
         storageCache: StorageEstimateCache? = nil,
         coordinator: OperationCoordinator? = nil,
+        accessMonitor: FullDiskAccessMonitor? = nil,
         incompleteRetryDelay: TimeInterval = OverviewViewModel.defaultIncompleteRetryDelay,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.storageLoader = storageLoader
         self.historyLoader = historyLoader
         self.storageCache = storageCache
+        self.accessMonitor = accessMonitor
         self.incompleteRetryDelay = incompleteRetryDelay
         self.now = now
         if let coordinator {
@@ -323,6 +326,7 @@ final class OverviewViewModel: ObservableObject {
         storageLoader = nil
         historyLoader = nil
         storageCache = nil
+        accessMonitor = nil
         incompleteRetryDelay = Self.defaultIncompleteRetryDelay
         now = Date.init
     }
@@ -349,6 +353,21 @@ final class OverviewViewModel: ObservableObject {
         guard sums.isComplete else { return true }
         guard let cacheEntry else { return false }
         return storageCache?.isStale(cacheEntry, now: now()) ?? false
+    }
+
+    /// Without Full Disk Access the `/Users` segment is skipped, because the
+    /// recursive walk would raise TCC dialogs for protected folders.
+    private var diskAccessGranted: Bool {
+        accessMonitor?.isGranted ?? true
+    }
+
+    /// Called when the shared monitor observes a newly granted Full Disk
+    /// Access. Forces a full rescan so the user segment appears immediately.
+    func diskAccessDidChange() {
+        guard diskAccessGranted else { return }
+        invalidationCount += 1
+        estimateInvalidated = true
+        startEstimate(usedBytes: lastUsedBytes)
     }
 
     /// Starts the directory scan without waiting for the status sample. The
@@ -427,7 +446,11 @@ final class OverviewViewModel: ObservableObject {
             // one-shot follow-up: resolved segments predate the write.
             let allowFill = fillMissingOnly && !estimateInvalidated
             let partial = (allowFill && sums?.isComplete == false) ? sums : nil
-            let merged = try await storageLoader.loadSums(filling: partial)
+            let includeUsers = diskAccessGranted
+            let merged = try await storageLoader.loadSums(
+                filling: partial,
+                includingUsers: includeUsers
+            )
             sums = merged
             breakdown = merged.breakdown(usedBytes: lastUsedBytes)
             // A fill-only scan reuses resolved segments, so it must not
@@ -447,9 +470,10 @@ final class OverviewViewModel: ObservableObject {
             if !invalidatedDuringScan {
                 estimateInvalidated = false
             }
-            if invalidatedDuringScan || !merged.isComplete, !incompleteRetryScheduled {
+            if invalidatedDuringScan || (!merged.isComplete && includeUsers), !incompleteRetryScheduled {
                 // The one-shot retry never chains another unless a new write
-                // landed while it was running.
+                // landed while it was running. A permission-limited estimate
+                // waits for the grant instead of rescanning the same segments.
                 if invalidatedDuringScan || !isFollowUp {
                     scheduleIncompleteRetry()
                 }

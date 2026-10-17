@@ -12,11 +12,15 @@ struct OverviewView: View {
     @ObservedObject var viewModel: OverviewViewModel
     @ObservedObject var cleanViewModel: CleanViewModel
     @ObservedObject var navigation: NavigationModel
+    @ObservedObject var accessMonitor: FullDiskAccessMonitor
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 head
+                if !accessMonitor.isGranted {
+                    FullDiskAccessNotice(monitor: accessMonitor)
+                }
                 if let errorKey = viewModel.errorMessageKey {
                     VStack(spacing: 10) {
                         UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
@@ -46,6 +50,7 @@ struct OverviewView: View {
             // Start the estimate first: it must not wait for the history
             // command, and its task is owned by the view model so leaving the
             // page does not cancel a running scan.
+            accessMonitor.refresh()
             viewModel.primeEstimate(usedBytes: usedBytes)
             viewModel.startEstimate(usedBytes: usedBytes)
             await viewModel.refreshHistory()
@@ -56,6 +61,10 @@ struct OverviewView: View {
         .onChange(of: viewModel.estimateInvalidated) { invalidated in
             guard invalidated else { return }
             viewModel.startEstimate(usedBytes: usedBytes)
+        }
+        .onChange(of: accessMonitor.isGranted) { granted in
+            guard granted else { return }
+            viewModel.diskAccessDidChange()
         }
     }
 

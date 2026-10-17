@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon.icns</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>zmole analyzes disk usage in your Desktop folder for the storage estimate and installer scan.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>zmole analyzes disk usage in your Documents folder for the storage estimate and installer scan.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>zmole analyzes disk usage in your Downloads folder for the storage estimate and installer scan.</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 </dict>
