@@ -10,8 +10,13 @@ final class ScanProvidingStub: BackgroundScanProviding {
     @Published var results: [BackgroundScanItem: BackgroundScanResult]
     @Published var runningItems: Set<BackgroundScanItem> = []
     @Published var failedItems: Set<BackgroundScanItem> = []
+    var inProgressRows: [UninstallAppListing] = []
     private(set) var requestedItems: [BackgroundScanItem] = []
     private(set) var cancelledItems: [BackgroundScanItem] = []
+
+    func inProgressUninstallList() -> [UninstallAppListing] {
+        inProgressRows
+    }
 
     var statePublisher: AnyPublisher<Void, Never> {
         Publishers.Merge3(
@@ -43,6 +48,8 @@ final class ScanProvidingStub: BackgroundScanProviding {
     func request(_ item: BackgroundScanItem) {
         requestedItems.append(item)
     }
+
+    func waitForScan(_ item: BackgroundScanItem) async {}
 
     func cancelAndWait(_ item: BackgroundScanItem) async {
         cancelledItems.append(item)

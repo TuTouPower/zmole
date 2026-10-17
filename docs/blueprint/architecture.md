@@ -54,11 +54,11 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ### 卸载名单与确认
 
-卸载名单走 `uninstall --list-stream`：先输出已发现的应用身份（名称/路径），再按应用输出完整行（bundle id、卸载名、来源、大小、版本、上次使用时间来自同一次扫描；版本读目标自身 Info.plist，不用 Spotlight）。界面先列名单、大小随后补上，尚无大小的行不显示为 0；图标在列表可交互后异步补上。同一次会话的确认复用这份名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。
+卸载名单与安装包名单由 `BackgroundScanService` 作为唯一所有者管理。卸载走 `uninstall --list-stream`：流式输出先产生身份行、随后补齐属性行，扫描服务以最长 100 ms 聚合渐进发布进度，流停止时 100 ms 内交付尾批。页面仅作为订阅者消费进度，移除独立扫描通道；名单未成功完成前禁止确认执行。同一次会话的确认复用已完成的稳定名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新请求扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。页面离页仅解除订阅，不影响底层共享任务。
 
 ### 后台扫描
 
-`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`；schema 不匹配或损坏时整文件忽略。写入成功后作废全部结果并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
+`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`（Schema 2）；schema 不匹配或损坏时整文件忽略。写入成功后按数据影响集合精准使受影响结果失效并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
 
 ## 捆绑与进程边界
 

@@ -24,6 +24,7 @@ final class InstallersViewModel: ObservableObject {
     private weak var scan: (any BackgroundScanProviding)?
     private var lease: OperationLease?
     private var removalCancelled = false
+    private var scanSubscription: AnyCancellable?
 
     init(
         interface: InstallerInterface,
@@ -35,6 +36,9 @@ final class InstallersViewModel: ObservableObject {
         self.coordinator = coordinator
         self.scan = scan
         self.accessMonitor = accessMonitor
+        scanSubscription = scan?.statePublisher.sink { [weak self] in
+            Task { @MainActor in self?.syncWithScanService() }
+        }
     }
 
     private var diskAccessGranted: Bool {
@@ -68,20 +72,39 @@ final class InstallersViewModel: ObservableObject {
     func loadListIfNeeded() async {
         guard diskAccessGranted else { return }
         guard candidates.isEmpty, !isListing, !isRemoving else { return }
-        if adoptPrewarmList() { return }
-        await scan()
+        if let scan {
+            if let result = scan.result(for: .installerList),
+               case let .installerCandidates(list) = result.payload {
+                candidates = list
+                lastListing = list
+                listCapturedAt = result.capturedAt
+            if result.isStale {
+                scan.request(.installerList)
+            }
+            return
+        }
+        await self.scan()
+        } else {
+            await scanFromInterface()
+        }
     }
 
     func scan() async {
-        guard diskAccessGranted else { return }
-        guard !isListing, !isRemoving else { return }
-        scan?.userDidRescan(.installerList)
-        isListing = true
+        guard diskAccessGranted, !isRemoving else { return }
         errorMessage = nil
         errorMessageKey = nil
         showBusyNotice = false
-        failures = []
-        listCapturedAt = nil
+        if let scan {
+            scan.request(.installerList)
+            syncWithScanService()
+        } else {
+            await scanFromInterface()
+        }
+    }
+
+    private func scanFromInterface() async {
+        guard !isListing else { return }
+        isListing = true
         defer { isListing = false }
         do {
             let list = try await interface.list()
@@ -89,6 +112,7 @@ final class InstallersViewModel: ObservableObject {
             lastListing = list
             selectedPaths.removeAll()
             isConfirmationPresented = false
+            showBusyNotice = false
         } catch {
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
@@ -102,15 +126,17 @@ final class InstallersViewModel: ObservableObject {
         }
     }
 
-    private func adoptPrewarmList() -> Bool {
-        guard let result = scan?.result(for: .installerList),
-              case let .installerCandidates(list) = result.payload else { return false }
-        candidates = list
-        lastListing = list
-        selectedPaths.removeAll()
-        isConfirmationPresented = false
-        listCapturedAt = result.capturedAt
-        return true
+    private func syncWithScanService() {
+        guard let scan else { return }
+        isListing = scan.runningItems.contains(.installerList)
+        if !isListing {
+            if let result = scan.result(for: .installerList),
+               case let .installerCandidates(list) = result.payload {
+                candidates = list
+                lastListing = list
+                listCapturedAt = result.capturedAt
+            }
+        }
     }
 
     func toggleSelection(_ candidate: InstallerCandidate) {
