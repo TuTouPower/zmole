@@ -10,6 +10,5 @@ final class PurgeViewModel: MaintenanceViewModel {
         super.init(kind: .purge, process: process, coordinator: coordinator, scan: scan)
     }
 
-    func previewPurge() async { await previewMaintenance() }
     func confirmExecution() async { await confirmMaintenance() }
 }

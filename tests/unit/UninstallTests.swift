@@ -25,28 +25,25 @@ final class UninstallTests: XCTestCase {
     }
 
     @MainActor
-    func testUninstallPreviewUsesSelectedNameAndConfirmationInput() async throws {
+    func testUninstallConfirmationOpensDirectlyFromSelection() async throws {
         let spy = UninstallProcessSpy()
         let viewModel = makeUninstallViewModel(process: spy, listJSON: Self.uninstallListFixture)
 
         await viewModel.loadList()
-        let app = try XCTUnwrap(viewModel.apps.first)
-        viewModel.toggleSelection(app)
-        await viewModel.previewUninstall()
+        viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
+        viewModel.requestConfirmation()
 
-        let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [
-            ["uninstall", "--dry-run", "Example"]
-        ])
-        XCTAssertEqual(invocations[0].stdin, Data("y\n".utf8))
+        XCTAssertTrue(viewModel.isConfirmationPresented)
         XCTAssertTrue(viewModel.canConfirm)
+        let invocations = await spy.invocations
+        XCTAssertTrue(invocations.isEmpty, "opening the sheet must not spawn a preview process")
     }
 
     @MainActor
     func testUninstallConfirmationExecutesWithoutPermanentAndShowsSummary() async throws {
         let spy = UninstallProcessSpy(
             executionResult: MoleCommandResult(
-                stdout: "moved Example to Trash",
+                stdout: "Successfully uninstalled Example",
                 stderr: "",
                 exitCode: 0
             )
@@ -55,56 +52,53 @@ final class UninstallTests: XCTestCase {
 
         await viewModel.loadList()
         viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
 
         let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [
-            ["uninstall", "--dry-run", "Example"],
-            ["uninstall", "Example"]
-        ])
-        XCTAssertEqual(invocations[1].stdin, Data("y\n".utf8))
+        XCTAssertEqual(invocations.map(\.arguments), [["uninstall", "Example"]])
+        XCTAssertEqual(invocations[0].stdin, Data("y\n".utf8))
         XCTAssertFalse(invocations.contains { $0.arguments.contains("--permanent") })
         XCTAssertFalse(
             invocations.contains { $0.arguments.contains("--list") },
             "confirm must reuse the session list instead of rescanning sizes"
         )
-        XCTAssertEqual(viewModel.executionSummary, "moved Example to Trash")
-        XCTAssertNil(viewModel.preview)
+        XCTAssertEqual(viewModel.executionSummary, "Successfully uninstalled Example")
+        XCTAssertNil(viewModel.result?.errorKey)
     }
 
     @MainActor
-    func testUninstallNoSelectionDoesNotPreviewOrExecute() async throws {
+    func testUninstallNoSelectionDoesNotOpenConfirmationOrExecute() async throws {
         let spy = UninstallProcessSpy()
         let viewModel = makeUninstallViewModel(process: spy, listJSON: Self.uninstallListFixture)
 
         await viewModel.loadList()
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
+        await viewModel.confirmExecution()
 
         let invocations = await spy.invocations
         XCTAssertTrue(invocations.isEmpty)
-        XCTAssertEqual(viewModel.errorMessageKey, "uninstall.error.no_selection")
-        XCTAssertFalse(viewModel.canConfirm)
+        XCTAssertFalse(viewModel.isConfirmationPresented)
+        XCTAssertFalse(viewModel.canUninstall)
     }
 
     @MainActor
-    func testUninstallDuplicateNameCannotPreview() async throws {
+    func testUninstallDuplicateNameCannotConfirm() async throws {
         let spy = UninstallProcessSpy()
         let viewModel = makeUninstallViewModel(process: spy, listJSON: Self.uninstallDuplicateListFixture)
 
         await viewModel.loadList()
         viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
 
         let invocations = await spy.invocations
         XCTAssertTrue(invocations.isEmpty)
         XCTAssertEqual(viewModel.errorMessageKey, "uninstall.error.ambiguous")
-        XCTAssertNil(viewModel.preview)
+        XCTAssertFalse(viewModel.isConfirmationPresented)
     }
 
     @MainActor
-    func testUninstallChangingSelectionExpiresPreviewUntilNewBatchPreview() async throws {
+    func testChangingSelectionRebuildsTheConfirmationBatch() async throws {
         let spy = UninstallProcessSpy()
         let viewModel = makeUninstallViewModel(process: spy, listJSON: Self.uninstallTwoAppsFixture)
 
@@ -112,25 +106,20 @@ final class UninstallTests: XCTestCase {
         let first = try XCTUnwrap(viewModel.apps.first)
         let second = try XCTUnwrap(viewModel.apps.last)
         viewModel.toggleSelection(first)
-        await viewModel.previewUninstall()
-        XCTAssertTrue(viewModel.canConfirm)
+        viewModel.requestConfirmation()
+        XCTAssertTrue(viewModel.isConfirmationPresented)
 
         viewModel.toggleSelection(second)
-        XCTAssertNil(viewModel.preview)
+        XCTAssertFalse(viewModel.isConfirmationPresented, "changing the selection closes the stale sheet")
         XCTAssertFalse(viewModel.canConfirm)
+
+        viewModel.requestConfirmation()
+        await viewModel.confirmExecution()
 
         let invocations = await spy.invocations
         XCTAssertEqual(invocations.map(\.arguments), [
-            ["uninstall", "--dry-run", "First"]
+            ["uninstall", "First", "Second"]
         ])
-
-        await viewModel.previewUninstall()
-        let refreshedInvocations = await spy.invocations
-        XCTAssertEqual(refreshedInvocations.map(\.arguments), [
-            ["uninstall", "--dry-run", "First"],
-            ["uninstall", "--dry-run", "First", "Second"]
-        ])
-        XCTAssertEqual(viewModel.preview?.apps.map(\.uninstallName), ["First", "Second"])
     }
 
     @MainActor
@@ -150,46 +139,19 @@ final class UninstallTests: XCTestCase {
 
         await viewModel.loadList()
         viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
 
         let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [
-            ["uninstall", "--dry-run", "Example"]
-        ])
-        XCTAssertFalse(
-            invocations.contains { $0.arguments == ["uninstall", "Example"] },
+        XCTAssertTrue(
+            invocations.isEmpty,
             "a changed target must not spawn the uninstall command"
         )
         XCTAssertEqual(viewModel.errorMessageKey, "uninstall.error.changed_target")
-        XCTAssertNil(viewModel.preview)
         XCTAssertEqual(counter.opens, 2, "the refused execution must re-scan the list")
         XCTAssertEqual(viewModel.listings.map(\.path).count, Set(viewModel.listings.map(\.path)).count,
                        "the re-scan must not duplicate rows")
         XCTAssertEqual(viewModel.listings.count, 1, "the re-scan replaces the listing")
-    }
-
-    @MainActor
-    func testUninstallAbortedPreviewCannotConfirm() async throws {
-        let spy = UninstallProcessSpy(
-            previewResult: MoleCommandResult(
-                stdout: "Proceed with uninstallation? [y/N]",
-                stderr: "Aborted",
-                exitCode: 1
-            )
-        )
-        let viewModel = makeUninstallViewModel(process: spy, listJSON: Self.uninstallListFixture)
-
-        await viewModel.loadList()
-        viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
-
-        let invocations = await spy.invocations
-        XCTAssertEqual(invocations.count, 1)
-        XCTAssertNil(viewModel.preview)
-        XCTAssertFalse(viewModel.canConfirm)
-        XCTAssertTrue(viewModel.errorMessage?.contains("Aborted") == true)
     }
 
     @MainActor
@@ -205,7 +167,6 @@ final class UninstallTests: XCTestCase {
 
         await viewModel.loadList()
         viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
 
@@ -215,7 +176,6 @@ final class UninstallTests: XCTestCase {
         )
         XCTAssertEqual(viewModel.errorMessageKey, "uninstall.error.failed")
         XCTAssertEqual(viewModel.result?.status, .partial)
-        XCTAssertNil(viewModel.preview)
     }
 
     @MainActor
@@ -226,11 +186,10 @@ final class UninstallTests: XCTestCase {
 
         await viewModel.loadList()
         viewModel.toggleSelection(try XCTUnwrap(viewModel.apps.first))
-        await viewModel.previewUninstall()
         viewModel.requestConfirmation()
         let execution = Task { @MainActor in await viewModel.confirmExecution() }
 
-        try await spy.waitForInvocationCount(2)
+        try await spy.waitForInvocationCount(1)
         XCTAssertTrue(viewModel.isExecuting)
         await viewModel.confirmExecution()
         let beforeCancel = await spy.invocations
@@ -309,24 +268,17 @@ private struct UninstallInvocation: Equatable, Sendable {
 private actor UninstallProcessSpy: MoleProcessControlling {
     private(set) var invocations: [UninstallInvocation] = []
     private(set) var cancelCount = 0
-    private let previewResult: MoleCommandResult
     private let executionResult: MoleCommandResult
     private var blockExecution = false
     private var executionContinuation: CheckedContinuation<MoleCommandResult, Error>?
 
     init(
-        previewResult: MoleCommandResult = MoleCommandResult(
-            stdout: "would uninstall selected app",
-            stderr: "",
-            exitCode: 0
-        ),
         executionResult: MoleCommandResult = MoleCommandResult(
             stdout: "uninstalled selected app",
             stderr: "",
             exitCode: 0
         )
     ) {
-        self.previewResult = previewResult
         self.executionResult = executionResult
     }
 
@@ -336,9 +288,6 @@ private actor UninstallProcessSpy: MoleProcessControlling {
         timeout: TimeInterval
     ) async throws -> MoleCommandResult {
         invocations.append(UninstallInvocation(arguments: arguments, stdin: stdin))
-        if arguments.first == "uninstall", arguments.contains("--dry-run") {
-            return previewResult
-        }
         guard blockExecution else { return executionResult }
         return try await withCheckedThrowingContinuation { continuation in
             executionContinuation = continuation

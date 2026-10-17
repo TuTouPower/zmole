@@ -102,7 +102,7 @@ struct OverviewHealthCard: Equatable, Sendable {
                     id: "reclaimable",
                     titleKey: "overview.reclaimable",
                     value: reclaimBytes.map(OverviewMetrics.bytes) ?? "—",
-                    note: reclaimBytes == nil ? "overview.reclaim_no_preview" : nil
+                    note: reclaimBytes == nil ? "overview.reclaim_no_scan" : nil
                 ),
                 OverviewTile(
                     id: "cpu",

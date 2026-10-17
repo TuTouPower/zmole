@@ -71,8 +71,8 @@ final class ZmoleTests: XCTestCase {
     }
 
     @MainActor
-    func testDemoUninstallPreviewContainsOnlySelectedApplications() async throws {
-        let root = try makeTemporaryDirectory(prefix: "zmole-demo-uninstall-preview")
+    func testDemoUninstallExecutesOnlySelectedApplications() async throws {
+        let root = try makeTemporaryDirectory(prefix: "zmole-demo-uninstall-confirm")
         defer { try? FileManager.default.removeItem(at: root) }
         let dependencies = AppDependencies(configuration: DemoConfiguration(arguments: [
             "zmole", "--demo", "--demo-page", "software", "--demo-data-root", root.path
@@ -83,13 +83,16 @@ final class ZmoleTests: XCTestCase {
         let selected = viewModel.apps.filter { ["Brew Tool", "Data Tools"].contains($0.name) }
         XCTAssertEqual(selected.count, 2)
         selected.forEach(viewModel.toggleSelection)
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
+        XCTAssertTrue(viewModel.isConfirmationPresented)
 
-        XCTAssertEqual(viewModel.preview?.apps.map(\.name), ["Brew Tool", "Data Tools"])
-        XCTAssertTrue(viewModel.preview?.output.contains("Brew Tool") == true)
-        XCTAssertTrue(viewModel.preview?.output.contains("Data Tools") == true)
-        XCTAssertFalse(viewModel.preview?.output.contains("Demo Editor") == true)
-        XCTAssertFalse(viewModel.preview?.output.hasPrefix("[") == true)
+        await viewModel.confirmExecution()
+
+        let summary = viewModel.executionSummary ?? ""
+        XCTAssertTrue(summary.contains("Brew Tool"))
+        XCTAssertTrue(summary.contains("Data Tools"))
+        XCTAssertFalse(summary.contains("Demo Editor"))
+        XCTAssertNil(viewModel.result?.errorKey)
     }
 
     @MainActor
@@ -381,109 +384,6 @@ final class ZmoleTests: XCTestCase {
     // "editor writes only the whitelist file" behavior stays covered by
     // testWhitelistEditorSavesPatternsToStore above.
 
-    @MainActor
-    func testCleanPreviewUsesDryRunAndCurrentList() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-preview")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(previewFileURL: listURL)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-
-        let arguments = await spy.arguments
-        XCTAssertEqual(arguments, [["clean", "--dry-run"]])
-        XCTAssertEqual(viewModel.preview?.entries, ["/tmp/cache # 1KB"])
-        XCTAssertTrue(viewModel.canConfirm)
-    }
-
-    @MainActor
-    func testCleanConfirmationCancelExpiresPreviewWithoutExecution() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-cancel")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(previewFileURL: listURL)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        viewModel.cancelConfirmation()
-        await viewModel.confirmExecution()
-
-        let arguments = await spy.arguments
-        XCTAssertNil(viewModel.preview)
-        XCTAssertFalse(viewModel.canConfirm)
-        XCTAssertEqual(arguments, [["clean", "--dry-run"]])
-    }
-
-    @MainActor
-    func testCleanConfirmationRunsCleanWithoutDryRun() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-execute")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(previewFileURL: listURL)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        await viewModel.confirmExecution()
-
-        let arguments = await spy.arguments
-        XCTAssertEqual(arguments, [["clean", "--dry-run"], ["clean"]])
-        XCTAssertNil(viewModel.preview)
-    }
-
-    @MainActor
-    func testCleanPreviewFailureOrMissingListCannotConfirm() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-failure")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        try "old preview\n".write(to: listURL, atomically: true, encoding: .utf8)
-        let spy = CleanProcessSpy(previewFileURL: listURL, writesPreviewFile: false)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-
-        XCTAssertNil(viewModel.preview)
-        XCTAssertFalse(viewModel.canConfirm)
-        XCTAssertTrue(viewModel.errorMessage != nil || viewModel.errorMessageKey != nil)
-    }
-
-    @MainActor
-    func testCleanNonZeroDryRunCannotConfirmOrExecute() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-dry-run-failure")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(
-            previewFileURL: listURL,
-            dryRunResult: MoleCommandResult(stdout: "partial preview", stderr: "dry-run failed", exitCode: 7)
-        )
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-        await viewModel.confirmExecution()
-
-        let arguments = await spy.arguments
-        XCTAssertNil(viewModel.preview)
-        XCTAssertFalse(viewModel.canConfirm)
-        XCTAssertEqual(arguments, [["clean", "--dry-run"]])
-    }
-
     func testCleanExecutionNoteUsesLocalizedCatalogKey() throws {
         XCTAssertEqual(CleanViewCopy.executionNoteKey, "clean.execution_note")
         let sourceURL = URL(fileURLWithPath: #filePath)
@@ -527,86 +427,8 @@ final class ZmoleTests: XCTestCase {
         }
     }
 
-    @MainActor
-    func testCleanDuplicateExecutionCreatesOneProcess() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-busy")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(previewFileURL: listURL)
-        await spy.setExecutionBlocked(true)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
 
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        let first = Task { @MainActor in await viewModel.confirmExecution() }
-        try await spy.waitForArgumentCount(2)
-        XCTAssertTrue(viewModel.isExecuting)
-        let second = Task { @MainActor in await viewModel.confirmExecution() }
-        await second.value
 
-        let arguments = await spy.arguments
-        XCTAssertEqual(arguments, [["clean", "--dry-run"], ["clean"]])
-
-        await spy.finishExecution()
-        await first.value
-    }
-
-    @MainActor
-    func testCleanCancelCallsBridgeCancelAndEndsExecution() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-execution-cancel")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(previewFileURL: listURL)
-        await spy.setExecutionBlocked(true)
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        let execution = Task { @MainActor in await viewModel.confirmExecution() }
-        try await spy.waitForArgumentCount(2)
-        await viewModel.cancelExecution()
-        await execution.value
-
-        let cancelCount = await spy.cancelCount
-        XCTAssertEqual(cancelCount, 1)
-        XCTAssertFalse(viewModel.isExecuting)
-    }
-
-    @MainActor
-    // Replaces the pre-operation-session assertion that expected the raw command
-    // summary in errorMessage. The current contract keeps the localized error
-    // state and persistent command summary as separate fields.
-    func testCleanExecutionFailurePersistsErrorStateAndSummary() async throws {
-        let directory = try makeTemporaryDirectory(prefix: "zmole-clean-execution-failure")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let listURL = directory.appendingPathComponent("clean-list.txt")
-        let spy = CleanProcessSpy(
-            previewFileURL: listURL,
-            executionResult: MoleCommandResult(
-                stdout: "partial output",
-                stderr: "clean failed",
-                exitCode: 9
-            )
-        )
-        let viewModel = CleanViewModel(
-            process: spy,
-            previewStore: CleanPreviewStore(fileURL: listURL)
-        )
-
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        await viewModel.confirmExecution()
-
-        XCTAssertNil(viewModel.preview)
-        XCTAssertEqual(viewModel.errorMessageKey, "clean.error.failed")
-        XCTAssertEqual(viewModel.executionSummary, "partial output\nclean failed")
-    }
 
     func testAnalyzeDisplayStateProjectsOverviewAndDirectoryEntries() throws {
         let decoder = JSONDecoder()
@@ -703,81 +525,4 @@ private actor CommandRecorder {
     func record(_ arguments: [String]) {
         self.arguments = arguments
     }
-}
-
-private actor CleanProcessSpy: MoleProcessControlling {
-    private(set) var arguments: [[String]] = []
-    private(set) var cancelCount = 0
-    private let previewFileURL: URL?
-    private let writesPreviewFile: Bool
-    private let dryRunResult: MoleCommandResult
-    private let executionResult: MoleCommandResult
-    private var blockExecution = false
-    private var executionContinuation: CheckedContinuation<MoleCommandResult, Error>?
-
-    init(
-        previewFileURL: URL?,
-        writesPreviewFile: Bool = true,
-        dryRunResult: MoleCommandResult = MoleCommandResult(stdout: "", stderr: "", exitCode: 0),
-        executionResult: MoleCommandResult = MoleCommandResult(stdout: "cleaned", stderr: "", exitCode: 0)
-    ) {
-        self.previewFileURL = previewFileURL
-        self.writesPreviewFile = writesPreviewFile
-        self.dryRunResult = dryRunResult
-        self.executionResult = executionResult
-    }
-
-    func run(
-        _ arguments: [String],
-        stdin: Data?,
-        timeout: TimeInterval
-    ) async throws -> MoleCommandResult {
-        self.arguments.append(arguments)
-        if arguments == ["clean", "--dry-run"] {
-            if writesPreviewFile, let previewFileURL {
-                try FileManager.default.createDirectory(
-                    at: previewFileURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try "# preview\n=== Cache ===\n/tmp/cache # 1KB\n".write(
-                    to: previewFileURL,
-                    atomically: true,
-                    encoding: .utf8
-                )
-            }
-            return dryRunResult
-        }
-
-        guard blockExecution else { return executionResult }
-        return try await withCheckedThrowingContinuation { continuation in
-            executionContinuation = continuation
-        }
-    }
-
-    func cancel() async {
-        cancelCount += 1
-        executionContinuation?.resume(throwing: MoleBridgeError.cancelled)
-        executionContinuation = nil
-    }
-
-    func setExecutionBlocked(_ blocked: Bool) {
-        blockExecution = blocked
-    }
-
-    func finishExecution() {
-        executionContinuation?.resume(returning: executionResult)
-        executionContinuation = nil
-    }
-
-    func waitForArgumentCount(_ count: Int) async throws {
-        for _ in 0..<1_000 {
-            if arguments.count >= count { return }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        throw CleanSpyWaitError.timeout
-    }
-}
-
-private enum CleanSpyWaitError: Error {
-    case timeout
 }

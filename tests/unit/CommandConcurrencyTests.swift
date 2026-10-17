@@ -135,22 +135,35 @@ final class CommandConcurrencyTests: XCTestCase {
         let optimizeSpy = BlockingProcessSpy()
         let purgeSpy = BlockingProcessSpy()
         let coordinator = OperationCoordinator()
-        let optimize = OptimizeViewModel(process: optimizeSpy, coordinator: coordinator)
-        let purge = PurgeViewModel(process: purgeSpy, coordinator: coordinator)
+        let optimize = OptimizeViewModel(
+            process: optimizeSpy,
+            coordinator: coordinator,
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        let purge = PurgeViewModel(
+            process: purgeSpy,
+            coordinator: coordinator,
+            scan: ScanProvidingStub.maintenance(.purge, output: "plan")
+        )
+        optimize.adoptBackgroundResultIfAvailable()
+        purge.adoptBackgroundResultIfAvailable()
+        optimize.requestConfirmation()
+        purge.requestConfirmation()
 
-        let running = Task { @MainActor in await optimize.previewOptimize() }
+        let running = Task { @MainActor in await optimize.confirmExecution() }
         await optimizeSpy.waitForStart()
 
-        await purge.previewPurge()
+        await purge.confirmExecution()
         // Representation-agnostic mutual exclusion: the second write must not
-        // spawn a command on its own lane nor enter previewing.
+        // spawn a command on its own lane while the lease is held.
         let purgeInvocations = await purgeSpy.invocations
         XCTAssertEqual(purgeInvocations, 0, "a second write must not spawn while one is active")
-        XCTAssertFalse(purge.isPreviewing)
+        XCTAssertFalse(purge.isConfirmationPresented, "another write invalidates the pending confirmation")
+        XCTAssertEqual(purge.errorMessageKey, "operation.error.stale_scan")
 
         await optimizeSpy.finish()
         await running.value
-        XCTAssertTrue(optimize.canConfirm)
+        XCTAssertEqual(optimize.result?.status, .succeeded)
     }
 
     // AC-004: duplicate submission on one lane keeps a single command in flight.
@@ -234,8 +247,7 @@ final class CommandConcurrencyTests: XCTestCase {
             estimate: estimateBridges[0],
             estimatePool: estimateBridges,
             scan: scan,
-            statusStream: try MoleBridge(executableURL: sleepURL),
-            cleanStream: try MoleBridge(executableURL: sleepURL)
+            statusStream: try MoleBridge(executableURL: sleepURL)
         )
     }
 

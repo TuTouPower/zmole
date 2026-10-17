@@ -29,7 +29,8 @@ struct CleanView: View {
         .navigationTitle("sidebar.clean")
         .task {
             if whitelistViewModel.document == nil { whitelistViewModel.load() }
-            viewModel.adoptPrewarmPreviewIfAvailable()
+            viewModel.adoptBackgroundResultIfAvailable()
+            viewModel.refreshIfNeeded()
         }
     }
 
@@ -51,15 +52,15 @@ struct CleanView: View {
 
     private var head: some View {
         MolePageHead(title: "clean.title", subtitle: "clean.subtitle") {
-            if viewModel.isPreviewing {
-                Button("clean.cancel") { Task { await viewModel.cancelPreview() } }
+            if viewModel.isRefreshing {
+                Button("clean.cancel") { Task { await viewModel.cancelRefresh() } }
             } else if viewModel.isExecuting {
                 Button("clean.cancel") { Task { await viewModel.cancelExecution() } }
             } else {
                 Button {
-                    Task { await viewModel.previewClean() }
+                    viewModel.refreshClean()
                 } label: {
-                    Label("clean.preview", systemImage: "arrow.clockwise")
+                    Label("clean.refresh", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(MoleTheme.accent)
@@ -94,7 +95,7 @@ struct CleanView: View {
             .padding(16)
             Divider()
 
-            if viewModel.isPreviewing {
+            if viewModel.isRefreshing {
                 scanningState
             } else if viewModel.isExecuting {
                 VStack(spacing: 12) {
@@ -112,11 +113,10 @@ struct CleanView: View {
                     }
                 }
             } else {
-                UtilityEmptyState(symbol: "sparkles", title: "clean.empty", message: "clean.preview_hint")
-                    .frame(minHeight: 200)
+                emptyState
             }
 
-            if let preview = viewModel.preview, !viewModel.isPreviewing {
+            if viewModel.preview != nil, !viewModel.isRefreshing {
                 Divider()
                 HStack {
                     Text("clean.action.footer").font(.system(size: 11)).foregroundStyle(MoleTheme.muted)
@@ -138,24 +138,28 @@ struct CleanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("clean.scanning").font(.system(size: 13, weight: .semibold))
-            }
-            HStack(spacing: 7) {
-                Text("clean.stage.current").font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
-                if let stage = viewModel.currentStage {
-                    if let key = stage.localizedKey {
-                        Text(LocalizedStringKey(key)).font(.system(size: 12, weight: .medium))
-                    } else {
-                        Text(verbatim: stage.raw).font(.system(size: 12, weight: .medium))
-                    }
-                } else {
-                    Text("clean.stage.unknown").font(.system(size: 12)).foregroundStyle(MoleTheme.subtle)
-                }
+                Text("clean.refreshing").font(.system(size: 13, weight: .semibold))
             }
             Text("clean.scan_hint").font(.system(size: 10)).foregroundStyle(MoleTheme.subtle)
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if viewModel.scanFailed {
+            VStack(spacing: 12) {
+                UtilityNotice(title: "clean.scan_failed", symbol: "exclamationmark.triangle", isError: true)
+                Button("clean.refresh") { viewModel.refreshClean() }
+                    .buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity, minHeight: 200)
+            .padding(16)
+        } else {
+            UtilityEmptyState(symbol: "sparkles", title: "clean.empty", message: "clean.empty_hint")
+                .frame(minHeight: 200)
+        }
     }
 
     private func sectionHeader(_ section: CleanPreviewSection) -> some View {
@@ -237,6 +241,9 @@ struct CleanView: View {
     private var resultNotices: some View {
         if viewModel.showBusyNotice {
             RecoverableBusyNotice()
+        }
+        if viewModel.scanFailed, viewModel.preview != nil {
+            UtilityNotice(title: "clean.scan_failed", symbol: "exclamationmark.triangle", isError: true)
         }
         if let errorMessageKey = viewModel.errorMessageKey {
             UtilityNotice(

@@ -1,34 +1,18 @@
 import Foundation
 
-enum CleanPreviewStoreError: Error, Equatable, LocalizedError, Sendable, ErrorKeyProviding {
+enum CleanPreviewStoreError: Error, Equatable, LocalizedError, Sendable {
     case missingFile
     case emptyFile
     case invalidUTF8
-    case changedSincePreview
-
-    var errorKey: String {
-        switch self {
-        case .missingFile:
-            return "clean.error.missing_list"
-        case .emptyFile:
-            return "clean.error.empty_list"
-        case .invalidUTF8:
-            return "clean.error.invalid_list"
-        case .changedSincePreview:
-            return "clean.error.changed_list"
-        }
-    }
 
     var errorDescription: String? {
         switch self {
         case .missingFile:
-            return "本次 clean 预览没有写出列表文件"
+            return "clean 扫描没有写出列表文件"
         case .emptyFile:
-            return "本次 clean 预览列表为空"
+            return "clean 扫描列表为空"
         case .invalidUTF8:
-            return "clean 预览文件不是有效的 UTF-8 文本"
-        case .changedSincePreview:
-            return "预览列表已变化，请重新预览"
+            return "clean 列表不是有效的 UTF-8 文本"
         }
     }
 }
@@ -109,26 +93,5 @@ struct CleanPreviewStore: Sendable {
             entries: entries,
             sections: CleanPreviewParser.sections(from: contents)
         )
-    }
-
-    func verifyUnchanged(_ snapshot: CleanPreviewSnapshot) throws {
-        guard snapshot.generation.fileURL == fileURL else {
-            throw CleanPreviewStoreError.changedSincePreview
-        }
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw CleanPreviewStoreError.missingFile
-        }
-        let data: Data
-        do {
-            data = try Data(contentsOf: fileURL)
-        } catch {
-            throw CleanPreviewStoreError.changedSincePreview
-        }
-        guard let contents = String(data: data, encoding: .utf8) else {
-            throw CleanPreviewStoreError.invalidUTF8
-        }
-        guard contents == snapshot.contents else {
-            throw CleanPreviewStoreError.changedSincePreview
-        }
     }
 }

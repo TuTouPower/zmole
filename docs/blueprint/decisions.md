@@ -32,7 +32,7 @@
 
 - 背景：mole 部分命令是全屏 TUI，无 JSON；用隐藏 PTY 代按键会在「第几行」上赌删除目标。
 - 选项：嵌终端；隐藏终端代按键；自己扫盘；只做结构化输出 + 白名单文件。
-- 结论：status / history / analyze 只读 / clean / uninstall / optimize / purge / 白名单编辑进第一版。installer、analyze 删除、代按键、嵌终端 park。破坏性操作一律预览后界面确认再 spawn。
+- 结论：status / history / analyze 只读 / clean / uninstall / optimize / purge / 白名单编辑进第一版。installer、analyze 删除、代按键、嵌终端 park。破坏性操作一律先展示扫描结果并界面确认再 spawn。
 - 替代：无
 
 ## 005 许可、语言、架构与隐私（2026-09-21）
@@ -57,7 +57,7 @@
     2. 补丁捆绑 clean：`safe_remove` 在 `MOLE_CURRENT_COMMAND=clean` 时改把目标移入 `~/.Trash`，并停用 `clean_trash`；移动失败保留原文件、不退回 `rm -rf`
     3. 只改 Swift 侧、不改捆绑脚本
 - 结论：选 2。补丁限于捆绑树内的 clean 删除路径（`lib/core/file_ops.sh` 新增 `_mole_clean_trash_path`；`lib/clean/user.sh` 的 `clean_trash` 直接返回）。卸载本就进废纸篓；项目清理与优化的删除维持永久删除并由页面写明；安装包删除在后续 task 改为废纸篓。上游 tag 升级时该补丁需重放。
-- 替代：004 中「clean 破坏性操作一律预览后执行」不变，仅改删除落点。
+- 替代：004 中「clean 破坏性操作一律展示结果后执行」不变，仅改删除落点。
 
 ## 008 安装包走非交互接口，删除进废纸篓（2026-10-16）
 

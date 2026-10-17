@@ -499,3 +499,9 @@ struct DemoDiskScanner: DiskScanning {
         return Dictionary(uniqueKeysWithValues: pairs)
     }()
 }
+
+/// Demo apps point at fixture paths that do not exist on disk; the confirm-time
+/// identity check accepts them so demo flows can reach the execution command.
+struct DemoUninstallTargetChecker: UninstallTargetChecking {
+    func stillMatches(_ app: UninstallApp) async -> Bool { true }
+}

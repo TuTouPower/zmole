@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Zmole
 
@@ -10,14 +11,18 @@ final class RecoverableBusyTests: XCTestCase {
 
     func testWriteBusyFromCoordinatorIsRecoverable() async {
         let coordinator = OperationCoordinator()
-        _ = coordinator.acquire(.clean) // another write holds the single lease
+        let lease = coordinator.acquire(.purge) // another write holds the single lease
 
-        let viewModel = OptimizeViewModel(process: NoopProcess(), coordinator: coordinator)
-        await viewModel.previewOptimize()
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "plan")
+        let viewModel = OptimizeViewModel(process: NoopProcess(), coordinator: coordinator, scan: scan)
+        viewModel.adoptBackgroundResultIfAvailable()
+        viewModel.requestConfirmation()
+        await viewModel.confirmExecution()
 
         XCTAssertTrue(viewModel.showBusyNotice)
-        XCTAssertFalse(viewModel.isPreviewing)
         XCTAssertNil(viewModel.errorMessageKey, "busy must not be reported as a failure")
+        XCTAssertFalse(viewModel.isConfirmationPresented, "a busy retry must not leave the sheet open")
+        lease?.release()
     }
 
     func testInstallersScanBusyKeepsListAndClearsOnRetry() async {

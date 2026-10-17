@@ -11,19 +11,19 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 |`App`|窗口、侧边栏十页导航、本地化、设置、依赖装配|不直接 `Process`|
 |`Features/*`|Overview / Status / History / Analyze / Clean / Uninstall / Optimize / Purge / Installers / Whitelist / Settings / Confirmation / Operations|用户意图 → Bridge API + UI 状态|
 |`MoleBridge`|定位 bundle 内 mole、拼参数、跑 `Process`、读 stdout/stderr、解析退出码与 JSON|唯一允许 spawn mole 的层|
-|`Models`|预留共享值类型落点（当前为空目录）；命令结果、预览条目、白名单行等值类型按 Feature 就近存放|与 UI 解耦|
+|`Models`|预留共享值类型落点（当前为空目录）；命令结果、清理条目、白名单行等值类型按 Feature 就近存放|与 UI 解耦|
 
 侧边栏主导航为十个目的地：概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。设置从系统菜单升为正式页面，系统菜单的设置命令选中该页。⌘K 命令面板只做页面跳转，不承载删除或执行动作。自定义窗口壳只替换导航；各页面继续呈现既有功能，破坏性语义留在各自的页面 task。优化与项目清理是两个独立页面：任务/产物行只读，计划来自本次 dry-run，执行范围由 mole 决定；两者的删除保持永久删除，白名单与扫描目录分别在设置与项目清理页编辑。
 
 安装包不使用上游全屏菜单：捆绑 installer 增加非交互接口 `--list-json`（列出绝对路径、字节大小、来源、身份）与 `--remove <path> --size <n> --identity <id>`（只接受调用方会话名单里的路径；直接核对目标自身——仍在扫描根内、该深度、候选扩展名，且大小与身份未变——`MOLE_DELETE_MODE=trash` 移入废纸篓，失败保留原文件）。删除不重新遍历扫描根（t029）；扫描规则仍由捆绑脚本负责，界面（t023）只消费该接口。
 
-设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理预览失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
+设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理结果失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
 
 ## App 装配与共享协调
 
 `AppDependencies` 是 App 生命周期所有者，统一创建共享 `MoleBridge`、`OperationCoordinator`、四类写入 ViewModel、白名单编辑器与只读查询/状态 ViewModel。页面只接收已装配依赖，不在 View 内创建生产 Bridge。
 
-`OperationCoordinator` 为 clean、uninstall、optimize、purge、protectionRules 提供跨页面/窗口的单写入 lease；保存保护规则成功后递增 preview generation，使受影响 clean 预览失效。ViewModel 释放 lease 后才允许下一项写入。三个写入 ViewModel（clean、uninstall、optimize/purge）共享 `PreviewLeaseCoordinator`：由它持有 lease、跟踪当前预览所属的 generation、并经失效信号回调让页面过期预览；各页面不再各自维护租约与世代样板。
+`OperationCoordinator` 为 clean、uninstall、optimize、purge、protectionRules 提供跨页面/窗口的单写入 lease；保存保护规则成功后递增 invalidation generation，使受影响 clean 结果失效。ViewModel 释放 lease 后才允许下一项写入。三个写入 ViewModel（clean、uninstall、optimize/purge）共享 `PreviewLeaseCoordinator`：由它持有 lease、跟踪当前结果所属的 generation、并经失效信号回调让页面过期结果；各页面不再各自维护租约与世代样板。
 
 ## 数据流
 
@@ -34,8 +34,8 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
                       → Model → UI
 ```
 
-- 破坏性命令：本次预览成功 → 界面确认（对象与预览一致）→ 再 spawn 执行。预览失败、取消、目标变化后禁止执行。确认前不创建**执行**用 `Process`（预览 spawn 允许）。
-- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是扫描快照，执行时 mole 会重扫；UI 须写明。只展示**本次** dry-run 写入的内容，禁止沿用旧文件。用户预览或执行开始前会取消后台 clean 扫描并等待其进程完全退出，避免两侧并发写同一文件。
+- 破坏性命令：后台扫描结果就绪 → 界面确认（对象与结果一致）→ 再 spawn 执行。扫描失败、取消、目标变化后禁止执行。确认前不创建**执行**用 `Process`（后台扫描 spawn 允许）。
+- `clean --dry-run` 的 `~/.config/mole/clean-list.txt` 是扫描写出的清单；后台扫描结果连同 `capturedAt` 落入应用支持目录缓存。UI 展示缓存结果并说明执行时 mole 会重扫。用户执行开始前会取消后台 clean 扫描并等待其进程完全退出，避免两侧并发写同一文件。
 - 白名单：读写 `~/.config/mole/whitelist`（及 optimize 对应文件），不跑 whitelist TUI。
 - App 设置（语言覆盖等）存本应用容器；mole 配置仍在 `~/.config/mole/`。
 - mole 配置文件（`purge_paths`、`whitelist`、`whitelist_optimize`）在本仓视为纯数据：GUI 逐行校验形状后原样写入，由 mole 负责解释与展开安全；GUI 不做 shell 转义（也不按 shell 求值）。
@@ -54,11 +54,11 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ### 卸载名单与确认
 
-卸载名单走 `uninstall --list-stream`：先输出已发现的应用身份（名称/路径），再按应用输出完整行（bundle id、卸载名、来源、大小、版本、上次使用时间来自同一次扫描；版本读目标自身 Info.plist，不用 Spotlight）。界面先列名单、大小随后补上，尚无大小的行不显示为 0；图标在列表可交互后异步补上。同一次会话的预览与确认复用这份名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。
+卸载名单走 `uninstall --list-stream`：先输出已发现的应用身份（名称/路径），再按应用输出完整行（bundle id、卸载名、来源、大小、版本、上次使用时间来自同一次扫描；版本读目标自身 Info.plist，不用 Spotlight）。界面先列名单、大小随后补上，尚无大小的行不显示为 0；图标在列表可交互后异步补上。同一次会话的确认复用这份名单：确认前只做轻量身份核对（路径存在、bundle id 未变），不重跑全量大小扫描；身份变化时拒绝执行、不 spawn 卸载命令，并重新扫描名单。「检查关联文件」仍只在用户点击时对该应用跑一次 `uninstall --dry-run`。
 
 ### 后台扫描
 
-`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 预览/执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`；schema 不匹配或损坏时整文件忽略。写入成功后作废全部结果并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
+`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`；schema 不匹配或损坏时整文件忽略。写入成功后作废全部结果并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
 
 ## 捆绑与进程边界
 

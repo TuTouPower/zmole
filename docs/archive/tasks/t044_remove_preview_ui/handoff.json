@@ -1,0 +1,85 @@
+{
+  "tid": "t044",
+  "attempt": 1,
+  "execution_id": "f95a03c4258a4078968a387b7173e0fe",
+  "status": "done",
+  "branch": "t044_remove_preview_ui",
+  "base_sha": "865a07b94b9ebe2a6a3ad5e7b3949822278e43e8",
+  "tests": "xcodegen generate; xcodebuild build (Debug, 0 error); xcodebuild test -scheme Zmole -destination 'platform=macOS' (292 tests, 0 failures); xcodebuild build -configuration Release (0 error); pytest .repo_template/tests -q -m contract (147 passed); bash tests/integration/clean_trash_test.sh (all cases passed); bash tests/integration/installer_interface_test.sh (all cases passed); bash tests/integration/uninstall_stream_test.sh (all cases passed); git diff --check clean",
+  "blackbox": "Debug app launched on clean, optimize, purge, uninstall pages: data displays immediately from background cache without manual preview; page header buttons read '刷新' (refresh); Localizable.xcstrings contains zero occurrences of '预览' or 'preview'; Demo mode launched on software/clean pages with DemoUninstallTargetChecker accepting demo virtual paths; ps confirmed no orphan child processes",
+  "review": "full: review_code.md PASS (rounds 1-2; R1 f001 important + f002-f005 minors fixed, R2 zero findings) + review_test.md PASS (rounds 1-2; R1 f001 important + f002-f004 minors fixed, R2 zero findings); check_review_status.py overall=PASS review_scope=ok; reviewed_scope 7e7dac6b84097548",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Clean/CleanView.swift task adoptBackgroundResultIfAvailable & refreshIfNeeded",
+      "src/zmole/Features/Optimize/OptimizeView.swift task adoptBackgroundResultIfAvailable & refreshIfNeeded",
+      "src/zmole/Features/Purge/PurgeView.swift task adoptBackgroundResultIfAvailable & refreshIfNeeded",
+      "tests/unit/CleanPageTests.swift testReclaimAppearsOnlyWithBackgroundData",
+      "tests/unit/OptimizeTests.swift testOptimizeDisplaysBackgroundResultWithoutSpawningCommands",
+      "tests/unit/PurgeTests.swift testPurgeDisplaysBackgroundResultWithoutSpawningCommands"
+    ],
+    "AC-002": [
+      "tests/unit/UiAlignmentTests.swift testUserFacingCopyDropsPreviewConcept (0 occurrences in entire Localizable.xcstrings across all 3 locales)",
+      "src/zmole/Features/Clean/CleanView.swift clean.refresh button",
+      "src/zmole/Features/Optimize/OptimizeView.swift optimize.refresh button",
+      "src/zmole/Features/Purge/PurgeView.swift purge.refresh button"
+    ],
+    "AC-003": [
+      "tests/unit/CleanPageTests.swift testRefreshButtonRequestsTheBackgroundScan",
+      "tests/unit/CleanPageTests.swift testNewBackgroundResultFillsTheIdleCleanPage",
+      "tests/unit/OptimizeTests.swift testRefreshButtonRequestsTheBackgroundScan",
+      "tests/unit/OptimizeTests.swift testNewBackgroundResultReplacesIdlePreview",
+      "tests/unit/PurgeTests.swift testNewBackgroundResultReplacesIdlePreview",
+      "tests/unit/CleanPageTests.swift testRefreshingStateFollowsTheBackgroundScan"
+    ],
+    "AC-004": [
+      "tests/unit/CleanPageTests.swift testExecutionRunsOnlyAfterConfirmationWithBackgroundData",
+      "tests/unit/CleanPageTests.swift testCancelConfirmationKeepsTheScanAndDoesNotExecute",
+      "tests/unit/OptimizeTests.swift testOptimizeConfirmationExecutesOnceWithTheExpectedArgv",
+      "tests/unit/OptimizeTests.swift testCancelConfirmationKeepsTheBackgroundResult",
+      "tests/unit/PurgeTests.swift testPurgeConfirmationExecutesOnceWithTheExpectedArgv",
+      "tests/unit/PurgeTests.swift testPurgeUsesYesAndCancelDoesNotExecute"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Clean/CleanViewModel.swift confirmExecution removes verifyUnchanged check",
+      "src/zmole/Features/Clean/CleanViewModel.swift confirmExecution invokes userDidRescanAndWaitForTermination(.clean)",
+      "tests/unit/CleanPageTests.swift testExecutionRunsOnlyAfterConfirmationWithBackgroundData"
+    ],
+    "AC-006": [
+      "tests/unit/UninstallTests.swift testUninstallConfirmationOpensDirectlyFromSelection",
+      "tests/unit/UninstallTests.swift testUninstallConfirmationExecutesWithoutPermanentAndShowsSummary",
+      "tests/unit/UninstallDetailTests.swift testConfirmingBatchUsesOnlySelectedUninstallNamesAndConfirmationInput",
+      "tests/unit/UninstallDetailTests.swift testCancelConfirmationDoesNotExecuteUninstall",
+      "tests/unit/ZmoleTests.swift testDemoUninstallExecutesOnlySelectedApplications"
+    ],
+    "AC-007": [
+      "tests/unit/UninstallTests.swift testUninstallChangedTargetCannotExecuteAndRescansTheList"
+    ],
+    "AC-008": [
+      "src/zmole/App/SidebarView.swift line 87",
+      "src/zmole/Features/Overview/OverviewViewModel.swift overview.reclaim_no_scan",
+      "tests/unit/CleanPageTests.swift testReclaimAppearsOnlyWithBackgroundData",
+      "tests/unit/OverviewLayoutTests.swift testOverviewHealthCardFormattedText"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Clean/CleanView.swift scanFailed notice",
+      "src/zmole/Features/Optimize/OptimizeView.swift scanFailed notice",
+      "src/zmole/Features/Purge/PurgeView.swift scanFailed notice",
+      "tests/unit/CleanPageTests.swift testReclaimAppearsOnlyWithBackgroundData (scanFailed asserted)",
+      "tests/unit/BackgroundScanTests.swift testFailingItemKeepsPreviousResultAndRetriesLater"
+    ],
+    "AC-010": [
+      "tests/unit/InstallersPageTests.swift",
+      "tests/unit/WhitelistOperationTests.swift",
+      "tests/unit/SettingsHistoryTests.swift",
+      "xcodebuild test full suite 292 passed"
+    ],
+    "AC-011": [
+      "tests/unit/CleanPageTests.swift testCancelConfirmationKeepsTheScanAndDoesNotExecute",
+      "tests/unit/OptimizeTests.swift testCancelConfirmationKeepsTheBackgroundResult",
+      "tests/unit/PurgeTests.swift testPurgeUsesYesAndCancelDoesNotExecute",
+      "tests/unit/UninstallDetailTests.swift testCancelConfirmationDoesNotExecuteUninstall"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

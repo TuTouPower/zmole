@@ -89,7 +89,6 @@ final class AppDependencies: ObservableObject {
             )
         } else if let bridges = MoleCommandLanes.makeCommandBridges(),
                    let streamBridge = try? MoleBridge(),
-                   let cleanBridge = try? MoleBridge(),
                    let uninstallStreamBridge = try? MoleBridge() {
             // One bridge per one-shot consumer: a slow read no longer rejects
             // other pages as busy. Writes stay mutually exclusive via the
@@ -113,8 +112,7 @@ final class AppDependencies: ObservableObject {
                 estimate: bridges.estimate,
                 estimatePool: [bridges.estimate] + bridges.estimateExtras,
                 scan: scanLanes,
-                statusStream: streamBridge,
-                cleanStream: cleanBridge
+                statusStream: streamBridge
             )
         } else {
             lanes = .unavailable()
@@ -136,10 +134,15 @@ final class AppDependencies: ObservableObject {
         }
         let scan: BackgroundScanService?
         if backgroundScanEnabled, let scanLanes = lanes.scan {
+            let cache = configuration.isEnabled
+                ? BackgroundScanCache(
+                    fileURL: demoDirectory.appendingPathComponent("background_scan_cache.json")
+                )
+                : BackgroundScanCache.live
             scan = BackgroundScanService(
                 lanes: scanLanes,
                 cleanPreviewStore: previewStore,
-                cache: .live,
+                cache: cache,
                 coordinator: sharedCoordinator,
                 accessMonitor: accessMonitor
             )
@@ -149,15 +152,16 @@ final class AppDependencies: ObservableObject {
         scanService = scan
         cleanViewModel = CleanViewModel(
             process: lanes.cleanCommand,
-            previewStore: previewStore,
             coordinator: coordinator,
-            streaming: lanes.cleanStream,
             scan: scan
         )
         uninstallViewModel = UninstallViewModel(
             process: lanes.uninstall,
             listStream: UninstallListStream(streaming: lanes.uninstallStream),
             coordinator: coordinator,
+            targetChecker: configuration.isEnabled
+                ? DemoUninstallTargetChecker()
+                : LiveUninstallTargetChecker(),
             scan: scan
         )
         optimizeViewModel = OptimizeViewModel(
@@ -234,11 +238,7 @@ final class AppDependencies: ObservableObject {
 
         if let scan {
             scan.cleanBusyProvider = { [weak cleanViewModel] in
-                guard let cleanViewModel else { return false }
-                return cleanViewModel.preview != nil
-                    || cleanViewModel.isConfirmationPresented
-                    || cleanViewModel.isPreviewing
-                    || cleanViewModel.isExecuting
+                cleanViewModel?.ownsCleanListFile ?? false
             }
             // Published changes fire before the mutation lands; hop one main
             // actor turn so the deferred-clean check reads the new values. A
