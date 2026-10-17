@@ -15,8 +15,8 @@
     - `src/zmole/Models/` — 预留共享模型落点；当前为空目录，值类型按 Feature 就近存放
     - `tests/unit/` — 纯逻辑单测（Bridge 解析、参数拼装等）
     - `tests/integration/` — 对捆绑 mole 或假二进制的集成
-- **工程文件**：根目录 `project.yml`，XcodeGen 生成 `Zmole.xcodeproj`；禁止手写损坏的 pbxproj
-- **工程生成**：在仓库根目录运行 `xcodegen generate`；构建前重新生成工程
+- **工程文件**：根目录 `project.yml` 作为唯一源，本地通过 XcodeGen 生成 `Zmole.xcodeproj`（已 gitignore，不入版本库）；禁止手写损坏的 pbxproj
+- **工程生成**：在仓库根目录运行 `xcodegen generate`；构建或测试前自动或手动重新生成工程
 - **捆绑 mole**：构建时放入 Resources；运行时只 spawn 该绝对路径
 - **禁止**：Feature / View 里直接 `Process`；解析 TUI；PTY 代发方向键；把 CLI 装进 PATH；调用捆绑 mole 的 `update`/`remove`
 - **允许的 stdin**：仅 mole 文档化的行确认。当前只有命名 `uninstall` 的 `[y/N]` → 写入 `y\n`。其它命令保持空 stdin，除非新 ADR
