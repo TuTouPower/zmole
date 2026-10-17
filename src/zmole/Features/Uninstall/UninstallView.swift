@@ -88,8 +88,6 @@ struct UninstallView: View {
     private var listActionButton: some View {
         if viewModel.isListing {
             Button("uninstall.cancel") { Task { await viewModel.cancelList() } }
-        } else if viewModel.isPreviewing {
-            Button("uninstall.cancel") { Task { await viewModel.cancelPreview() } }
         } else if viewModel.isExecuting {
             Button("uninstall.cancel") { Task { await viewModel.cancelExecution() } }
         } else {
@@ -159,10 +157,10 @@ struct UninstallView: View {
             Spacer(minLength: 0)
             Button("uninstall.clear_selection") { viewModel.clearSelection() }
                 .buttonStyle(.borderless)
-            Button("uninstall.preview") { Task { await viewModel.previewUninstall() } }
+            Button("uninstall.action") { viewModel.requestConfirmation() }
                 .buttonStyle(.borderedProminent)
                 .tint(MoleTheme.accent)
-                .disabled(!viewModel.canPreview)
+                .disabled(!viewModel.canUninstall)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
@@ -375,7 +373,7 @@ struct UninstallView: View {
                     Button {
                         viewModel.clearSelection()
                         viewModel.toggleSelection(app)
-                        Task { await viewModel.previewUninstall() }
+                        viewModel.requestConfirmation()
                     } label: {
                         Label("uninstall.trash", systemImage: "trash")
                             .frame(maxWidth: .infinity)
@@ -418,31 +416,6 @@ struct UninstallView: View {
         } else if viewModel.showBusyNotice {
             RecoverableBusyNotice()
                 .padding(12)
-        } else if let preview = viewModel.preview {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("uninstall.preview_result").font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Button("uninstall.execute") { viewModel.requestConfirmation() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .disabled(!viewModel.canConfirm)
-                }
-                Text(preview.apps.map(\.name).joined(separator: " · "))
-                    .font(.system(size: 12))
-                if !preview.output.isEmpty {
-                    ScrollView(.vertical) {
-                        Text(preview.output)
-                            .font(.system(size: 11, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxHeight: 120)
-                }
-            }
-            .padding(14)
-            .background(.bar)
-            .overlay(alignment: .top) { Divider() }
         } else if let errorMessageKey = viewModel.errorMessageKey {
             UtilityNotice(
                 title: LocalizedStringKey(errorMessageKey),

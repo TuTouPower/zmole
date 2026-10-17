@@ -3,22 +3,17 @@ import XCTest
 
 final class OptimizeTests: XCTestCase {
     @MainActor
-    func testOptimizePreviewUsesDryRunAndDisplaysStrippedOutput() async throws {
-        let spy = OptimizeProcessSpy(previewResults: [
-            MoleCommandResult(
-                stdout: "\u{001B}[31mPlan\u{001B}[0m\n",
-                stderr: "",
-                exitCode: 0
-            )
-        ])
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
+    func testOptimizeDisplaysBackgroundResultWithoutSpawningCommands() async throws {
+        let spy = MaintenanceExecutionSpy()
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "Plan")
+        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator(), scan: scan)
 
-        await viewModel.previewOptimize()
+        viewModel.adoptBackgroundResultIfAvailable()
 
-        let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [["optimize", "--dry-run"]])
-        XCTAssertNil(invocations[0].stdin)
         XCTAssertEqual(viewModel.preview?.output, "Plan")
+        XCTAssertTrue(viewModel.canConfirm)
+        let invocations = await spy.invocations
+        XCTAssertTrue(invocations.isEmpty, "the page must use the background result, not run its own scan")
 
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -32,103 +27,145 @@ final class OptimizeTests: XCTestCase {
     }
 
     @MainActor
-    func testOptimizePreviewFailureExpiresPreviousPreview() async throws {
-        let spy = OptimizeProcessSpy(previewResults: [
-            MoleCommandResult(stdout: "old plan", stderr: "", exitCode: 0),
-            MoleCommandResult(stdout: "new plan", stderr: "optimize failed", exitCode: 7)
-        ])
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
+    func testNewBackgroundResultReplacesIdlePreview() async throws {
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "first")
+        let viewModel = OptimizeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: OperationCoordinator(),
+            scan: scan
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
+        XCTAssertEqual(viewModel.preview?.output, "first")
 
-        await viewModel.previewOptimize()
-        XCTAssertEqual(viewModel.preview?.output, "old plan")
+        scan.results[.optimize] = BackgroundScanResult(
+            capturedAt: Date(),
+            payload: .maintenance("second")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
 
-        await viewModel.previewOptimize()
+        XCTAssertEqual(viewModel.preview?.output, "second", "a new background result fills the idle page")
+    }
 
-        XCTAssertNil(viewModel.preview)
-        XCTAssertFalse(viewModel.canConfirm)
-        XCTAssertEqual(viewModel.errorMessageKey, "optimize.error.failed")
-        XCTAssertEqual(viewModel.executionSummary, "new plan\noptimize failed")
+    @MainActor
+    func testRefreshButtonRequestsTheBackgroundScan() async throws {
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "plan")
+        let viewModel = OptimizeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: OperationCoordinator(),
+            scan: scan
+        )
+
+        viewModel.refreshMaintenance()
+
+        XCTAssertEqual(scan.requestedItems, [.optimize])
+    }
+
+    @MainActor
+    func testCancelRefreshYieldsTheBackgroundScan() async throws {
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "plan")
+        let viewModel = OptimizeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: OperationCoordinator(),
+            scan: scan
+        )
+
+        await viewModel.cancelRefresh()
+
+        XCTAssertEqual(scan.cancelledItems, [.optimize])
     }
 
     @MainActor
     func testOptimizeDoesNotExecuteBeforeConfirmation() async throws {
-        let spy = OptimizeProcessSpy(previewResults: [
-            MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)
-        ])
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
+        let spy = MaintenanceExecutionSpy()
+        let viewModel = OptimizeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
 
-        await viewModel.previewOptimize()
+        viewModel.requestConfirmation()
 
         let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [["optimize", "--dry-run"]])
+        XCTAssertTrue(invocations.isEmpty)
         XCTAssertNil(viewModel.executionSummary)
     }
 
     @MainActor
-    func testOptimizeConfirmationExecutesWithoutDryRun() async throws {
-        let spy = OptimizeProcessSpy(
-            previewResults: [MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)],
-            executionResult: MoleCommandResult(
-                stdout: "optimized",
-                stderr: "",
-                exitCode: 0
-            )
+    func testConfirmingResultIsNotReplacedByANewBackgroundResult() async throws {
+        let scan = ScanProvidingStub.maintenance(.optimize, output: "plan")
+        let viewModel = OptimizeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: OperationCoordinator(),
+            scan: scan
         )
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
-
-        await viewModel.previewOptimize()
+        viewModel.adoptBackgroundResultIfAvailable()
         viewModel.requestConfirmation()
+
+        scan.results[.optimize] = BackgroundScanResult(
+            capturedAt: Date(),
+            payload: .maintenance("replacement")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+        viewModel.adoptBackgroundResultIfAvailable()
+
+        XCTAssertEqual(viewModel.preview?.output, "plan", "the confirming result stays")
+    }
+
+    @MainActor
+    func testCancelConfirmationKeepsTheBackgroundResult() async throws {
+        let viewModel = OptimizeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
+        viewModel.requestConfirmation()
+
+        viewModel.cancelConfirmation()
+
+        XCTAssertFalse(viewModel.isConfirmationPresented)
+        XCTAssertEqual(viewModel.preview?.output, "plan")
+    }
+
+    @MainActor
+    func testOptimizeConfirmationExecutesOnceWithTheExpectedArgv() async throws {
+        let spy = MaintenanceExecutionSpy(
+            executionResult: MoleCommandResult(stdout: "optimized", stderr: "", exitCode: 0)
+        )
+        let viewModel = OptimizeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
+        viewModel.requestConfirmation()
+
         await viewModel.confirmExecution()
 
         let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [
-            ["optimize", "--dry-run"],
-            ["optimize"]
-        ])
+        XCTAssertEqual(invocations.map(\.arguments), [["optimize"]])
         XCTAssertEqual(viewModel.executionSummary, "optimized")
         XCTAssertNil(viewModel.preview)
     }
 
     @MainActor
-    func testOptimizeConfirmationCancelRequiresNewPreview() async throws {
-        let spy = OptimizeProcessSpy(previewResults: [
-            MoleCommandResult(stdout: "first plan", stderr: "", exitCode: 0),
-            MoleCommandResult(stdout: "second plan", stderr: "", exitCode: 0)
-        ])
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
-
-        await viewModel.previewOptimize()
-        viewModel.requestConfirmation()
-        viewModel.cancelConfirmation()
-        await viewModel.confirmExecution()
-        XCTAssertNil(viewModel.preview)
-
-        await viewModel.previewOptimize()
-        viewModel.requestConfirmation()
-        await viewModel.confirmExecution()
-
-        let invocations = await spy.invocations
-        XCTAssertEqual(invocations.map(\.arguments), [
-            ["optimize", "--dry-run"],
-            ["optimize", "--dry-run"],
-            ["optimize"]
-        ])
-    }
-
-    @MainActor
     func testOptimizeExecutionFailureShowsSummary() async throws {
-        let spy = OptimizeProcessSpy(
-            previewResults: [MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)],
+        let spy = MaintenanceExecutionSpy(
             executionResult: MoleCommandResult(
                 stdout: "partial optimize",
                 stderr: "optimize failed",
                 exitCode: 9
             )
         )
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
-
-        await viewModel.previewOptimize()
+        let viewModel = OptimizeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
         viewModel.requestConfirmation()
+
         await viewModel.confirmExecution()
 
         XCTAssertEqual(viewModel.executionSummary, "partial optimize\noptimize failed")
@@ -138,18 +175,20 @@ final class OptimizeTests: XCTestCase {
 
     @MainActor
     func testOptimizeBusyExecutionCannotStartTwiceAndCanCancel() async throws {
-        let spy = OptimizeProcessSpy(
-            previewResults: [MoleCommandResult(stdout: "plan", stderr: "", exitCode: 0)]
-        )
+        let spy = MaintenanceExecutionSpy()
         await spy.setExecutionBlocked(true)
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
-
-        await viewModel.previewOptimize()
+        let viewModel = OptimizeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
+        viewModel.adoptBackgroundResultIfAvailable()
         viewModel.requestConfirmation()
-        let execution = Task { @MainActor in await viewModel.confirmExecution() }
 
-        try await spy.waitForInvocationCount(2)
+        let execution = Task { @MainActor in await viewModel.confirmExecution() }
+        try await spy.waitForInvocationCount(1)
         XCTAssertTrue(viewModel.isExecuting)
+
         await viewModel.confirmExecution()
         let beforeCancel = await spy.invocations
         XCTAssertEqual(beforeCancel.filter { $0.arguments == ["optimize"] }.count, 1)
@@ -162,69 +201,4 @@ final class OptimizeTests: XCTestCase {
         XCTAssertFalse(viewModel.isExecuting)
         XCTAssertEqual(viewModel.errorMessageKey, "optimize.cancelled")
     }
-}
-
-private struct OptimizeInvocation: Equatable, Sendable {
-    let arguments: [String]
-    let stdin: Data?
-}
-
-private actor OptimizeProcessSpy: MoleProcessControlling {
-    private(set) var invocations: [OptimizeInvocation] = []
-    private(set) var cancelCount = 0
-    private var previewResults: [MoleCommandResult]
-    private let executionResult: MoleCommandResult
-    private var blockExecution = false
-    private var executionContinuation: CheckedContinuation<MoleCommandResult, Error>?
-
-    init(
-        previewResults: [MoleCommandResult],
-        executionResult: MoleCommandResult = MoleCommandResult(
-            stdout: "optimized",
-            stderr: "",
-            exitCode: 0
-        )
-    ) {
-        self.previewResults = previewResults
-        self.executionResult = executionResult
-    }
-
-    func run(
-        _ arguments: [String],
-        stdin: Data?,
-        timeout: TimeInterval
-    ) async throws -> MoleCommandResult {
-        invocations.append(OptimizeInvocation(arguments: arguments, stdin: stdin))
-        if arguments == ["optimize", "--dry-run"] {
-            return previewResults.isEmpty
-                ? MoleCommandResult(stdout: "", stderr: "", exitCode: 0)
-                : previewResults.removeFirst()
-        }
-        guard blockExecution else { return executionResult }
-        return try await withCheckedThrowingContinuation { continuation in
-            executionContinuation = continuation
-        }
-    }
-
-    func cancel() async {
-        cancelCount += 1
-        executionContinuation?.resume(throwing: MoleBridgeError.cancelled)
-        executionContinuation = nil
-    }
-
-    func setExecutionBlocked(_ blocked: Bool) {
-        blockExecution = blocked
-    }
-
-    func waitForInvocationCount(_ count: Int) async throws {
-        for _ in 0..<1_000 {
-            if invocations.count >= count { return }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        throw OptimizeSpyWaitError.timeout
-    }
-}
-
-private enum OptimizeSpyWaitError: Error {
-    case timeout
 }

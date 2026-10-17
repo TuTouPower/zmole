@@ -674,6 +674,38 @@
             "conflicts_with": "",
             "note": "review_20261017_054534 A85（用户 2026-10-17 批准执行）；三个写路径 ViewModel 租约样板收敛，来源 adoption_decision.md",
             "dir": "docs/archive/tasks/t042_preview_lease_coordinator"
+        },
+        {
+            "tid": "t043",
+            "slug": "background_parallel_scan_cache",
+            "title": "后台并行扫描与 24 小时缓存",
+            "status": "done",
+            "branch": "t043_background_parallel_scan_cache",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "a7dc728648e71029b450d300ed12b734bbff828d",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "用户 2026-10-17 批准：预览改后台扫描；独立项并行；结果落盘；每 24 小时刷新；仅应用运行期间。",
+            "dir": "docs/archive/tasks/t043_background_parallel_scan_cache"
+        },
+        {
+            "tid": "t044",
+            "slug": "remove_preview_ui",
+            "title": "去预览化页面与卸载步骤简化",
+            "status": "done",
+            "branch": "t044_remove_preview_ui",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "865a07b94b9ebe2a6a3ad5e7b3949822278e43e8",
+            "depends_on": "t043",
+            "conflicts_with": "",
+            "note": "用户 2026-10-17 批准：用户可见预览全部改刷新/后台数据；卸载页去掉预览步骤；破坏性确认保留。",
+            "dir": "docs/archive/tasks/t044_remove_preview_ui"
         }
     ]
 }

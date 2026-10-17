@@ -4,38 +4,46 @@ import XCTest
 @MainActor
 final class OptimizePurgePageTests: XCTestCase {
     func testOptimizeArgsNeverIncludeSelectedTaskSubset() async {
-        let spy = MaintenanceSpy()
-        let viewModel = OptimizeViewModel(process: spy, coordinator: OperationCoordinator())
+        let spy = MaintenanceExecutionSpy()
+        let viewModel = OptimizeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.optimize, output: "plan")
+        )
 
-        await viewModel.previewOptimize()
+        viewModel.adoptBackgroundResultIfAvailable()
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
 
-        let invocations = await spy.arguments
-        XCTAssertEqual(invocations, [["optimize", "--dry-run"], ["optimize"]])
-        XCTAssertFalse(invocations.contains { $0.count > 1 && !$0.contains("--dry-run") })
+        let invocations = await spy.invocations.map(\.arguments)
+        XCTAssertEqual(invocations, [["optimize"]])
+        XCTAssertFalse(invocations.contains { $0.count > 1 })
     }
 
     func testPurgeUsesYesAndCancelDoesNotExecute() async {
-        let spy = MaintenanceSpy()
-        let viewModel = PurgeViewModel(process: spy, coordinator: OperationCoordinator())
+        let spy = MaintenanceExecutionSpy()
+        let viewModel = PurgeViewModel(
+            process: spy,
+            coordinator: OperationCoordinator(),
+            scan: ScanProvidingStub.maintenance(.purge, output: "plan")
+        )
 
-        await viewModel.previewPurge()
-        var recorded = await spy.arguments
-        XCTAssertEqual(recorded, [["purge", "--dry-run"]])
+        viewModel.adoptBackgroundResultIfAvailable()
         XCTAssertTrue(viewModel.canConfirm)
 
         viewModel.requestConfirmation()
         viewModel.cancelConfirmation()
-        recorded = await spy.arguments
-        XCTAssertEqual(recorded, [["purge", "--dry-run"]])
-        XCTAssertFalse(viewModel.canConfirm)
+        var recorded = await spy.invocations.map(\.arguments)
+        XCTAssertTrue(recorded.isEmpty, "cancelling the sheet must not execute")
 
-        await viewModel.previewPurge()
+        await viewModel.confirmExecution()
+        recorded = await spy.invocations.map(\.arguments)
+        XCTAssertTrue(recorded.isEmpty, "execution requires an open confirmation")
+
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
-        recorded = await spy.arguments
-        XCTAssertEqual(recorded.last, ["purge", "--yes"])
+        recorded = await spy.invocations.map(\.arguments)
+        XCTAssertEqual(recorded, [["purge", "--yes"]])
     }
 
     func testOptimizePlanParsesRealDryRunSample() throws {
@@ -58,7 +66,7 @@ final class OptimizePurgePageTests: XCTestCase {
         let launchAgents = try XCTUnwrap(rows.first { $0.name == "Launch Agents Cleanup" })
         XCTAssertTrue(launchAgents.deletesFiles)
 
-        // No preview output means no rows at all (tasks are never marked as run).
+        // No scan output means no rows at all (tasks are never marked as run).
         XCTAssertTrue(OptimizePlanParser.rows(from: "").isEmpty)
     }
 
@@ -124,10 +132,14 @@ final class OptimizePurgePageTests: XCTestCase {
         let fileURL = directory.appendingPathComponent("purge_paths")
         let coordinator = OperationCoordinator()
 
-        let purgeViewModel = PurgeViewModel(process: MaintenanceSpy(), coordinator: coordinator)
+        let purgeViewModel = PurgeViewModel(
+            process: MaintenanceExecutionSpy(),
+            coordinator: coordinator,
+            scan: ScanProvidingStub.maintenance(.purge, output: "plan")
+        )
         let pathsViewModel = PurgePathsViewModel(store: PurgePathsStore(fileURL: fileURL), coordinator: coordinator)
 
-        await purgeViewModel.previewPurge()
+        purgeViewModel.adoptBackgroundResultIfAvailable()
         XCTAssertTrue(purgeViewModel.canConfirm)
 
         pathsViewModel.load()
@@ -171,19 +183,4 @@ final class OptimizePurgePageTests: XCTestCase {
             XCTAssertFalse(value.contains("移入废纸篓"), "\(key) must not claim Trash")
         }
     }
-}
-
-private actor MaintenanceSpy: MoleProcessControlling {
-    private(set) var arguments: [[String]] = []
-
-    func run(
-        _ arguments: [String],
-        stdin: Data?,
-        timeout: TimeInterval
-    ) async throws -> MoleCommandResult {
-        self.arguments.append(arguments)
-        return MoleCommandResult(stdout: "would run", stderr: "", exitCode: 0)
-    }
-
-    func cancel() async {}
 }

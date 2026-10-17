@@ -31,7 +31,6 @@ enum MaintenanceKind: Sendable {
 }
 
 struct MaintenancePreviewSnapshot: Equatable, Sendable {
-    let generation: UUID
     let output: String
 }
 
@@ -41,32 +40,40 @@ class MaintenanceViewModel: ObservableObject {
     private let coordinator: OperationCoordinator
     private let kind: MaintenanceKind
     private let session = OperationSession<MaintenancePreviewSnapshot>()
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private let scan: (any BackgroundScanProviding)?
     private let leaseCoordinator: PreviewLeaseCoordinator
+
+    @Published private(set) var showBusyNotice = false
+    @Published private(set) var previewCapturedAt: Date?
+
+    private var scanCancellables: [AnyCancellable] = []
 
     init(
         kind: MaintenanceKind,
         process: any MoleProcessControlling,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
         self.kind = kind
         self.process = process
         self.coordinator = coordinator
-        self.prewarm = prewarm
+        self.scan = scan
         leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         leaseCoordinator.onInvalidation = { [weak self] in
             guard let self, self.session.preview != nil else { return false }
-            self.session.expirePreview(errorKey: "operation.error.stale_preview")
+            self.session.expirePreview(errorKey: "operation.error.stale_scan")
             return true
         }
+        subscribeToBackgroundScan()
+        adoptBackgroundResultIfAvailable()
     }
 
     var operationState: OperationState<MaintenancePreviewSnapshot> { session.state }
     var result: OperationResult? { session.result }
     var preview: MaintenancePreviewSnapshot? { session.preview }
-    var isPreviewing: Bool { session.isPreviewing }
+    var isRefreshing: Bool { item.map { scan?.runningItems.contains($0) ?? false } ?? false }
+    var scanFailed: Bool { item.map { scan?.failedItems.contains($0) ?? false } ?? false }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
     var canConfirm: Bool { session.canConfirm && leaseCoordinator.isCurrentPreview }
@@ -76,11 +83,11 @@ class MaintenanceViewModel: ObservableObject {
         guard let result = session.result, result.errorKey == nil else { return nil }
         return result.summary
     }
-    @Published private(set) var showBusyNotice = false
-    @Published private(set) var previewCapturedAt: Date?
+
+    private var item: BackgroundScanItem? { kind.scanItem }
 
     /// What the confirmation sheet covers: the number of output rows the
-    /// current preview would act on.
+    /// current scan would act on.
     var confirmationDetail: String? {
         guard let preview else { return nil }
         let lineCount = preview.output
@@ -90,91 +97,49 @@ class MaintenanceViewModel: ObservableObject {
         return String(localized: "maintenance.confirm_detail \(lineCount)")
     }
 
-    /// Shows a finished background prewarm preview without re-running the
-    /// scan. Does nothing when the user already has a preview or no prewarm
-    /// result is available.
-    func adoptPrewarmPreviewIfAvailable() {
-        guard session.preview == nil, !session.isBusy else { return }
-        guard let item = kind.prewarmItem,
-              let result = prewarm?.takeResult(item),
+    // MARK: - Background scan
+
+    /// Requests a background scan when the page has no data yet.
+    func refreshIfNeeded() {
+        guard let scan, let item else { return }
+        guard scan.result(for: item) == nil, !scan.runningItems.contains(item) else { return }
+        scan.request(item)
+    }
+
+    func refreshMaintenance() {
+        guard let item else { return }
+        scan?.request(item)
+    }
+
+    func cancelRefresh() async {
+        guard let item else { return }
+        await scan?.cancelAndWait(item)
+    }
+
+    /// Shows the latest background result and keeps a confirmation or
+    /// execution already on screen untouched.
+    func adoptBackgroundResultIfAvailable() {
+        guard !session.isBusy, !session.isConfirmationPresented else { return }
+        guard let item,
+              let result = scan?.result(for: item),
               case let .maintenance(output) = result.payload else { return }
+        guard session.preview == nil || previewCapturedAt != result.capturedAt else { return }
         leaseCoordinator.captureGeneration()
-        session.adoptPreview(MaintenancePreviewSnapshot(generation: UUID(), output: output))
+        session.adoptPreview(MaintenancePreviewSnapshot(output: output))
         previewCapturedAt = result.capturedAt
     }
 
-    func previewMaintenance() async {
-        guard !session.isBusy else { return }
-        if let item = kind.prewarmItem {
-            prewarm?.userDidRescan(item)
-        }
-        previewCapturedAt = nil
-        leaseCoordinator.release()
-        session.invalidate()
-        showBusyNotice = false
-        guard leaseCoordinator.acquire(kind.writeOperation) else {
-            showBusyNotice = true
-            return
-        }
-        guard let operationID = session.beginPreview() else {
-            leaseCoordinator.release()
-            return
-        }
-        leaseCoordinator.captureGeneration()
-
-        do {
-            let result = try await process.run(
-                [kind.command, "--dry-run"],
-                stdin: nil,
-                timeout: 120
-            )
-            guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
-            guard leaseCoordinator.isCurrentPreview else {
-                session.fail(OperationResult(status: .failed, errorKey: "operation.error.stale_preview"), id: operationID)
-                leaseCoordinator.release()
-                return
+    private func subscribeToBackgroundScan() {
+        guard let scan else { return }
+        scanCancellables.append(
+            scan.observeStateChanges { [weak self] in
+                self?.objectWillChange.send()
+                self?.adoptBackgroundResultIfAvailable()
             }
-            guard result.exitCode == 0 else { throw MoleBridgeError.commandFailed(result) }
-            session.acceptPreview(
-                MaintenancePreviewSnapshot(
-                    generation: operationID,
-                    output: MaintenanceOutput.summary(stdout: result.stdout)
-                ),
-                id: operationID
-            )
-            leaseCoordinator.release(clearPreviewGeneration: false)
-        } catch let error as MoleBridgeError where error == .cancelled {
-            session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
-            leaseCoordinator.release()
-        } catch {
-            guard session.accepts(operationID) else { return }
-            if CommandBusy.isBusy(error) {
-                showBusyNotice = true
-                session.invalidate()
-                leaseCoordinator.release()
-                return
-            }
-            let summary: String?
-            if case let MoleBridgeError.commandFailed(result) = error {
-                summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
-            } else {
-                summary = error.localizedDescription
-            }
-            session.fail(
-                OperationResult(status: .failed, summary: summary, errorKey: kind.failedKey),
-                id: operationID
-            )
-            leaseCoordinator.release()
-        }
+        )
     }
 
-    func cancelPreview() async {
-        guard let operationID = session.beginPreviewCancellation() else { return }
-        await process.cancel()
-        session.finishCancelled(OperationResult(status: .cancelled, errorKey: kind.cancelledKey), id: operationID)
-        previewCapturedAt = nil
-        leaseCoordinator.release()
-    }
+    // MARK: - Confirmation / execution
 
     func requestConfirmation() {
         guard canConfirm else { return }
@@ -184,6 +149,8 @@ class MaintenanceViewModel: ObservableObject {
     func cancelConfirmation() {
         guard session.isConfirmationPresented else { return }
         session.cancelConfirmation()
+        leaseCoordinator.release()
+        adoptBackgroundResultIfAvailable()
     }
 
     func confirmMaintenance() async {
@@ -253,10 +220,10 @@ private extension MaintenanceKind {
         }
     }
 
-    var prewarmItem: PrewarmItem? {
+    var scanItem: BackgroundScanItem? {
         switch self {
-        case .optimize: return .optimizeDryRun
-        case .purge: return .purgeDryRun
+        case .optimize: return .optimize
+        case .purge: return .purge
         }
     }
 }

@@ -21,19 +21,19 @@ final class InstallersViewModel: ObservableObject {
     private let interface: InstallerInterface
     private let coordinator: OperationCoordinator
     private let accessMonitor: FullDiskAccessMonitor?
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private weak var scan: (any BackgroundScanProviding)?
     private var lease: OperationLease?
     private var removalCancelled = false
 
     init(
         interface: InstallerInterface,
         coordinator: OperationCoordinator,
-        prewarm: (any PrewarmResultProviding)? = nil,
+        scan: (any BackgroundScanProviding)? = nil,
         accessMonitor: FullDiskAccessMonitor? = nil
     ) {
         self.interface = interface
         self.coordinator = coordinator
-        self.prewarm = prewarm
+        self.scan = scan
         self.accessMonitor = accessMonitor
     }
 
@@ -63,7 +63,7 @@ final class InstallersViewModel: ObservableObject {
         return "\(count) \(unit) · \(size)"
     }
 
-    /// Uses the background prewarm result when it exists; otherwise scans now.
+    /// Uses the background scan result when it exists; otherwise scans now.
     /// The session list is kept until the user re-scans or a removal updates it.
     func loadListIfNeeded() async {
         guard diskAccessGranted else { return }
@@ -75,7 +75,7 @@ final class InstallersViewModel: ObservableObject {
     func scan() async {
         guard diskAccessGranted else { return }
         guard !isListing, !isRemoving else { return }
-        prewarm?.userDidRescan(.installerList)
+        scan?.userDidRescan(.installerList)
         isListing = true
         errorMessage = nil
         errorMessageKey = nil
@@ -103,7 +103,7 @@ final class InstallersViewModel: ObservableObject {
     }
 
     private func adoptPrewarmList() -> Bool {
-        guard let result = prewarm?.takeResult(.installerList),
+        guard let result = scan?.result(for: .installerList),
               case let .installerCandidates(list) = result.payload else { return false }
         candidates = list
         lastListing = list

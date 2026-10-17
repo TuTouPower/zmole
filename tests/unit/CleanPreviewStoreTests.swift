@@ -15,72 +15,72 @@ final class CleanPreviewStoreTests: XCTestCase {
         }
     }
 
-    func testVerifyMissingPreviewFileMapsToMissingFile() throws {
+    func testMissingFileMapsToMissingFile() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let fileURL = directory.appendingPathComponent("clean-list.txt")
         let store = CleanPreviewStore(fileURL: fileURL)
         let generation = try store.begin()
-        try "/tmp/cache # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
-        let snapshot = try store.read(generation)
-        try FileManager.default.removeItem(at: fileURL)
 
-        XCTAssertThrowsError(try store.verifyUnchanged(snapshot)) { error in
+        XCTAssertThrowsError(try store.read(generation)) { error in
             XCTAssertEqual(error as? CleanPreviewStoreError, .missingFile)
         }
     }
 
-    func testVerifyUnreadablePreviewMapsToChangedSincePreview() throws {
+    func testBeginRemovesThePreviousList() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("clean-list.txt")
+        let store = CleanPreviewStore(fileURL: fileURL)
+        try "/tmp/old # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        _ = try store.begin()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testInvalidUTF8MapsToInvalidUTF8() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let fileURL = directory.appendingPathComponent("clean-list.txt")
         let store = CleanPreviewStore(fileURL: fileURL)
         let generation = try store.begin()
-        try "/tmp/cache # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
-        let snapshot = try store.read(generation)
-        try FileManager.default.removeItem(at: fileURL)
-        try FileManager.default.createDirectory(at: fileURL, withIntermediateDirectories: false)
+        try Data([0xFF, 0xFE, 0xFD]).write(to: fileURL)
 
-        XCTAssertThrowsError(try store.verifyUnchanged(snapshot)) { error in
-            XCTAssertEqual(error as? CleanPreviewStoreError, .changedSincePreview)
+        XCTAssertThrowsError(try store.read(generation)) { error in
+            XCTAssertEqual(error as? CleanPreviewStoreError, .invalidUTF8)
         }
     }
 
-    func testVerifyChangedContentsMapToChangedSincePreview() throws {
+    func testForeignGenerationIsRejected() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let fileURL = directory.appendingPathComponent("clean-list.txt")
         let store = CleanPreviewStore(fileURL: fileURL)
-        let generation = try store.begin()
         try "/tmp/cache # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
-        let snapshot = try store.read(generation)
-        // Same-length overwrite: only the content equality gate can catch it.
-        try "/tmp/other # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
-
-        XCTAssertThrowsError(try store.verifyUnchanged(snapshot)) { error in
-            XCTAssertEqual(error as? CleanPreviewStoreError, .changedSincePreview)
-        }
-    }
-
-    @MainActor
-    func testCleanConfirmationSurfacesMissingPreviewKey() async throws {
-        let directory = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let fileURL = directory.appendingPathComponent("clean-list.txt")
-        let process = CleanPreviewProcessSpy(fileURL: fileURL)
-        let viewModel = CleanViewModel(
-            process: process,
-            previewStore: CleanPreviewStore(fileURL: fileURL),
-            coordinator: OperationCoordinator()
+        let foreign = CleanPreviewGeneration(
+            id: UUID(),
+            fileURL: directory.appendingPathComponent("other.txt")
         )
 
-        await viewModel.previewClean()
-        viewModel.requestConfirmation()
-        try FileManager.default.removeItem(at: fileURL)
-        await viewModel.confirmExecution()
+        XCTAssertThrowsError(try store.read(foreign)) { error in
+            XCTAssertEqual(error as? CleanPreviewStoreError, .missingFile)
+        }
+    }
 
-        XCTAssertEqual(viewModel.errorMessageKey, "clean.error.missing_list")
-        XCTAssertNil(viewModel.preview)
+    func testValidListReadsEntriesAndSections() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("clean-list.txt")
+        let store = CleanPreviewStore(fileURL: fileURL)
+        let generation = try store.begin()
+        try "# preview\n=== Cache ===\n/tmp/cache # 1KB\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let snapshot = try store.read(generation)
+
+        XCTAssertEqual(snapshot.entries, ["/tmp/cache # 1KB"])
+        XCTAssertEqual(snapshot.sections.map(\.name), ["Cache"])
+        XCTAssertEqual(snapshot.reclaimBytes, 1_000)
     }
 
     private func makeTemporaryDirectory() throws -> URL {
@@ -89,26 +89,4 @@ final class CleanPreviewStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
-}
-
-private actor CleanPreviewProcessSpy: MoleProcessControlling {
-    private let fileURL: URL
-
-    init(fileURL: URL) {
-        self.fileURL = fileURL
-    }
-
-    func run(
-        _ arguments: [String],
-        stdin: Data?,
-        timeout: TimeInterval
-    ) async throws -> MoleCommandResult {
-        if arguments == ["clean", "--dry-run"] {
-            try "# preview\n=== Cache ===\n/tmp/cache # 1KB\n"
-                .write(to: fileURL, atomically: true, encoding: .utf8)
-        }
-        return MoleCommandResult(stdout: "", stderr: "", exitCode: 0)
-    }
-
-    func cancel() async {}
 }
