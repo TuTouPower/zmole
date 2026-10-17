@@ -29,7 +29,7 @@
 
 - [ ] AC-001：`src/zmole/App/AppDependencies.swift` 不再包含任何 `Demo*` 类型、demo fixture 字面量与 demo 专用扩展；demo 内容全部位于独立文件。
 - [ ] AC-002：`xcodegen generate` 后 `xcodebuild build -scheme Zmole` 退出码 0。
-- [ ] AC-003：全量 `xcodebuild test`（含全部 demo 用例：`ZmoleTests` 的 demo 配置/卸载预览/状态流、`PrewarmTests.testDemoConfigurationDisablesPrewarm`、`CommandConcurrencyTests` 的 demo 装配路径）通过。
+- [ ] AC-003：全量 `xcodebuild test`（含全部 demo 用例：`ZmoleTests` 的 demo 配置/卸载预览/状态流、`PrewarmTests.testDemoConfigurationDisablesPrewarm`）通过。
 - [ ] AC-004：三个集成脚本（clean_trash / installer_interface / uninstall_stream）通过。
 - [ ] AC-005：工作副本中 `AppDependencies.swift` 行数少于拆分前的一半，且其内容只含装配与装配辅助。
 

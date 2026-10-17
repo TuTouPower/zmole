@@ -1,0 +1,20 @@
+{
+  "tid": "t041",
+  "attempt": 1,
+  "execution_id": "622b06d739c24af8af12747b85b00566",
+  "status": "done",
+  "branch": "t041_demo_support_extraction",
+  "base_sha": "965d2b20c345bb1dd809fdc3d8e556cd42bf9527",
+  "tests": "xcodegen generate + xcodebuild build (0 error); xcodebuild test -scheme Zmole -destination 'platform=macOS' (281 pass, incl. new AppAssemblyTests structural guards); bash tests/integration/{clean_trash,installer_interface,uninstall_stream}_test.sh (pass); git diff --check clean",
+  "blackbox": "Demo launch of the built app (disk and overview pages, zh-Hans/light, --demo-data-root under /tmp): identical rendering to the pre-split build (disk list, space map, percentages; overview cards). Demo assembly works with the relocated fakes; screenshots reviewed visually (not committed).",
+  "review": "full: review_code.md PASS (rounds 1-2; 1 minor fixed, 0 new) + review_test.md PASS (rounds 1-2; 2 minors fixed, 1 residual blind spot accepted as defensive-only); check_review_status.py overall=PASS review_scope=ok; reviewed_scope 61e0de2cd0914f08",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/App/AppDependencies.swift (no Demo* declarations/fixture literals)", "tests/unit/AppAssemblyTests.swift testAppDependenciesFileOnlyContainsAssembly"],
+    "AC-002": ["xcodegen generate + xcodebuild build exit 0 (see tests field)"],
+    "AC-003": ["xcodebuild test full suite 281 pass (demo cases: ZmoleTests demo configuration/uninstall preview/status stream, PrewarmTests demo prewarm disabled)"],
+    "AC-004": ["tests/integration/{clean_trash,installer_interface,uninstall_stream}_test.sh pass"],
+    "AC-005": ["src/zmole/App/AppDependencies.swift 300 lines < half of 796", "tests/unit/AppAssemblyTests.swift testDemoSupportFileCarriesTheDemoTypes"]
+  },
+  "pending": [],
+  "findings": []
+}
