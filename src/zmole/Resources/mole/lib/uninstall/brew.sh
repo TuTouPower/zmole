@@ -9,6 +9,7 @@ if [[ -n "${MOLE_BREW_UNINSTALL_LOADED:-}" ]]; then
     return 0
 fi
 readonly MOLE_BREW_UNINSTALL_LOADED=1
+[[ -n "${MOLE_TIMEOUT_PKG_LIST_SEC:-}" ]] || readonly MOLE_TIMEOUT_PKG_LIST_SEC=10
 
 # Resolve a path to its absolute real path (follows symlinks)
 # Args: $1 - path to resolve
@@ -56,18 +57,51 @@ _mole_brew_probe() {
 #   0 - cask is installed
 #   1 - cask is not installed
 #   2 - install state could not be determined
-is_brew_cask_installed() {
-    local cask_name="$1"
-    [[ -n "$cask_name" ]] || return 2
-    is_homebrew_available || return 2
-
+_get_installed_casks_snapshot() {
+    if [[ -n "${MOLE_BREW_CASK_INSTALLED_FILE:-}" && -f "${MOLE_BREW_CASK_INSTALLED_FILE}" ]]; then
+        cat "${MOLE_BREW_CASK_INSTALLED_FILE}"
+        return 0
+    fi
+    is_homebrew_available || return 1
     local cask_list=""
     local list_rc=0
     cask_list=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" \
         list --cask 2> /dev/null) || list_rc=$?
     [[ $list_rc -eq 124 || $list_rc -ge 128 ]] && return "$list_rc"
     [[ $list_rc -eq 0 ]] || return 2
+    printf '%s\n' "$cask_list"
+}
+
+is_brew_cask_installed() {
+    local cask_name="$1"
+    [[ -n "$cask_name" ]] || return 2
+    is_homebrew_available || return 2
+
+    if [[ -n "${MOLE_BREW_CASK_LIST_ERROR:-}" && "$MOLE_BREW_CASK_LIST_ERROR" != "0" ]]; then
+        return "$MOLE_BREW_CASK_LIST_ERROR"
+    fi
+
+    local cask_list=""
+    local list_rc=0
+    cask_list=$(_get_installed_casks_snapshot) || list_rc=$?
+    [[ $list_rc -ne 0 ]] && return "$list_rc"
     grep -qxF "$cask_name" <<< "$cask_list"
+}
+
+# Directories searched for Caskroom installations
+_get_caskroom_dirs() {
+    local -a dirs=()
+    local r
+    for r in "${HOMEBREW_CASKROOM:-}" "/opt/homebrew/Caskroom" "/usr/local/Caskroom"; do
+        [[ -n "$r" && -d "$r" ]] || continue
+        dirs+=("$r")
+        local canon=""
+        canon=$(cd -P "$r" 2> /dev/null && pwd) || true
+        if [[ -n "$canon" && "$canon" != "$r" ]]; then
+            dirs+=("$canon")
+        fi
+    done
+    printf '%s\n' "${dirs[@]}"
 }
 
 # Extract cask token from a Caskroom path
@@ -76,18 +110,25 @@ is_brew_cask_installed() {
 # Returns: 0 if valid token extracted, 1 otherwise
 _extract_cask_token_from_path() {
     local path="$1"
+    local room matched=""
+    for room in "${HOMEBREW_CASKROOM:-}" "/opt/homebrew/Caskroom" "/usr/local/Caskroom"; do
+        [[ -n "$room" && -d "$room" ]] || continue
+        if [[ "$path" == "$room/"* ]]; then
+            matched="$room"
+            break
+        fi
+        local canon=""
+        canon=$(cd -P "$room" 2> /dev/null && pwd) || true
+        if [[ -n "$canon" && "$path" == "$canon/"* ]]; then
+            matched="$canon"
+            break
+        fi
+    done
 
-    # Check if path is inside Caskroom. Quote literals so Homebrew bottle
-    # relocation cannot break parsing when the prefix contains spaces.
-    case "$path" in
-        "/opt/homebrew/Caskroom/"* | "/usr/local/Caskroom/"*) ;;
-        *) return 1 ;;
-    esac
+    [[ -n "$matched" ]] || return 1
 
-    # Extract token from path: /opt/homebrew/Caskroom/<token>/<version>/...
-    local token
-    token="${path#*/Caskroom/}" # Remove everything up to and including Caskroom/
-    token="${token%%/*}"        # Take only the first path component
+    local rel="${path#"$matched"/}"
+    local token="${rel%%/*}"
 
     # Validate token looks like a valid cask name (lowercase alphanumeric with hyphens)
     if [[ -n "$token" && "$token" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
@@ -99,115 +140,153 @@ _extract_cask_token_from_path() {
 }
 
 # Stage 1: Deterministic detection via fully resolved path
-# Fast, no false positives - follows all symlinks
+# Fast, no false positives - follows all symlinks.
+# Zero Caskroom traversals required (AC-009).
 _detect_cask_via_resolved_path() {
     local app_path="$1"
     local resolved
     if resolved=$(resolve_path "$app_path") && [[ -n "$resolved" ]]; then
         [[ "$(basename "$resolved")" == "$(basename "$app_path")" ]] || return 1
-        _extract_cask_token_from_path "$resolved" && return 0
+        local token
+        if token=$(_extract_cask_token_from_path "$resolved"); then
+            # Verify the token is in the installed snapshot (AC-009)
+            local installed_rc=0
+            is_brew_cask_installed "$token" || installed_rc=$?
+            if [[ $installed_rc -eq 0 ]]; then
+                echo "$token"
+                return 0
+            fi
+            [[ $installed_rc -gt 1 ]] && return "$installed_rc"
+            return 1
+        fi
     fi
     return 1
 }
 
-# Stage 2: Search Caskroom by app bundle name using find
-# Catches apps where the .app in /Applications doesn't link to Caskroom
-# Only succeeds if exactly one cask matches (avoids wrong uninstall)
-_detect_cask_via_caskroom_search() {
+# Build Caskroom index once per scan session (AC-001)
+_ensure_caskroom_index() {
+    is_homebrew_available || return 1
+    local index_target="${MOLE_BREW_CASK_INDEX_FILE:-}"
+    if [[ -z "$index_target" ]]; then
+        index_target=$(create_temp_file) || return 1
+        export MOLE_BREW_CASK_INDEX_FILE="$index_target"
+    fi
+
+    if [[ -f "${index_target}.ready" ]]; then
+        return 0
+    fi
+
+    if [[ -n "${MOLE_TEST_CASKROOM_TRAVERSAL_COUNT_FILE:-}" ]]; then
+        printf '1\n' >> "$MOLE_TEST_CASKROOM_TRAVERSAL_COUNT_FILE"
+    fi
+
+    local room
+    while IFS= read -r room; do
+        [[ -n "$room" && -d "$room" ]] || continue
+        local scan_file=""
+        scan_file=$(create_temp_file) || continue
+        find "$room" -maxdepth 4 -name "*.app" < /dev/null 2> /dev/null > "$scan_file" || true
+        while IFS= read -r match; do
+            [[ -n "$match" ]] || continue
+            local token
+            token=$(_extract_cask_token_from_path "$match" 2> /dev/null) || continue
+            local bname
+            bname=$(basename "$match")
+            printf '%s|%s|%s\n' "$token" "$bname" "$match" >> "$index_target"
+        done < "$scan_file"
+        rm -f -- "$scan_file" 2> /dev/null || true
+    done < <(_get_caskroom_dirs)
+
+    touch "${index_target}.ready"
+    return 0
+}
+
+# Search Caskroom from shared index
+_detect_cask_from_scan_index() {
     local app_bundle_name="$1"
     local app_path="${2:-}"
     [[ -z "$app_bundle_name" ]] && return 1
 
-    local -a tokens=()
-    local room match token
-    local exact_app_link=""
-    local scan_file=""
-    scan_file=$(create_temp_file) || return 1
-    local scan_deadline=$((SECONDS + MOLE_TIMEOUT_PKG_LIST_SEC))
+    local index_rc=0
+    _ensure_caskroom_index || index_rc=$?
+    [[ $index_rc -ne 0 ]] && return "$index_rc"
 
-    for room in "/opt/homebrew/Caskroom" "/usr/local/Caskroom"; do
-        [[ -d "$room" ]] || continue
-        local scan_timeout=""
-        local scan_rc=0
-        scan_timeout=$(_mole_timeout_with_deadline "$MOLE_TIMEOUT_MEDIUM_PROBE_SEC" \
-            "$scan_deadline") || scan_rc=$?
-        if [[ $scan_rc -eq 0 ]]; then
-            : > "$scan_file" || scan_rc=1
-        fi
-        if [[ $scan_rc -eq 0 ]]; then
-            run_with_timeout "$scan_timeout" find "$room" -maxdepth 3 \
-                -name "$app_bundle_name" < /dev/null > "$scan_file" \
-                2> /dev/null || scan_rc=$?
-        fi
-        if [[ $scan_rc -ne 0 ]]; then
-            : > "$scan_file" || true
-            rm -f -- "$scan_file" 2> /dev/null || true # SAFE: exact tracked temp file created above
-            return "$scan_rc"
-        fi
-        while IFS= read -r match; do
-            [[ -n "$match" ]] || continue
-            token=$(_extract_cask_token_from_path "$match" 2> /dev/null) || continue
-            [[ -n "$token" ]] && tokens+=("$token")
-            if [[ -n "$app_path" && -L "$match" && -d "$app_path" && "$match" -ef "$app_path" ]]; then
-                exact_app_link="$match"
+    local index_target="${MOLE_BREW_CASK_INDEX_FILE:-}"
+    [[ -f "$index_target" ]] || return 1
+
+    if [[ -n "${MOLE_BREW_CASK_LIST_ERROR:-}" && "$MOLE_BREW_CASK_LIST_ERROR" != "0" ]]; then
+        return "$MOLE_BREW_CASK_LIST_ERROR"
+    fi
+
+    # Pass 1: exact file identity or realpath match (-ef)
+    local token bname match
+    if [[ -n "$app_path" && -e "$app_path" ]]; then
+        local -a identity_tokens=()
+        while IFS='|' read -r token bname match; do
+            [[ -n "$token" && -n "$match" ]] || continue
+            if [[ -e "$match" ]] && [[ "$app_path" -ef "$match" || "$(resolve_path "$app_path" 2>/dev/null)" == "$(resolve_path "$match" 2>/dev/null)" ]]; then
+                if is_brew_cask_installed "$token"; then
+                    identity_tokens+=("$token")
+                fi
             fi
-        done < "$scan_file"
-    done
-    rm -f -- "$scan_file" 2> /dev/null || true # SAFE: exact tracked temp file created above
+        done < "$index_target"
 
-    # Need at least one token
-    ((${#tokens[@]} > 0)) || return 1
-
-    # Deduplicate and check count
-    local -a uniq=()
-    local candidate existing seen
-    for candidate in "${tokens[@]}"; do
-        seen=false
-        for existing in "${uniq[@]+"${uniq[@]}"}"; do
-            if [[ "$candidate" == "$existing" ]]; then
-                seen=true
-                break
-            fi
+        local -a uniq_id=()
+        for t in "${identity_tokens[@]+"${identity_tokens[@]}"}"; do
+            local seen=0
+            for u in "${uniq_id[@]+"${uniq_id[@]}"}"; do
+                [[ "$t" == "$u" ]] && seen=1 && break
+            done
+            [[ $seen -eq 0 ]] && uniq_id+=("$t")
         done
-        [[ "$seen" == true ]] || uniq+=("$candidate")
+
+        if [[ ${#uniq_id[@]} -eq 1 ]]; then
+            # AC-002: Exact file identity confirmed; return without calling brew info!
+            echo "${uniq_id[0]}"
+            return 0
+        fi
+    fi
+
+    # Pass 2: Name-based candidates
+    local -a name_candidates=()
+    while IFS='|' read -r token bname match; do
+        [[ -n "$token" && "$bname" == "$app_bundle_name" ]] || continue
+        if is_brew_cask_installed "$token"; then
+            name_candidates+=("$token")
+        fi
+    done < "$index_target"
+
+    local -a uniq_candidates=()
+    for t in "${name_candidates[@]+"${name_candidates[@]}"}"; do
+        local seen=0
+        for u in "${uniq_candidates[@]+"${uniq_candidates[@]}"}"; do
+            [[ "$t" == "$u" ]] && seen=1 && break
+        done
+        [[ $seen -eq 0 ]] && uniq_candidates+=("$t")
     done
 
-    # Only succeed if exactly one unique token found and it's installed
-    if ((${#uniq[@]} == 1)) && [[ -n "${uniq[0]}" ]]; then
-        local cask_list=""
-        local list_rc=0
-        cask_list=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" \
-            list --cask 2> /dev/null) || list_rc=$?
-        [[ $list_rc -eq 124 || $list_rc -ge 128 ]] && return "$list_rc"
-        [[ $list_rc -eq 0 ]] || return 2
-        grep -qxF "${uniq[0]}" <<< "$cask_list" || return 1
+    ((${#uniq_candidates[@]} > 0)) || return 1
 
-        local info_output=""
+    # Directional probe via brew info for candidate tokens (AC-003, AC-006)
+    local -a verified_tokens=()
+    for cand in "${uniq_candidates[@]}"; do
+        local info_out=""
         local info_rc=0
-        info_output=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" \
-            info --cask "${uniq[0]}" 2> /dev/null) || info_rc=$?
+        info_out=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" info --cask "$cand" 2> /dev/null) || info_rc=$?
         [[ $info_rc -eq 124 || $info_rc -ge 128 ]] && return "$info_rc"
-        if [[ $info_rc -ne 0 ]]; then
-            # Third-party short-token lookup can fail even with an installed
-            # cask. Require its actual app symlink, not just a matching name,
-            # and recheck after the probe in case the link changed meanwhile.
-            if [[ -n "$exact_app_link" && -L "$exact_app_link" && -d "$app_path" &&
-                "$exact_app_link" -ef "$app_path" ]]; then
-                echo "${uniq[0]}"
-                return 0
-            fi
-            return 2
-        fi
-        if [[ -n "$app_path" ]]; then
-            if grep -qF "$app_path" <<< "$info_output"; then
-                :
-            elif [[ "$app_path" == "/Applications/$app_bundle_name" ]] && grep -qF "$app_bundle_name" <<< "$info_output"; then
-                :
-            else
-                return 1
+        if [[ $info_rc -eq 0 ]]; then
+            if [[ -n "$app_path" ]]; then
+                if grep -qF "$app_path" <<< "$info_out"; then
+                    verified_tokens+=("$cand")
+                elif [[ "$app_path" == "/Applications/$app_bundle_name" ]] && grep -qF "$app_bundle_name" <<< "$info_out"; then
+                    verified_tokens+=("$cand")
+                fi
             fi
         fi
-        echo "${uniq[0]}"
+    done
+
+    if [[ ${#verified_tokens[@]} -eq 1 ]]; then
+        echo "${verified_tokens[0]}"
         return 0
     fi
 
@@ -222,52 +301,56 @@ _detect_cask_via_symlink_check() {
     local target
     target=$(readlink "$app_path" 2> /dev/null) || return 1
     [[ "$(basename "$target")" == "$(basename "$app_path")" ]] || return 1
-    _extract_cask_token_from_path "$target"
-}
-
-# Stage 4: Query brew list --cask and verify with brew info (slowest fallback)
-_detect_cask_via_brew_list() {
-    local app_path="$1"
-    local app_bundle_name="$2"
-    local app_base_name
-    local app_name_lower
-    app_base_name="${app_bundle_name%.[aA][pP][pP]}"
-    app_name_lower=$(printf '%s' "$app_base_name" | LC_ALL=C tr '[:upper:]' '[:lower:]')
-
-    local cask_list=""
-    local list_rc=0
-    cask_list=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" \
-        list --cask 2> /dev/null) || list_rc=$?
-    [[ $list_rc -eq 124 || $list_rc -ge 128 ]] && return "$list_rc"
-    [[ $list_rc -eq 0 ]] || return 2
-
-    local cask_name=""
-    cask_name=$(grep -Fix "$app_name_lower" <<< "$cask_list") || return 1
-
-    # Verify this cask actually owns this app path or app bundle.
-    local info_output=""
-    local info_rc=0
-    info_output=$(_mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" \
-        info --cask "$cask_name" 2> /dev/null) || info_rc=$?
-    [[ $info_rc -eq 124 || $info_rc -ge 128 ]] && return "$info_rc"
-    [[ $info_rc -eq 0 ]] || return 2
-    if grep -qF "$app_path" <<< "$info_output"; then
-        echo "$cask_name"
-        return 0
-    fi
-    if [[ "$app_path" == "/Applications/$app_bundle_name" ]] && grep -qF "$app_bundle_name" <<< "$info_output"; then
-        echo "$cask_name"
-        return 0
+    local token
+    if token=$(_extract_cask_token_from_path "$target"); then
+        if is_brew_cask_installed "$token"; then
+            echo "$token"
+            return 0
+        fi
     fi
     return 1
+}
+
+# Lifecycle helpers for the per-scan Homebrew cask index (t054)
+_init_brew_cask_scan_index() {
+    is_homebrew_available || return 0
+    if [[ -z "${MOLE_BREW_CASK_INSTALLED_FILE:-}" ]]; then
+        local installed_file=""
+        installed_file=$(create_temp_file) || return 1
+        local list_rc=0
+        _mole_brew_probe "$MOLE_TIMEOUT_PKG_LIST_SEC" list --cask 2> /dev/null > "$installed_file" || list_rc=$?
+        if [[ $list_rc -eq 0 ]]; then
+            export MOLE_BREW_CASK_INSTALLED_FILE="$installed_file"
+        elif [[ $list_rc -eq 124 || $list_rc -ge 128 ]]; then
+            export MOLE_BREW_CASK_LIST_ERROR="$list_rc"
+        else
+            export MOLE_BREW_CASK_LIST_ERROR=2
+        fi
+    fi
+    if [[ -z "${MOLE_BREW_CASK_INDEX_FILE:-}" ]]; then
+        local index_file=""
+        index_file=$(create_temp_file) || return 1
+        export MOLE_BREW_CASK_INDEX_FILE="$index_file"
+    fi
+}
+
+_cleanup_brew_cask_scan_index() {
+    if [[ -n "${MOLE_BREW_CASK_INSTALLED_FILE:-}" ]]; then
+        rm -f -- "${MOLE_BREW_CASK_INSTALLED_FILE}" 2> /dev/null || true
+        unset MOLE_BREW_CASK_INSTALLED_FILE
+    fi
+    if [[ -n "${MOLE_BREW_CASK_INDEX_FILE:-}" ]]; then
+        rm -f -- "${MOLE_BREW_CASK_INDEX_FILE}" "${MOLE_BREW_CASK_INDEX_FILE}.ready" 2> /dev/null || true
+        unset MOLE_BREW_CASK_INDEX_FILE
+    fi
+    unset MOLE_BREW_CASK_LIST_ERROR
 }
 
 # Get Homebrew cask name for an app
 # Uses multi-stage detection (fast to slow, deterministic to heuristic):
 #   1. Resolve symlinks fully, check if path is in Caskroom (fast, deterministic)
-#   2. Search Caskroom by app bundle name using find
+#   2. Caskroom shared index (exact identity match, then name-based candidates with brew info)
 #   3. Check if app is a direct symlink to Caskroom
-#   4. Query brew list --cask and verify with brew info (slowest)
 #
 # Args: $1 - app_path
 # Prints: cask token to stdout if brew-managed
@@ -280,24 +363,19 @@ get_brew_cask_name() {
     local app_bundle_name
     app_bundle_name=$(basename "$app_path")
 
-    # Try each detection method in order (fast to slow)
+    # Try each detection method in order:
     local detect_rc=0
     _detect_cask_via_resolved_path "$app_path" || detect_rc=$?
     [[ $detect_rc -eq 0 ]] && return 0
     [[ $detect_rc -eq 1 ]] || return "$detect_rc"
 
     detect_rc=0
-    _detect_cask_via_caskroom_search "$app_bundle_name" "$app_path" || detect_rc=$?
+    _detect_cask_from_scan_index "$app_bundle_name" "$app_path" || detect_rc=$?
     [[ $detect_rc -eq 0 ]] && return 0
     [[ $detect_rc -eq 1 ]] || return "$detect_rc"
 
     detect_rc=0
     _detect_cask_via_symlink_check "$app_path" || detect_rc=$?
-    [[ $detect_rc -eq 0 ]] && return 0
-    [[ $detect_rc -eq 1 ]] || return "$detect_rc"
-
-    detect_rc=0
-    _detect_cask_via_brew_list "$app_path" "$app_bundle_name" || detect_rc=$?
     [[ $detect_rc -eq 0 ]] && return 0
     [[ $detect_rc -eq 1 ]] || return "$detect_rc"
 

@@ -1262,6 +1262,10 @@ scan_applications() {
         cache_source_is_temp=true
     fi
 
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
+
     # Local spinner_pid for cleanup
     local spinner_pid=""
     local spinner_shown_file="${temp_file}.spinner_shown"
@@ -1654,6 +1658,10 @@ uninstall_list_apps() {
         format="json"
     fi
 
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
+
     if [[ "$format" == "json" ]]; then
         printf '['
         local first=1
@@ -1687,12 +1695,14 @@ uninstall_list_apps() {
             printf '\n'
         fi
         printf ']\n'
+        _cleanup_brew_cask_scan_index
         return 0
     fi
 
     local total=${#apps_data[@]}
     if [[ $total -eq 0 ]]; then
         echo "No applications found."
+        _cleanup_brew_cask_scan_index
         return 0
     fi
 
@@ -1740,6 +1750,7 @@ uninstall_list_apps() {
     done
 
     printf '\n%d application(s)  |  Remove with: mo uninstall <UNINSTALL NAME>\n\n' "$total"
+    _cleanup_brew_cask_scan_index
     return 0
 }
 
@@ -1772,10 +1783,15 @@ uninstall_stream_apps() {
             wait "${MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]}" 2> /dev/null || true
             MOLE_UNINSTALL_MANAGED_WORKER_PIDS=()
         fi
+        _cleanup_brew_cask_scan_index
         exec 3>&- 2> /dev/null || true
         exit 130
     }
     trap _stream_trap_cleanup INT TERM HUP
+
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
 
     local scan_out_file
     scan_out_file=$(mktemp 2> /dev/null || echo "/tmp/mole_scan_out_$$")
@@ -1839,6 +1855,7 @@ uninstall_stream_apps() {
     printf '{"event":"done"}\n' >&3
     exec 3>&- 2> /dev/null || true
     trap - INT TERM HUP
+    _cleanup_brew_cask_scan_index
     return 0
 }
 
