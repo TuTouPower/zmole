@@ -31,56 +31,66 @@ final class AnalyzeViewModel: ObservableObject {
     @Published private(set) var expandedPaths: Set<String> = []
 
     let rootPath: String
+    let session: DiskMeasurementSession
 
-    private let scanner: DiskScanning
     private let revealer: FileRevealing
-
-    /// Upper bound for the per-session level cache so measuring a huge subtree
-    /// cannot pin hundreds of megabytes of path strings.
-    private static let maxCachedRecords = 4_000
-
     private var pathStack: [String] = []
-    private var records: [String: LevelRecord] = [:]
-    private var childCache: [String: [DiskEntry]] = [:]
-    private var nextGeneration = 0
-    private var pendingMeasurements: [MeasurementRequest] = []
-    private var measurementWorker: Task<Void, Never>?
-    private var workerToken = 0
     private var levelRevision = 0
     private var visibleRowsCache: (revision: Int, search: String, sort: AnalyzeSort, rows: [AnalyzeRow])?
     private var tilesCache: (revision: Int, size: CGSize, tiles: [SpaceMapTile])?
+    private var cancellables: Set<AnyCancellable> = []
 
-    private struct LevelRecord {
-        var entries: [DiskEntry]
-        /// Counted sum of the level: deduplicated direct files plus every
-        /// measured child directory.
-        var totalSize: Int64
-        /// Direct-file part of the level, sealed at listing time.
-        let filesTotal: Int64
-        let generation: Int
-        let deduplicator: HardLinkDeduplicator
-    }
-
-    private struct MeasurementRequest: Sendable {
-        let parent: String
-        let child: String
-        let generation: Int
-        let deduplicator: HardLinkDeduplicator
-    }
-
-    init(scanner: DiskScanning, root: String = "/", revealer: FileRevealing = LiveFileRevealer()) {
-        self.scanner = scanner
-        rootPath = root
+    init(
+        scanner: DiskScanning,
+        root: String = "/",
+        revealer: FileRevealing = LiveFileRevealer(),
+        session: DiskMeasurementSession? = nil,
+        scheduler: HeavyScanScheduler? = nil
+    ) {
+        self.rootPath = root
         self.revealer = revealer
-        pathStack = [root]
+        let activeSession = session ?? DiskMeasurementSession(scanner: scanner, root: root, scheduler: scheduler)
+        self.session = activeSession
+        self.pathStack = [root]
+
+        bindSession()
+    }
+
+    private func bindSession() {
+        session.$isScanning
+            .sink { [weak self] scanning in
+                guard let self else { return }
+                self.isScanning = scanning || self.isListing
+            }
+            .store(in: &cancellables)
+
+        session.objectWillChange
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.syncWithSession()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncWithSession() {
+        guard let current = level?.path, let record = session.levelRecord(for: current) else {
+            return
+        }
+        if level?.entries != record.entries || level?.totalSize != record.totalSize {
+            publish(record)
+        } else if !expandedPaths.isEmpty {
+            levelRevision += 1
+            visibleRowsCache = nil
+            tilesCache = nil
+            objectWillChange.send()
+        }
     }
 
     var currentPath: String? { level?.path }
 
     /// Cached filter+sort for the visible list, keyed by level revision so
     /// repeated body evaluations do not re-sort (ICU compare) the whole level.
-    /// Expanded directories contribute their children as indented rows, all
-    /// sharing the current directory's total as their denominator.
     func visibleRows(search: String, sort: AnalyzeSort) -> [AnalyzeRow] {
         if let cache = visibleRowsCache,
            cache.revision == levelRevision,
@@ -115,7 +125,7 @@ final class AnalyzeViewModel: ObservableObject {
             }
             guard entry.isDirectory,
                   expandedPaths.contains(entry.path),
-                  let children = childCache[entry.path] else { continue }
+                  let children = session.cachedEntries(for: entry.path) else { continue }
             appendRows(
                 from: children,
                 depth: depth + 1,
@@ -132,23 +142,21 @@ final class AnalyzeViewModel: ObservableObject {
         entry.isDirectory && expandedPaths.contains(entry.path)
     }
 
-    /// Looks a row up in the current level or any inline-expanded run, so the
-    /// inspector keeps working for nested rows.
+    /// Looks a row up in the current level or any inline-expanded run.
     func entry(for path: String) -> DiskEntry? {
         if let entry = level?.entries.first(where: { $0.path == path }) {
             return entry
         }
-        for entries in childCache.values {
-            if let entry = entries.first(where: { $0.path == path }) {
+        for expandedPath in expandedPaths {
+            if let children = session.cachedEntries(for: expandedPath),
+               let entry = children.first(where: { $0.path == path }) {
                 return entry
             }
         }
         return nil
     }
 
-    /// Expands or collapses a directory inline. Expansion never navigates: the
-    /// current level, selection and breadcrumb stay put. Children are listed on
-    /// first expansion and then served from the session cache.
+    /// Expands or collapses a directory inline.
     func toggleExpanded(_ entry: DiskEntry) async {
         guard entry.isDirectory else { return }
         if expandedPaths.contains(entry.path) {
@@ -156,14 +164,9 @@ final class AnalyzeViewModel: ObservableObject {
             visibleRowsCache = nil
             return
         }
-        if childCache[entry.path] == nil {
+        if session.cachedEntries(for: entry.path) == nil {
             do {
-                let children = try await scanner.listDirectory(entry.path)
-                // A background measurement may have filled the cache while the
-                // listing was in flight; its entries carry real sizes and win.
-                if childCache[entry.path] == nil {
-                    childCache[entry.path] = children
-                }
+                _ = try await session.listDirectory(entry.path)
             } catch {
                 errorMessageKey = error.localizationKey
                 errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
@@ -190,17 +193,6 @@ final class AnalyzeViewModel: ObservableObject {
         return tiles
     }
 
-    private var wantsScanningState: Bool {
-        isListing || measurementWorker != nil || !pendingMeasurements.isEmpty
-    }
-
-    private func refreshScanState() {
-        let scanning = wantsScanningState
-        if isScanning != scanning {
-            isScanning = scanning
-        }
-    }
-
     /// Lists the scan root, reusing the session cache when present.
     func loadOverview() async {
         pathStack = [rootPath]
@@ -208,12 +200,15 @@ final class AnalyzeViewModel: ObservableObject {
         await showPath(rootPath)
     }
 
-    /// Re-analyzes the current directory and its subtree, replacing the cached
-    /// result for that subtree.
+    /// Re-analyzes the current directory and its subtree.
     func refreshCurrent() async {
         guard !isListing, let path = level?.path else { return }
-        cancelMeasurements()
-        invalidateSubtree(of: path)
+        session.reanalyze(path: path)
+        let prefix = LiveDiskScanner.directoryPrefix(path)
+        expandedPaths = expandedPaths.filter { key in
+            key != path && !key.hasPrefix(prefix)
+        }
+        visibleRowsCache = nil
         await list(path)
     }
 
@@ -250,206 +245,39 @@ final class AnalyzeViewModel: ObservableObject {
     private func showPath(_ path: String) async {
         errorMessage = nil
         errorMessageKey = nil
-        if let record = records[path] {
-            publish(record, path: path)
+        if let record = session.levelRecord(for: path) {
+            publish(record)
             return
         }
         await list(path)
     }
 
-    /// Lists one directory level immediately, then measures its subdirectories
-    /// one after another in the background.
     private func list(_ path: String) async {
-        nextGeneration += 1
-        let generation = nextGeneration
         isListing = true
-        refreshScanState()
+        isScanning = true
         defer {
             isListing = false
-            refreshScanState()
+            isScanning = session.isScanning
         }
         do {
-            let entries = try await scanner.listDirectory(path)
-            let deduplicator = HardLinkDeduplicator()
-            let filesTotal = Self.countedFilesTotal(entries, deduplicator: deduplicator)
-            let record = LevelRecord(
-                entries: entries,
-                totalSize: filesTotal,
-                filesTotal: filesTotal,
-                generation: generation,
-                deduplicator: deduplicator
-            )
-            records[path] = record
-            childCache[path] = entries
-            publish(record, path: path)
-            enqueueMeasurements(
-                parent: path,
-                entries: entries,
-                generation: generation,
-                deduplicator: deduplicator
-            )
+            let entries = try await session.listDirectory(path)
+            if let record = session.levelRecord(for: path) {
+                publish(record)
+            } else {
+                levelRevision += 1
+                level = LevelState(path: path, entries: entries, totalSize: 0)
+            }
         } catch {
             errorMessageKey = error.localizationKey
             errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
-            // Keep the previous level on screen; the error banner explains why
-            // the requested directory could not be listed.
         }
     }
 
-    private func publish(_ record: LevelRecord, path: String) {
+    private func publish(_ record: DiskMeasurementSession.LevelRecord) {
         levelRevision += 1
-        level = LevelState(path: path, entries: record.entries, totalSize: record.totalSize)
-    }
-
-    private func enqueueMeasurements(
-        parent: String,
-        entries: [DiskEntry],
-        generation: Int,
-        deduplicator: HardLinkDeduplicator
-    ) {
-        for entry in entries where entry.isDirectory && entry.value == .computing {
-            pendingMeasurements.append(
-                MeasurementRequest(
-                    parent: parent,
-                    child: entry.path,
-                    generation: generation,
-                    deduplicator: deduplicator
-                )
-            )
-        }
-        startMeasurementWorker()
-    }
-
-    private func startMeasurementWorker() {
-        guard measurementWorker == nil else { return }
-        workerToken += 1
-        let token = workerToken
-        measurementWorker = Task { @MainActor [weak self] in
-            await self?.processMeasurements()
-            guard let self, self.workerToken == token else { return }
-            self.measurementWorker = nil
-            self.refreshScanState()
-        }
-        refreshScanState()
-    }
-
-    private func cancelMeasurements() {
-        measurementWorker?.cancel()
-        measurementWorker = nil
-        workerToken += 1
-        pendingMeasurements.removeAll()
-        refreshScanState()
-    }
-
-    /// Measures pending subdirectories with a small concurrency window so a
-    /// level with dozens of children does not serialize its whole scan.
-    private func processMeasurements() async {
-        await withTaskGroup(of: Void.self) { group in
-            var inFlight = 0
-            let maxConcurrent = 3
-            while let request = pendingMeasurements.first {
-                pendingMeasurements.removeFirst()
-                if Task.isCancelled { break }
-                guard records[request.parent]?.generation == request.generation else { continue }
-                if let existing = records[request.child], existing.generation >= request.generation {
-                    // Already measured by an in-flight parent walk or a later
-                    // list of that same path.
-                    continue
-                }
-                if inFlight >= maxConcurrent {
-                    await group.next()
-                    inFlight -= 1
-                }
-                let scanner = self.scanner
-                inFlight += 1
-                group.addTask { [weak self] in
-                    let result = await scanner.measureSubtree(
-                        request.child,
-                        deduplicator: request.deduplicator
-                    )
-                    guard let self else { return }
-                    await self.applyMeasured(result, request: request)
-                }
-            }
-            await group.waitForAll()
-        }
-    }
-
-    private func applyMeasured(_ result: DiskScanResult, request: MeasurementRequest) {
-        guard records[request.parent]?.generation == request.generation else { return }
-        apply(result, parent: request.parent, generation: request.generation)
-    }
-
-    private func apply(_ result: DiskScanResult, parent: String, generation: Int) {
-        guard var parentRecord = records[parent], parentRecord.generation == generation else {
-            return
-        }
-        var touched: Set<String> = []
-
-        let childValue: DiskEntryValue = result.isReadable ? .size(result.totalSize) : .unreadable
-        if let index = parentRecord.entries.firstIndex(where: { $0.path == result.path }),
-           parentRecord.entries[index].value != childValue {
-            parentRecord.entries[index].value = childValue
-        }
-        parentRecord.totalSize = parentRecord.filesTotal + parentRecord.entries.reduce(0) { sum, entry in
-            guard entry.isDirectory, let size = entry.knownSize else { return sum }
-            return sum + size
-        }
-        records[parent] = parentRecord
-        touched.insert(parent)
-
-        for (path, scannedLevel) in result.levels {
-            if let existing = records[path], existing.generation >= generation { continue }
-            if records[path] == nil, records.count >= Self.maxCachedRecords { continue }
-            records[path] = LevelRecord(
-                entries: scannedLevel.entries,
-                totalSize: scannedLevel.totalSize,
-                filesTotal: scannedLevel.totalSize,
-                generation: generation,
-                deduplicator: parentRecord.deduplicator
-            )
-            childCache[path] = scannedLevel.entries
-            touched.insert(path)
-        }
-
-        if let current = level?.path, touched.contains(current) {
-            publish(records[current]!, path: current)
-        } else if !touched.isDisjoint(with: expandedPaths) {
-            // An expanded subtree got fresh sizes: rebuild the visible rows.
-            levelRevision += 1
-            visibleRowsCache = nil
-            objectWillChange.send()
-        }
-    }
-
-    private func invalidateSubtree(of path: String) {
-        let prefix = LiveDiskScanner.directoryPrefix(path)
-        records = records.filter { key, _ in
-            key != path && !key.hasPrefix(prefix)
-        }
-        childCache = childCache.filter { key, _ in
-            key != path && !key.hasPrefix(prefix)
-        }
-        expandedPaths = expandedPaths.filter { key in
-            key != path && !key.hasPrefix(prefix)
-        }
+        level = LevelState(path: record.path, entries: record.entries, totalSize: record.totalSize)
         visibleRowsCache = nil
-    }
-
-    private static func countedFilesTotal(
-        _ entries: [DiskEntry],
-        deduplicator: HardLinkDeduplicator
-    ) -> Int64 {
-        var total: Int64 = 0
-        for entry in entries {
-            guard let size = entry.knownSize else { continue }
-            if let key = entry.linkKey {
-                if deduplicator.markIfNew(key) { total += size }
-            } else {
-                total += size
-            }
-        }
-        return total
+        tilesCache = nil
     }
 }
 

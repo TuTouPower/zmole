@@ -12,23 +12,30 @@ final class StatusViewModel: ObservableObject {
     @Published private(set) var errorMessageKey: String?
 
     private let watchService: (any StatusWatchProviding)?
+    private let policy: StatusFeaturePolicy?
     private var watchTask: Task<Void, Never>?
     /// Bumped on every start/pause/stop so a stale async start cannot
     /// resurrect the shared watch process after the page was left.
     private var watchGeneration = 0
 
-    init(service: any StatusWatchProviding) {
-        watchService = service
+    var isFeatureEnabled: Bool {
+        policy?.isEnabled ?? true
     }
 
-    convenience init(streaming: any MoleStreaming) {
-        self.init(service: StatusWatchService(streaming: streaming))
+    init(service: (any StatusWatchProviding)?, policy: StatusFeaturePolicy? = nil) {
+        watchService = service
+        self.policy = policy
+    }
+
+    convenience init(streaming: any MoleStreaming, policy: StatusFeaturePolicy? = nil) {
+        self.init(service: StatusWatchService(streaming: streaming), policy: policy)
     }
 
     /// Kept for SwiftUI previews and old call sites. Production App assembly
     /// must inject a service; this initializer never creates a Bridge.
     init() {
         watchService = nil
+        policy = nil
     }
 
     deinit {
@@ -38,6 +45,10 @@ final class StatusViewModel: ObservableObject {
     /// Starts one subscription for this view. The service itself is shared;
     /// multiple view models do not spawn multiple mole processes.
     func start() {
+        guard isFeatureEnabled else {
+            isSampling = false
+            return
+        }
         guard let watchService else {
             errorMessageKey = "status.error.no_service"
             errorMessage = nil
@@ -56,11 +67,11 @@ final class StatusViewModel: ObservableObject {
             // A stop/pause that raced this start bumps the generation; let the
             // discarded subscription terminate instead of restarting the
             // shared watch for a page the user already left.
-            guard let self, self.watchGeneration == generation else { return }
+            guard let self, self.watchGeneration == generation, self.isFeatureEnabled else { return }
             await watchService.start()
             do {
                 for try await update in stream {
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, self.isFeatureEnabled else { return }
                     self.snapshot = update.snapshot
                     self.series = update.series
                     self.lastUpdatedAt = update.receivedAt
@@ -70,7 +81,7 @@ final class StatusViewModel: ObservableObject {
                     self.isSampling = false
                 }
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self.isFeatureEnabled else { return }
                 self.isSampling = false
                 self.errorMessageKey = error.localizationKey
                 self.errorMessage = error.localizationKey == nil ? error.localizedDescription : nil
@@ -98,6 +109,7 @@ final class StatusViewModel: ObservableObject {
 
     /// Manual recovery only. There is intentionally no automatic retry loop.
     func retry() {
+        guard isFeatureEnabled else { return }
         errorMessage = nil
         errorMessageKey = nil
         isPaused = false
@@ -107,7 +119,18 @@ final class StatusViewModel: ObservableObject {
     /// Explicit user refresh: restarts the subscription so a fresh sample
     /// arrives even while the stream is already running.
     func resample() async {
+        guard isFeatureEnabled else { return }
         await pause()
         start()
+    }
+
+    func applyPolicyChange(enabled: Bool) async {
+        policy?.setEnabled(enabled)
+        if !enabled {
+            await stop()
+            snapshot = nil
+            series = []
+            isSampling = false
+        }
     }
 }

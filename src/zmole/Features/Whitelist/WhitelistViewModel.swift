@@ -114,7 +114,7 @@ final class WhitelistViewModel: ObservableObject {
             return
         }
 
-        guard let lease = coordinator.acquire(.protectionRules) else {
+        guard let lease = coordinator.acquire(kind == .optimize ? .optimizeWhitelist : .cleanWhitelist) else {
             errorMessage = nil
             errorMessageKey = "operation.error.busy"
             didSave = false
@@ -133,6 +133,7 @@ final class WhitelistViewModel: ObservableObject {
         do {
             let updatedDocument = document.replacingPatterns(patterns.map(\.value))
             try store.save(updatedDocument)
+            lease.markDataModified()
             self.document = updatedDocument
             isDirty = false
             didSave = true

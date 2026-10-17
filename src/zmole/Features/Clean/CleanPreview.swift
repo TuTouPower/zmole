@@ -39,9 +39,17 @@ struct CleanPreviewSnapshot: Equatable, Codable, Sendable {
 
 struct CleanPreviewStore: Sendable {
     let fileURL: URL
+    var onBeforeRead: (@Sendable () async -> Void)? = nil
+    var onRead: (@Sendable () -> Void)? = nil
 
-    init(fileURL: URL) {
+    init(
+        fileURL: URL,
+        onBeforeRead: (@Sendable () async -> Void)? = nil,
+        onRead: (@Sendable () -> Void)? = nil
+    ) {
         self.fileURL = fileURL
+        self.onBeforeRead = onBeforeRead
+        self.onRead = onRead
     }
 
     static var live: CleanPreviewStore {
@@ -57,7 +65,16 @@ struct CleanPreviewStore: Sendable {
         return CleanPreviewGeneration(id: UUID(), fileURL: fileURL)
     }
 
+    func readAsync(_ generation: CleanPreviewGeneration) async throws -> CleanPreviewSnapshot {
+        if let onBeforeRead {
+            await onBeforeRead()
+        }
+        guard !Task.isCancelled else { throw CancellationError() }
+        return try read(generation)
+    }
+
     func read(_ generation: CleanPreviewGeneration) throws -> CleanPreviewSnapshot {
+        onRead?()
         guard generation.fileURL == fileURL,
               FileManager.default.fileExists(atPath: fileURL.path) else {
             throw CleanPreviewStoreError.missingFile

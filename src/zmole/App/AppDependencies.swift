@@ -48,6 +48,7 @@ final class AppDependencies: ObservableObject {
     let optimizeWhitelistViewModel: WhitelistViewModel
     let loginItemViewModel: LoginItemViewModel
     let analyzeViewModel: AnalyzeViewModel
+    let statusPolicy: StatusFeaturePolicy
     let statusViewModel: StatusViewModel
     let historyViewModel: HistoryViewModel
     let installersViewModel: InstallersViewModel
@@ -120,6 +121,7 @@ final class AppDependencies: ObservableObject {
 
         let sharedCoordinator = OperationCoordinator()
         coordinator = sharedCoordinator
+        let heavyScanScheduler = HeavyScanScheduler(maxConcurrency: HeavyScanScheduler.defaultConcurrency)
         let accessMonitor = configuration.isEnabled
             ? FullDiskAccessMonitor(probe: { true })
             : FullDiskAccessMonitor()
@@ -143,6 +145,7 @@ final class AppDependencies: ObservableObject {
                 lanes: scanLanes,
                 cleanPreviewStore: previewStore,
                 cache: cache,
+                scheduler: heavyScanScheduler,
                 coordinator: sharedCoordinator,
                 accessMonitor: accessMonitor
             )
@@ -207,7 +210,9 @@ final class AppDependencies: ObservableObject {
             analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
         }
 
-        statusViewModel = StatusViewModel(streaming: lanes.statusStream)
+        let policy = StatusFeaturePolicy()
+        statusPolicy = policy
+        statusViewModel = StatusViewModel(streaming: lanes.statusStream, policy: policy)
 
         let historyBox = MoleProcessBox(lanes.history)
         let historyLoader = HistorySnapshotLoader { arguments in
@@ -221,13 +226,10 @@ final class AppDependencies: ObservableObject {
             accessMonitor: accessMonitor
         )
 
-        let estimateLoaders = lanes.estimatePool.map { lane in
-            let box = MoleProcessBox(lane)
-            return AnalyzeSnapshotLoader { arguments in
-                try await box.process.run(arguments, stdin: nil, timeout: 600)
-            }
-        }
-        let storageLoader = StorageEstimateLoader(loaders: estimateLoaders)
+        let storageLoader = StorageEstimateLoader(
+            session: analyzeViewModel.session,
+            scheduler: heavyScanScheduler
+        )
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,
             historyLoader: historyLoader,

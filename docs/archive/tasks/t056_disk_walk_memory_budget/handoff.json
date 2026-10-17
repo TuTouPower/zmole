@@ -1,0 +1,52 @@
+{
+  "tid": "t056",
+  "attempt": 1,
+  "execution_id": "fc636d80e1b04a60ac20d271f0478192",
+  "status": "done",
+  "branch": "t056_disk_walk_memory_budget",
+  "base_sha": "6eab0f666b23130762be888a5729e5d89c2829bc",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (341 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 28098c8759611464, 0 finding",
+  "ac_evidence": {
+    "AC-004": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift streamDirectoryEntries",
+      "tests/unit/DiskWalkMemoryBudgetTests.swift testAC004_StreamingBatchesDeliverFirstBatchWithBackpressure"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift cancel / store.clearSubtree",
+      "tests/unit/DiskMeasurementSessionTests.swift"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift recalculateAllRecords",
+      "tests/unit/DiskMeasurementSessionTests.swift"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift reanalyze",
+      "tests/unit/DiskMeasurementSessionTests.swift"
+    ],
+    "AC-008": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift enforceResidentBudget",
+      "tests/unit/DiskWalkMemoryBudgetTests.swift testAC008_PeakResidentEntriesNeverExceedBudget"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift pagedEntries",
+      "src/zmole/Features/Analyze/DiskSessionStore.swift loadEntries",
+      "tests/unit/DiskWalkMemoryBudgetTests.swift testAC009_PagingAccessesAllTenItemsWithBudgetThree"
+    ],
+    "AC-010": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift directChildren / cachedEntries",
+      "tests/unit/DiskWalkMemoryBudgetTests.swift testAC010_EvictedDirectoryCanBeReAccessedWithIdenticalStats"
+    ],
+    "AC-011": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift streamDirectoryEntries / pagedEntries",
+      "src/zmole/Features/Analyze/DiskSessionStore.swift loadEntries"
+    ],
+    "AC-012": [
+      "src/zmole/Features/Analyze/DiskSessionStore.swift checkQuota / close",
+      "tests/unit/DiskWalkMemoryBudgetTests.swift testAC012_StorageQuotaExceededPreservesOldSnapshotAndCleansUp"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

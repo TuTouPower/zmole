@@ -1,0 +1,37 @@
+{
+  "tid": "t050",
+  "attempt": 1,
+  "execution_id": "3bdfebf78fea4244b9927c7f6b784715",
+  "status": "done",
+  "branch": "t050_disk_shallow_bulk_scan",
+  "base_sha": "6f0f25d5623b8b1b79a1f9f7013dda1a3f75b0c2",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (379 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope f58732871d34242d, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "docs/spikes/s002_metadata_prefetch_benchmark/report.md",
+      "tests/unit/DiskPrefetchBenchmarkTests.swift testAC001_SemanticEquivalenceBetweenItemAndPrefetch"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Analyze/DiskScanner.swift LiveDiskScanner",
+      "tests/unit/DiskPrefetchBenchmarkTests.swift testAC002_ProductionScannerMatchesReferenceSemanticsAndRespectsBudget"
+    ],
+    "AC-004": [
+      "docs/spikes/s002_metadata_prefetch_benchmark/report.md",
+      "tests/unit/DiskPrefetchBenchmarkTests.swift testAC004_Deploy_TenRoundInterleavedBenchmarkConfirmsItemStrategy"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Analyze/DiskScanner.swift walk",
+      "tests/unit/DiskPrefetchBenchmarkTests.swift testAC005_CancellationAndDisappearanceDoNotProduceFakeZero"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Analyze/DiskScanner.swift",
+      "tests/unit/DiskPrefetchBenchmarkTests.swift testAC006_ProductionOnlyRetainsSingleSelectedStrategy"
+    ]
+  },
+  "pending": [],
+  "findings": [
+    "d002_disk_metadata_prefetch_overhead"
+  ]
+}

@@ -9,7 +9,11 @@ final class BackgroundScanTests: XCTestCase {
     func testAllItemsStartInParallelAndUseReadOnlyCommands() async throws {
         let probe = ConcurrencyProbe()
         let spies = ScanSpies(probe: probe, blockFirstProcessCall: true)
-        let service = makeService(spies: spies, cache: BackgroundScanCache(fileURL: temporaryFileURL()))
+        let service = makeService(
+            spies: spies,
+            cache: BackgroundScanCache(fileURL: temporaryFileURL()),
+            scheduler: HeavyScanScheduler(maxConcurrency: 5)
+        )
 
         try await waitUntil { await spies.blockedProcessCallCount == 4 }
         let maxConcurrent = await probe.max
@@ -241,10 +245,11 @@ final class BackgroundScanTests: XCTestCase {
         XCTAssertEqual(finalCalls, 2, "only one task was registered after cancellation")
     }
 
-    // AC-006: a write invalidates every cached result and starts a fresh pass.
-    func testInvalidationClearsResultsAndRescansEverything() async throws {
+    // AC-010, AC-013: a write invalidates only affected items, marks them stale with payload kept, and rescans only those items.
+    func testScopedInvalidationRescansOnlyAffectedItemsAndKeepsPayloadStale() async throws {
         let cache = BackgroundScanCache(fileURL: temporaryFileURL())
-        cache.save(freshFixtures(now: Date()))
+        let now = Date()
+        cache.save(freshFixtures(now: now))
         let spies = ScanSpies()
         let coordinator = OperationCoordinator()
         let service = makeService(spies: spies, cache: cache, coordinator: coordinator)
@@ -252,14 +257,28 @@ final class BackgroundScanTests: XCTestCase {
         let callsBefore = await spies.totalCallCount
         XCTAssertEqual(callsBefore, 0)
 
-        coordinator.invalidatePreviews()
+        // An optimize write affects optimize and clean, NOT uninstallList, installerList, or purge
+        let lease = coordinator.acquire(.optimize)!
+        lease.markDataModified()
+        lease.release()
+
         try await waitUntil {
-            let calls = await spies.totalCallCount
-            return calls == 5 && service.failedItems.isEmpty
+            let optCalls = await spies.optimize.processCallCount
+            let cleanCalls = await spies.clean.processCallCount
+            return optCalls == 1 && cleanCalls == 1 && service.failedItems.isEmpty
         }
-        let callsAfter = await spies.totalCallCount
-        XCTAssertEqual(callsAfter, 5)
-        XCTAssertEqual(service.results.count, 5)
+
+        let optCalls = await spies.optimize.processCallCount
+        let cleanCalls = await spies.clean.processCallCount
+        let uninstCalls = await spies.uninstall.callCount
+        let instCalls = await spies.installerList.processCallCount
+        let purgeCalls = await spies.purge.processCallCount
+
+        XCTAssertEqual(optCalls, 1)
+        XCTAssertEqual(cleanCalls, 1)
+        XCTAssertEqual(uninstCalls, 0, "Unaffected uninstallList must not rescan (AC-010)")
+        XCTAssertEqual(instCalls, 0, "Unaffected installerList must not rescan (AC-010)")
+        XCTAssertEqual(purgeCalls, 0, "Unaffected purge must not rescan (AC-010)")
     }
 
     // AC-007: a failing item keeps its previous result, is marked failed, does
@@ -324,8 +343,11 @@ final class BackgroundScanTests: XCTestCase {
         ]))
         let service = try XCTUnwrap(dependencies.scanService, "demo pages need a data source")
 
+        let cachePath = root.appendingPathComponent("background_scan_cache.json").path
         for _ in 0..<500 {
-            if service.result(for: .clean) != nil, service.result(for: .optimize) != nil {
+            if service.result(for: .clean) != nil,
+               service.result(for: .optimize) != nil,
+               FileManager.default.fileExists(atPath: cachePath) {
                 break
             }
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -476,6 +498,7 @@ final class BackgroundScanTests: XCTestCase {
     private func makeService(
         spies: ScanSpies,
         cache: BackgroundScanCache,
+        scheduler: HeavyScanScheduler? = nil,
         coordinator: OperationCoordinator? = nil,
         accessMonitor: FullDiskAccessMonitor? = nil,
         periodicTick: TimeInterval = 3600,
@@ -485,6 +508,7 @@ final class BackgroundScanTests: XCTestCase {
             lanes: spies.lanes,
             cleanPreviewStore: CleanPreviewStore(fileURL: spies.previewURL),
             cache: cache,
+            scheduler: scheduler,
             coordinator: coordinator ?? OperationCoordinator(),
             accessMonitor: accessMonitor,
             periodicTick: periodicTick,

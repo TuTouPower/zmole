@@ -51,6 +51,7 @@ struct OverviewView: View {
             // command, and its task is owned by the view model so leaving the
             // page does not cancel a running scan.
             accessMonitor.refresh()
+            await viewModel.refreshDiskCapacity()
             viewModel.primeEstimate(usedBytes: usedBytes)
             viewModel.startEstimate(usedBytes: usedBytes)
             await viewModel.refreshHistory()
@@ -73,7 +74,12 @@ struct OverviewView: View {
             title: "overview.title"
         ) {
             Button {
-                Task { await statusViewModel.resample() }
+                Task {
+                    await viewModel.refreshDiskCapacity()
+                    if statusViewModel.isFeatureEnabled {
+                        await statusViewModel.resample()
+                    }
+                }
             } label: {
                 Label("overview.refresh", systemImage: "arrow.clockwise")
             }
@@ -104,7 +110,8 @@ struct OverviewView: View {
     private var healthCard: some View {
         let card = OverviewHealthCard.make(
             snapshot: statusViewModel.snapshot,
-            reclaimBytes: cleanViewModel.lastReclaimBytes
+            reclaimBytes: cleanViewModel.lastReclaimBytes,
+            isStatusEnabled: statusViewModel.isFeatureEnabled
         )
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
@@ -362,7 +369,10 @@ struct OverviewView: View {
     }
 
     private var statusGridCard: some View {
-        let grid = OverviewStatusGrid.make(snapshot: statusViewModel.snapshot)
+        let grid = OverviewStatusGrid.make(
+            snapshot: statusViewModel.snapshot,
+            isStatusEnabled: statusViewModel.isFeatureEnabled
+        )
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("overview.status_grid")
@@ -389,7 +399,10 @@ struct OverviewView: View {
     }
 
     private var primaryDisk: StatusSnapshot.Disk? {
-        statusViewModel.snapshot.map(OverviewMetrics.init)?.primaryDisk
+        if statusViewModel.isFeatureEnabled, let disk = statusViewModel.snapshot.map(OverviewMetrics.init)?.primaryDisk {
+            return disk
+        }
+        return viewModel.diskCapacity?.disk
     }
 
     private var usedBytes: Int64? {

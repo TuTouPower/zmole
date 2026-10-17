@@ -4,6 +4,9 @@ struct BackgroundScanCacheEntry: Codable, Equatable, Sendable {
     let schemaVersion: Int
     let capturedAt: Date
     let payload: BackgroundScanPayload
+    let targetVersion: UInt64
+    let capturedVersion: UInt64
+    let isStale: Bool
 }
 
 private struct BackgroundScanCacheFile: Codable {
@@ -15,7 +18,7 @@ private struct BackgroundScanCacheFile: Codable {
 /// relaunch, before the scans finish. Stored in the app container, never in
 /// `~/.config/mole/`. A corrupt or older-schema file is ignored as a whole.
 struct BackgroundScanCache: Sendable {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     let fileURL: URL
 
@@ -42,12 +45,22 @@ struct BackgroundScanCache: Sendable {
         for (key, entry) in file.entries {
             guard entry.schemaVersion == Self.schemaVersion,
                   let item = BackgroundScanItem(rawValue: key) else { continue }
-            results[item] = BackgroundScanResult(capturedAt: entry.capturedAt, payload: entry.payload)
+            results[item] = BackgroundScanResult(
+                capturedAt: entry.capturedAt,
+                payload: entry.payload,
+                targetVersion: entry.targetVersion,
+                capturedVersion: entry.capturedVersion,
+                isStale: entry.isStale
+            )
         }
         return results
     }
 
     func save(_ results: [BackgroundScanItem: BackgroundScanResult]) {
+        try? saveThrowing(results)
+    }
+
+    func saveThrowing(_ results: [BackgroundScanItem: BackgroundScanResult]) throws {
         let entries = Dictionary(
             uniqueKeysWithValues: results.map { item, result in
                 (
@@ -55,19 +68,20 @@ struct BackgroundScanCache: Sendable {
                     BackgroundScanCacheEntry(
                         schemaVersion: Self.schemaVersion,
                         capturedAt: result.capturedAt,
-                        payload: result.payload
+                        payload: result.payload,
+                        targetVersion: result.targetVersion,
+                        capturedVersion: result.capturedVersion,
+                        isStale: result.isStale
                     )
                 )
             }
         )
-        guard let data = try? JSONEncoder().encode(
+        let data = try JSONEncoder().encode(
             BackgroundScanCacheFile(schemaVersion: Self.schemaVersion, entries: entries)
-        ) else {
-            return
-        }
+        )
         let directory = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: fileURL, options: .atomic)
     }
 }
 

@@ -4,7 +4,12 @@ import Foundation
 
 @MainActor
 final class UninstallViewModel: ObservableObject {
-    @Published private(set) var listings: [UninstallAppListing] = []
+    @Published private(set) var listings: [UninstallAppListing] = [] {
+        didSet {
+            contentVersion += 1
+        }
+    }
+    @Published private(set) var contentVersion: Int = 0
     @Published private(set) var selectedPaths: Set<String> = []
     @Published private(set) var hasLoaded = false
     @Published private(set) var isListing = false
@@ -17,7 +22,7 @@ final class UninstallViewModel: ObservableObject {
     @Published private(set) var listWasCancelled = false
 
     private let process: any MoleProcessControlling
-    private let listStream: UninstallListStream
+    private let listStream: UninstallListStream?
     private let coordinator: OperationCoordinator
     private let targetChecker: UninstallTargetChecking
     private let iconProvider: UninstallIconProviding
@@ -29,10 +34,11 @@ final class UninstallViewModel: ObservableObject {
     private let leaseCoordinator: PreviewLeaseCoordinator
     private var transientErrorKey: String?
     private var iconTask: Task<Void, Never>?
+    private var scanSubscription: AnyCancellable?
 
     init(
         process: any MoleProcessControlling,
-        listStream: UninstallListStream,
+        listStream: UninstallListStream? = nil,
         coordinator: OperationCoordinator,
         targetChecker: UninstallTargetChecking = LiveUninstallTargetChecker(),
         iconProvider: UninstallIconProviding = LiveUninstallIconProvider(),
@@ -52,6 +58,9 @@ final class UninstallViewModel: ObservableObject {
             guard let self, self.session.preview != nil else { return false }
             self.session.expirePreview(errorKey: "operation.error.stale_scan")
             return true
+        }
+        scanSubscription = scan?.statePublisher.sink { [weak self] in
+            Task { @MainActor in self?.syncWithScanService() }
         }
     }
 
@@ -93,35 +102,85 @@ final class UninstallViewModel: ObservableObject {
 
     func icon(forPath path: String) -> NSImage? { iconsByPath[path] }
 
+    private var visibleListingsCache: (
+        version: Int,
+        search: String,
+        source: String,
+        sort: UninstallSort,
+        locale: String,
+        result: [UninstallAppListing]
+    )?
+
+    /// Returns the filtered and sorted visible rows, cached by (contentVersion, search, source, sort, locale).
+    /// Updating icons does not invalidate this cache, preventing unnecessary re-sorting.
+    func visibleListings(
+        search: String,
+        source: String,
+        sort: UninstallSort,
+        locale: Locale = .current
+    ) -> [UninstallAppListing] {
+        let locId = locale.identifier
+        if let cache = visibleListingsCache,
+           cache.version == contentVersion,
+           cache.search == search,
+           cache.source == source,
+           cache.sort == sort,
+           cache.locale == locId {
+            return cache.result
+        }
+        let filtered = UninstallListFilter.visibleListings(listings, search: search, source: source)
+        let sorted = UninstallListOrder.sorted(filtered, by: sort, locale: locale)
+        visibleListingsCache = (contentVersion, search, source, sort, locId, sorted)
+        return sorted
+    }
+
+    func setListingsForTesting(_ listings: [UninstallAppListing]) {
+        self.listings = listings
+    }
+
+    func setIconForTesting(_ image: NSImage, forPath path: String) {
+        iconsByPath[path] = image
+    }
+
     // MARK: - Listing
 
     func loadListIfNeeded() async {
         guard !hasLoaded else { return }
-        if adoptPrewarmList() { return }
-        await loadList()
+        if let scan {
+            if !scan.isHydrated {
+                await scan.waitForHydration()
+            }
+            if let result = scan.result(for: .uninstallList),
+                case let .uninstallRows(rows) = result.payload {
+                listings = rows
+                listCapturedAt = result.capturedAt
+                hasLoaded = true
+                startIconLoading()
+                if result.isStale {
+                    scan.request(.uninstallList)
+                }
+                return
+            }
+            scan.request(.uninstallList)
+            syncWithScanService()
+        } else if let listStream {
+            await performList(using: listStream)
+        }
     }
 
     func loadList() async {
-        guard !isListing, !session.isBusy else { return }
-        scan?.userDidRescan(.uninstallList)
-        leaseCoordinator.release()
-        session.invalidate()
-        selectedPaths.removeAll()
+        guard !session.isBusy else { return }
         clearTransientError()
-        relatedLoadedIDs = []
-        relatedPathsByID = [:]
-        iconsByPath = [:]
-        listings = []
-        listCapturedAt = nil
-        listWasCancelled = false
-        await performList()
+        if let scan {
+            scan.request(.uninstallList)
+            await scan.waitForScan(.uninstallList)
+            syncWithScanService()
+        } else if let listStream {
+            await performList(using: listStream)
+        }
     }
 
-    /// Streams the list into `listings`, merging later rows per path. Keeps
-    /// whatever session state exists (the identity-refusal path re-scans the
-    /// list while its failure stays on screen); the fresh scan replaces the
-    /// listing wholesale, so removed apps do not linger.
-    private func performList() async {
+    private func performList(using stream: UninstallListStream) async {
         guard !isListing else { return }
         listErrorMessage = nil
         isListing = true
@@ -131,50 +190,52 @@ final class UninstallViewModel: ObservableObject {
         var indexByPath: [String: Int] = [:]
         var seenPaths: Set<String> = []
         do {
-            let rows = await listStream.rows()
-            var lastPublish = Date.distantPast
-            var dirty = false
+            let rows = await stream.rows()
             for try await row in rows {
                 UninstallListMerge.merge(row, into: &merged, indexByPath: &indexByPath)
                 seenPaths.insert(row.path)
-                dirty = true
-                // Throttle progressive publishes so the view is not rebuilt
-                // once per resolved row; the wholesale assignment at the end
-                // keeps the listing free of leftovers from the previous pass.
-                let now = Date()
-                if now.timeIntervalSince(lastPublish) >= 0.05 {
-                    listings = merged
-                    lastPublish = now
-                    dirty = false
-                }
-            }
-            if dirty {
                 listings = merged
             }
             hasLoaded = true
-        } catch let error as MoleBridgeError where error == .cancelled {
-            // Keep whatever was already resolved; a cancelled scan is not a
-            // failure, but it is flagged so the UI can offer to resume.
-            listWasCancelled = true
         } catch {
-            guard !CommandBusy.isBusy(error) else {
-                showBusyNotice = true
-                return
-            }
             listings = []
             hasLoaded = false
             listErrorMessage = error.localizedDescription
             return
         }
-
-        // Drop session state for rows this pass no longer reports, including
-        // after a cancelled scan that already replaced the listing.
         pruneSessionState(to: seenPaths)
         if hasLoaded {
             if focusedAppID == nil || !listings.contains(where: { $0.path == focusedAppID }) {
                 focusedAppID = listings.first?.path
             }
             startIconLoading()
+        }
+    }
+
+    private func syncWithScanService() {
+        guard let scan else { return }
+        let running = scan.runningItems.contains(.uninstallList)
+        isListing = running
+        if running {
+            let inProgress = scan.inProgressUninstallList()
+            if !inProgress.isEmpty {
+                listings = inProgress
+                hasLoaded = true
+                startIconLoading()
+            }
+        } else {
+            if let result = scan.result(for: .uninstallList),
+               case let .uninstallRows(rows) = result.payload {
+                listings = rows
+                listCapturedAt = result.capturedAt
+                hasLoaded = true
+                startIconLoading()
+            }
+            if scan.failedItems.contains(.uninstallList) {
+                listErrorMessage = String(localized: "uninstall.error.list_failed")
+            } else {
+                listErrorMessage = nil
+            }
         }
     }
 
@@ -187,7 +248,7 @@ final class UninstallViewModel: ObservableObject {
 
     func cancelList() async {
         guard isListing else { return }
-        await listStream.cancel()
+        await scan?.cancelAndWait(.uninstallList)
     }
 
     private func adoptPrewarmList() -> Bool {
@@ -394,6 +455,7 @@ final class UninstallViewModel: ObservableObject {
                 stdin: Self.confirmationInput,
                 timeout: 600
             )
+            leaseCoordinator.markDataModified()
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             let operationResult = UninstallBatchResultParser.result(
                 result,
@@ -408,7 +470,7 @@ final class UninstallViewModel: ObservableObject {
                 // Partially removed: succeeded and failed targets cannot be
                 // told apart reliably from the summary, so re-scan instead of
                 // leaving stale rows selectable.
-                await performList()
+                scan?.request(.uninstallList)
             }
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
@@ -443,7 +505,13 @@ final class UninstallViewModel: ObservableObject {
             if (error as? UninstallViewModelError) == .changedTarget {
                 // Identity changed since preview: refuse and re-scan the list
                 // while the refusal stays visible.
-                await performList()
+                if let scan {
+                    scan.request(.uninstallList)
+                    await scan.waitForScan(.uninstallList)
+                    syncWithScanService()
+                } else if let listStream {
+                    await performList(using: listStream)
+                }
             }
         }
     }

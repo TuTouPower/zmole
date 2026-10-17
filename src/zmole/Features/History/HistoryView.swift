@@ -12,63 +12,62 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                MolePageHead(
-                    title: "history.title",
-                    subtitle: "history.subtitle"
-                ) {
-                    Button {
-                        exportJSON()
-                    } label: {
-                        Label("history.export", systemImage: "square.and.arrow.up")
-                    }
-                    .disabled(viewModel.rawJSON == nil)
-                    Button("history.refresh") {
-                        Task { await viewModel.refresh() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MoleTheme.accent)
-                    .disabled(viewModel.isLoading)
+        VStack(alignment: .leading, spacing: 14) {
+            MolePageHead(
+                title: "history.title",
+                subtitle: "history.subtitle"
+            ) {
+                Button {
+                    exportJSON()
+                } label: {
+                    Label("history.export", systemImage: "square.and.arrow.up")
                 }
-                .padding(.bottom, 10)
+                .disabled(viewModel.rawJSON == nil)
+                Button("history.refresh") {
+                    Task { await viewModel.refresh() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MoleTheme.accent)
+                .disabled(viewModel.isLoading)
+            }
+            .padding(.bottom, 10)
 
-                if viewModel.isLoading && viewModel.snapshot == nil {
-                    ProgressView("history.loading")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 80)
-                } else if let snapshot = viewModel.snapshot {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let errorKey = viewModel.errorMessageKey {
-                            UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
-                        } else if let errorMessage = viewModel.errorMessage {
-                            UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
-                        }
-                        HistorySnapshotContent(snapshot: snapshot)
-                        UtilityNotice(title: "history.info_note", symbol: "shield", isInfo: true)
-                    }
-                } else if let errorKey = viewModel.errorMessageKey {
-                    VStack(spacing: 12) {
+            if viewModel.isLoading && viewModel.snapshot == nil {
+                ProgressView("history.loading")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let snapshot = viewModel.snapshot {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let errorKey = viewModel.errorMessageKey {
                         UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
-                    }
-                    .frame(maxWidth: 560, alignment: .leading)
-                } else if let errorMessage = viewModel.errorMessage {
-                    VStack(spacing: 12) {
+                    } else if let errorMessage = viewModel.errorMessage {
                         UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
                     }
-                    .frame(maxWidth: 560, alignment: .leading)
-                } else {
-                    ProgressView("history.loading")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 80)
+                    HistorySnapshotContent(snapshot: snapshot)
+                    UtilityNotice(title: "history.info_note", symbol: "shield", isInfo: true)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorKey = viewModel.errorMessageKey {
+                VStack(spacing: 12) {
+                    UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                }
+                .frame(maxWidth: 560, alignment: .leading)
+                Spacer()
+            } else if let errorMessage = viewModel.errorMessage {
+                VStack(spacing: 12) {
+                    UtilityNotice(title: "history.error_title", detail: errorMessage, isError: true)
+                }
+                .frame(maxWidth: 560, alignment: .leading)
+                Spacer()
+            } else {
+                ProgressView("history.loading")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 32)
-            .frame(maxWidth: 1180, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .center)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 24)
+        .frame(maxWidth: 1180, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(MoleTheme.background)
         .overlay(alignment: .top) {
             if viewModel.showBusyNotice {
@@ -113,11 +112,19 @@ private struct HistorySnapshotContent: View {
             UtilityPanel {
                 VStack(spacing: 0) {
                     headerRow
-                    ForEach(rows) { row in
-                        tableRow(row)
+                    Divider()
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(rows) { row in
+                                tableRow(row)
+                                Divider().padding(.leading, 18)
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

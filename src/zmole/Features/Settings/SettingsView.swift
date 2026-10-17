@@ -10,6 +10,7 @@ struct SettingsView: View {
     private let purgePathsViewModel: PurgePathsViewModel?
     @ObservedObject private var loginItemViewModel: LoginItemViewModel
     @ObservedObject private var accessMonitor: FullDiskAccessMonitor
+    @ObservedObject private var statusPolicy: StatusFeaturePolicy
     @State private var showingPurgePathsEditor = false
 
     init(
@@ -18,7 +19,8 @@ struct SettingsView: View {
         optimizeWhitelistViewModel: WhitelistViewModel? = nil,
         purgePathsViewModel: PurgePathsViewModel? = nil,
         loginItemViewModel: LoginItemViewModel? = nil,
-        accessMonitor: FullDiskAccessMonitor? = nil
+        accessMonitor: FullDiskAccessMonitor? = nil,
+        statusPolicy: StatusFeaturePolicy? = nil
     ) {
         self.demoLanguage = demoLanguage
         self.whitelistViewModel = whitelistViewModel
@@ -26,6 +28,7 @@ struct SettingsView: View {
         self.purgePathsViewModel = purgePathsViewModel
         _loginItemViewModel = ObservedObject(wrappedValue: loginItemViewModel ?? LoginItemViewModel())
         _accessMonitor = ObservedObject(wrappedValue: accessMonitor ?? FullDiskAccessMonitor())
+        _statusPolicy = ObservedObject(wrappedValue: statusPolicy ?? StatusFeaturePolicy())
     }
 
     var body: some View {
@@ -39,6 +42,7 @@ struct SettingsView: View {
             .padding(.bottom, 10)
             settingsForm
         }
+        .background(MoleTheme.background)
     }
 
     private var settingsForm: some View {
@@ -62,6 +66,8 @@ struct SettingsView: View {
             }
 
             Section("settings.system.title") {
+                Toggle("settings.feature_status.title", isOn: statusFeatureBinding)
+                Text("settings.feature_status.note").font(.caption).foregroundStyle(.secondary)
                 Toggle("settings.login_item", isOn: loginItemBinding)
                 if let reason = loginItemViewModel.failureReason {
                     Text(verbatim: reason).font(.caption).foregroundStyle(.red)
@@ -112,6 +118,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(MoleTheme.background)
         .navigationTitle("sidebar.settings")
         .task {
             if whitelistViewModel?.document == nil { whitelistViewModel?.load() }
@@ -129,6 +137,13 @@ struct SettingsView: View {
             return .constant(demoLanguage.rawValue)
         }
         return $languageOverride
+    }
+
+    private var statusFeatureBinding: Binding<Bool> {
+        Binding(
+            get: { statusPolicy.isEnabled },
+            set: { statusPolicy.setEnabled($0) }
+        )
     }
 
     private var loginItemBinding: Binding<Bool> {

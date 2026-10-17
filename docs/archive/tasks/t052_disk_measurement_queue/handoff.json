@@ -1,0 +1,55 @@
+{
+  "tid": "t052",
+  "attempt": 1,
+  "execution_id": "ebe7c681f3eb4ea4a650d19612df53da",
+  "status": "done",
+  "branch": "t052_disk_measurement_queue",
+  "base_sha": "95f591eb7760c8561a598f5607d4cb4b010223c5",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (329 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests passed; xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 893677bd50952405, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift startWorkerIfNeeded/runQueueLoop",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC001_ContinuousQueueConsumptionAndScanningState",
+      "tests/unit/DiskExplorerTests.swift testQueueWorkerConsumesRequestsEnqueuedWhileInFlightFinishes"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift startWorkerIfNeeded/runQueueLoop",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC002_EnqueueAfterQueueEmptiedDoesNotLeaveStrandedTasks"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift cancel/applyScanResult",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC003_CancellationPreventsNewStartsAndLateResultsDiscarded"
+    ],
+    "AC-004": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift findCoveringInFlight/enqueueMeasurement",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC004_AncestorMeasurementAvoidsDuplicateSubtreeTraversals"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift recalculateAllRecords/childContribs",
+      "src/zmole/Features/Analyze/DiskScanner.swift DiskEntry selfDeduplicatedSize/parentContribution",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC005_HardLinksSeparatedIntoSelfDeduplicatedAndParentContribution"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift applyScanResult/recalculateAllRecords",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC006_AncestorMeasurementCompletesSubscribedRowsListedLater",
+      "tests/unit/DiskExplorerTests.swift testAncestorMeasurementCompletesChildrenListedLaterWithoutStallingOnGeneration"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift reanalyze/applyScanResult",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC007_ReanalyzeBumpsGenerationAndRejectsBlockedOldGenerationResults"
+    ],
+    "AC-008": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift subscribe/removeConsumer",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC008_CompatibleConsumersReuseSingleWalkAndCleanCancellation"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Analyze/DiskScanner.swift LiveDiskScanner walk",
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift recalculateAllRecords",
+      "tests/unit/DiskMeasurementSessionTests.swift testAC009_SymlinkCrossDeviceHardLinkAndUnreadableAccounting"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}
