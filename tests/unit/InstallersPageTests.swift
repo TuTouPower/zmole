@@ -14,6 +14,26 @@ final class InstallersPageTests: XCTestCase {
         XCTAssertEqual(viewModel.candidates.count, 3)
     }
 
+    func testScanIsSkippedWithoutFullDiskAccess() async {
+        let spy = InstallerRunnerSpy()
+        let monitor = FullDiskAccessMonitor(probe: { false })
+        let viewModel = InstallersViewModel(
+            interface: InstallerInterface { arguments in await spy.run(arguments) },
+            coordinator: OperationCoordinator(),
+            accessMonitor: monitor
+        )
+
+        await viewModel.loadListIfNeeded()
+        await viewModel.scan()
+
+        let invocations = await spy.invocations
+        XCTAssertTrue(
+            invocations.isEmpty,
+            "without Full Disk Access the installer scan must not run"
+        )
+        XCTAssertTrue(viewModel.candidates.isEmpty)
+    }
+
     func testNoRemovalBeforeConfirmation() async {
         let spy = InstallerRunnerSpy()
         let viewModel = makeViewModel(spy)

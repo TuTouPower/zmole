@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 struct InstallersView: View {
     @ObservedObject var viewModel: InstallersViewModel
+    @ObservedObject var accessMonitor: FullDiskAccessMonitor
     @State private var search = ""
 
     private var visibleCandidates: [InstallerCandidate] {
@@ -30,7 +31,14 @@ struct InstallersView: View {
         }
         .navigationTitle("sidebar.installers")
         .task {
-            await viewModel.loadListIfNeeded()
+            accessMonitor.refresh()
+            if accessMonitor.isGranted {
+                await viewModel.loadListIfNeeded()
+            }
+        }
+        .onChange(of: accessMonitor.isGranted) { granted in
+            guard granted else { return }
+            Task { await viewModel.scan() }
         }
     }
 
@@ -38,17 +46,21 @@ struct InstallersView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 head
-                statStrip
-                UtilityNotice(title: "installers.trash_note", symbol: "trash")
-                listCard
-                failuresCard
-                if viewModel.showBusyNotice {
-                    RecoverableBusyNotice()
-                }
-                if let errorKey = viewModel.errorMessageKey {
-                    UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
-                } else if let errorMessage = viewModel.errorMessage {
-                    UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
+                if !accessMonitor.isGranted {
+                    FullDiskAccessNotice(monitor: accessMonitor)
+                } else {
+                    statStrip
+                    UtilityNotice(title: "installers.trash_note", symbol: "trash")
+                    listCard
+                    failuresCard
+                    if viewModel.showBusyNotice {
+                        RecoverableBusyNotice()
+                    }
+                    if let errorKey = viewModel.errorMessageKey {
+                        UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                    } else if let errorMessage = viewModel.errorMessage {
+                        UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
+                    }
                 }
             }
             .padding(24)
@@ -73,7 +85,7 @@ struct InstallersView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(MoleTheme.accent)
-            .disabled(viewModel.isListing || viewModel.isRemoving)
+            .disabled(viewModel.isListing || viewModel.isRemoving || !accessMonitor.isGranted)
         }
     }
 

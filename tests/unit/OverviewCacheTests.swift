@@ -649,6 +649,93 @@ final class OverviewCacheTests: XCTestCase {
         )
     }
 
+    func testMissingFullDiskAccessSkipsUsersSegmentWithoutRetrying() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        let permission = MutableFlag(false)
+        let monitor = FullDiskAccessMonitor(probe: { permission.value })
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                case "/System/Library": return 25
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            storageCache: makeCache(directory),
+            accessMonitor: monitor,
+            incompleteRetryDelay: 0.05,
+            now: { now }
+        )
+
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
+
+        let paths = await recorder.paths
+        XCTAssertFalse(paths.contains("/Users"), "without Full Disk Access the user walk must not run")
+        XCTAssertEqual(
+            paths.count, 3,
+            "a permission-limited estimate must not schedule a follow-up scan"
+        )
+        XCTAssertNil(viewModel.breakdown.userDataBytes)
+        XCTAssertFalse(viewModel.breakdown.isComplete)
+    }
+
+    func testGrantingFullDiskAccessRescansWithUsersSegment() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        let permission = MutableFlag(false)
+        let monitor = FullDiskAccessMonitor(probe: { permission.value })
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                case "/System/Library": return 25
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            storageCache: makeCache(directory),
+            accessMonitor: monitor,
+            incompleteRetryDelay: 0.05,
+            now: { now }
+        )
+
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
+
+        permission.value = true
+        monitor.refresh()
+        viewModel.diskAccessDidChange()
+        await viewModel.waitForEstimate()
+
+        let paths = await recorder.paths
+        XCTAssertEqual(paths.filter { $0 == "/Users" }.count, 1)
+        XCTAssertEqual(paths.count, 7, "the granted rescan must probe every segment once")
+        XCTAssertEqual(viewModel.breakdown.userDataBytes, 60)
+        XCTAssertTrue(viewModel.breakdown.isComplete)
+        XCTAssertFalse(viewModel.estimateInvalidated)
+    }
+
     private func tempDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("overview-cache-\(UUID().uuidString)", isDirectory: true)
@@ -712,5 +799,28 @@ private final class MutableNow: @unchecked Sendable {
         lock.lock()
         value += interval
         lock.unlock()
+    }
+}
+
+/// Mutable permission flag so a test can grant Full Disk Access mid-run.
+private final class MutableFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Bool
+
+    init(_ value: Bool) {
+        storage = value
+    }
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            storage = newValue
+            lock.unlock()
+        }
     }
 }

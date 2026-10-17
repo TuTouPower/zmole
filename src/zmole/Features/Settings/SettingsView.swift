@@ -9,6 +9,7 @@ struct SettingsView: View {
     private let optimizeWhitelistViewModel: WhitelistViewModel?
     private let purgePathsViewModel: PurgePathsViewModel?
     @ObservedObject private var loginItemViewModel: LoginItemViewModel
+    @ObservedObject private var accessMonitor: FullDiskAccessMonitor
     @State private var showingPurgePathsEditor = false
 
     init(
@@ -16,13 +17,15 @@ struct SettingsView: View {
         whitelistViewModel: WhitelistViewModel? = nil,
         optimizeWhitelistViewModel: WhitelistViewModel? = nil,
         purgePathsViewModel: PurgePathsViewModel? = nil,
-        loginItemViewModel: LoginItemViewModel? = nil
+        loginItemViewModel: LoginItemViewModel? = nil,
+        accessMonitor: FullDiskAccessMonitor? = nil
     ) {
         self.demoLanguage = demoLanguage
         self.whitelistViewModel = whitelistViewModel
         self.optimizeWhitelistViewModel = optimizeWhitelistViewModel
         self.purgePathsViewModel = purgePathsViewModel
         _loginItemViewModel = ObservedObject(wrappedValue: loginItemViewModel ?? LoginItemViewModel())
+        _accessMonitor = ObservedObject(wrappedValue: accessMonitor ?? FullDiskAccessMonitor())
     }
 
     var body: some View {
@@ -104,6 +107,7 @@ struct SettingsView: View {
             }
 
             Section("settings.permissions.title") {
+                FullDiskAccessSettingsRow(monitor: accessMonitor)
                 PermissionGuidanceView()
             }
         }

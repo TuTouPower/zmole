@@ -155,7 +155,12 @@ struct StorageEstimateLoader: Sendable {
     /// when the scan is cancelled, so callers never treat a cancelled pass as
     /// a complete result. Segments already resolved in `existing` are not
     /// probed again, so a follow-up scan only fills the missing segments.
-    func loadSums(filling existing: StorageSums? = nil) async throws -> StorageSums {
+    /// `includingUsers` is false without Full Disk Access: the `/Users` walk
+    /// would reach protected folders and raise TCC dialogs.
+    func loadSums(
+        filling existing: StorageSums? = nil,
+        includingUsers: Bool = true
+    ) async throws -> StorageSums {
         let applicationsPath = "/Applications"
         let developerPath = "~/Library/Developer"
         let usersPath = "/Users"
@@ -163,7 +168,7 @@ struct StorageEstimateLoader: Sendable {
         var probePaths: [String] = []
         if existing?.applications == nil { probePaths.append(applicationsPath) }
         if existing?.developer == nil { probePaths.append(developerPath) }
-        if existing?.users == nil { probePaths.append(usersPath) }
+        if includingUsers, existing?.users == nil { probePaths.append(usersPath) }
 
         var systemPaths: [String] = []
         if existing?.system == nil {
@@ -197,7 +202,7 @@ struct StorageEstimateLoader: Sendable {
             applications: existing?.applications ?? (sizes[applicationsPath] ?? nil),
             system: system,
             developer: existing?.developer ?? (sizes[developerPath] ?? nil),
-            users: existing?.users ?? (sizes[usersPath] ?? nil)
+            users: includingUsers ? (existing?.users ?? (sizes[usersPath] ?? nil)) : nil
         )
     }
 

@@ -54,11 +54,13 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
     private let installerInterface: InstallerInterface
     private let cleanPreviewStore: CleanPreviewStore
     private let coordinator: OperationCoordinator
+    private let accessMonitor: FullDiskAccessMonitor?
 
     private(set) var results: [PrewarmItem: PrewarmResult] = [:]
     private var queue: [PrewarmItem] = []
     private var retryItems: Set<PrewarmItem> = []
     private var deferredItems: Set<PrewarmItem> = []
+    private var permissionDeferredItems: Set<PrewarmItem> = []
     private var droppedItems: Set<PrewarmItem> = []
     private var resultGeneration = 0
     private var worker: Task<Void, Never>?
@@ -78,13 +80,15 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         process: any MoleProcessControlling & MoleStreaming,
         installerInterface: InstallerInterface? = nil,
         cleanPreviewStore: CleanPreviewStore,
-        coordinator: OperationCoordinator
+        coordinator: OperationCoordinator,
+        accessMonitor: FullDiskAccessMonitor? = nil
     ) {
         self.process = process
         uninstallStream = UninstallListStream(streaming: process)
         self.installerInterface = installerInterface ?? InstallerInterface(process: process)
         self.cleanPreviewStore = cleanPreviewStore
         self.coordinator = coordinator
+        self.accessMonitor = accessMonitor
         queue = PrewarmItem.allCases
         // Published properties fire before the mutation lands; hop one main
         // actor turn so the idle check reads the new value.
@@ -169,6 +173,21 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         coordinator.activeOperation == nil && !externalActivityProvider()
     }
 
+    private var diskAccessGranted: Bool {
+        accessMonitor?.isGranted ?? true
+    }
+
+    /// Requeues scans that were skipped for lack of Full Disk Access.
+    func diskAccessDidChange() {
+        guard diskAccessGranted else { return }
+        let pending = permissionDeferredItems.subtracting(droppedItems)
+        permissionDeferredItems.removeAll()
+        guard !pending.isEmpty else { return }
+        queue = PrewarmItem.allCases.filter { pending.contains($0) }
+            + queue.filter { !pending.contains($0) }
+        poke()
+    }
+
     private func cancelCurrent(requeue: Bool) {
         guard let item = runningItem else { return }
         if requeue, !queue.contains(item) {
@@ -185,6 +204,7 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
         queue = PrewarmItem.allCases
         retryItems.removeAll()
         deferredItems.removeAll()
+        permissionDeferredItems.removeAll()
         droppedItems.removeAll()
         resultGeneration += 1
         poke()
@@ -193,6 +213,12 @@ final class PrewarmService: ObservableObject, PrewarmResultProviding {
     private func run(_ item: PrewarmItem) async {
         if item == .cleanDryRun, cleanPreviewActiveProvider() {
             deferredItems.insert(item)
+            return
+        }
+        if item == .installerList, !diskAccessGranted {
+            // The installer scan walks Downloads/Desktop/Documents; wait for
+            // the user to grant Full Disk Access instead of raising TCC dialogs.
+            permissionDeferredItems.insert(item)
             return
         }
         let generation = resultGeneration
