@@ -88,32 +88,45 @@ struct StorageEstimateLoader: Sendable {
     /// across channels so several paths can be measured in parallel.
     private let channels: [DirectorySize]
     private let systemChildren: SystemChildren
+    private let scheduler: HeavyScanScheduler?
 
     init(
         directorySize: @escaping DirectorySize,
         systemChildren: @escaping SystemChildren = {
             try StorageEstimateLoader.directoryChildren(of: "/System")
-        }
+        },
+        scheduler: HeavyScanScheduler? = nil
     ) {
         channels = [directorySize]
         self.systemChildren = systemChildren
+        self.scheduler = scheduler
     }
 
-    init(loader: AnalyzeSnapshotLoader, home: String = NSHomeDirectory()) {
+    init(
+        loader: AnalyzeSnapshotLoader,
+        home: String = NSHomeDirectory(),
+        scheduler: HeavyScanScheduler? = nil
+    ) {
         channels = [Self.directorySize(for: loader, home: home)]
         systemChildren = {
             try Self.directoryChildren(of: "/System")
         }
+        self.scheduler = scheduler
     }
 
     /// Multi-channel initializer: each loader owns an independent analyze
     /// runner, so probes are distributed across channels and run in parallel.
-    init(loaders: [AnalyzeSnapshotLoader], home: String = NSHomeDirectory()) {
+    init(
+        loaders: [AnalyzeSnapshotLoader],
+        home: String = NSHomeDirectory(),
+        scheduler: HeavyScanScheduler? = nil
+    ) {
         precondition(!loaders.isEmpty, "at least one analyze loader is required")
         channels = loaders.map { Self.directorySize(for: $0, home: home) }
         systemChildren = {
             try Self.directoryChildren(of: "/System")
         }
+        self.scheduler = scheduler
     }
 
     private static func directorySize(for loader: AnalyzeSnapshotLoader, home: String) -> DirectorySize {
@@ -221,11 +234,20 @@ struct StorageEstimateLoader: Sendable {
         return try await withThrowingTaskGroup(of: [String: Int64?].self) { group in
             for (channelIndex, slice) in slices.enumerated() where !slice.isEmpty {
                 let channel = channels[channelIndex]
+                let sched = self.scheduler
                 group.addTask {
                     var results: [String: Int64?] = [:]
                     for path in slice {
                         try Task.checkCancellation()
-                        results[path] = try await channel(path)
+                        if let sched {
+                            let permit = try await sched.acquire(taskID: "estimate:\(path)", priority: .background)
+                            defer {
+                                Task { await permit.release() }
+                            }
+                            results[path] = try await channel(path)
+                        } else {
+                            results[path] = try await channel(path)
+                        }
                     }
                     return results
                 }

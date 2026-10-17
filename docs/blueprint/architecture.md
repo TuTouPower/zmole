@@ -60,6 +60,10 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 `BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出且 clean-list.txt 读取解析任务完全退出释放所有权；写入租约持有期间 clean 不启动，租约释放后补跑。服务拥有显式 hydration 状态，由串行存储所有者 `BackgroundScanStorage`（actor，完全离开 MainActor 进行文件 I/O 与 JSON 编解码）在后台异步加载缓存；加载与新扫描结果基于版本号合并，迟到加载不能覆盖较新结果，不发布成功空缓存造成页面闪空。普通扫描结果采用 100 ms 尾沿合并（持续更新时每 500 ms 强制推进一次水位落盘），失效版本作为高优先级立即串行写入；原子写失败保留上一完整文件与待写快照并标记错误可重试。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`（Schema 2）；schema 不匹配或损坏时整文件忽略并按无缓存安全恢复。写入成功后按数据影响集合精准使受影响结果失效并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
 
+### 重扫描资源准入与调度
+
+应用装配唯一重扫描调度器 `HeavyScanScheduler`，纳管五类后台任务、概览目录估算探测与磁盘测量子树遍历的并发名额准入与完整生命周期计账（生产默认名额为 3，防饥饿界限为 3）。当前页面可见需求提升优先级，切页后撤回提升，已运行任务不被抢占；后台任务达到防饥饿界限后获得下一可用位。通道可用性作为准入前提，不占名额等通道亦不占通道等名额；status watch、轻量卷容量查询、目录首层有界列出与缓存 I/O 不占重扫描名额。任务取消等待底层所有子任务与 worker 退出后释放名额。
+
 ## 捆绑与进程边界
 
 - 钉死版本的 mole 安装树放在 `Contents/Resources/mole/`，入口为 `Contents/Resources/mole/mole`，Go helper 为 `Contents/Resources/mole/bin/analyze-go` 与 `Contents/Resources/mole/bin/status-go`。入口用绝对路径，**不**搜 PATH、**不**调用 brew `mo`、**不**把命令装进 `/usr/local/bin`。

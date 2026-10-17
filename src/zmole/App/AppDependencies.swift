@@ -121,6 +121,7 @@ final class AppDependencies: ObservableObject {
 
         let sharedCoordinator = OperationCoordinator()
         coordinator = sharedCoordinator
+        let heavyScanScheduler = HeavyScanScheduler(maxConcurrency: HeavyScanScheduler.defaultConcurrency)
         let accessMonitor = configuration.isEnabled
             ? FullDiskAccessMonitor(probe: { true })
             : FullDiskAccessMonitor()
@@ -144,6 +145,7 @@ final class AppDependencies: ObservableObject {
                 lanes: scanLanes,
                 cleanPreviewStore: previewStore,
                 cache: cache,
+                scheduler: heavyScanScheduler,
                 coordinator: sharedCoordinator,
                 accessMonitor: accessMonitor
             )
@@ -230,7 +232,10 @@ final class AppDependencies: ObservableObject {
                 try await box.process.run(arguments, stdin: nil, timeout: 600)
             }
         }
-        let storageLoader = StorageEstimateLoader(loaders: estimateLoaders)
+        let storageLoader = StorageEstimateLoader(
+            loaders: estimateLoaders,
+            scheduler: heavyScanScheduler
+        )
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,
             historyLoader: historyLoader,
