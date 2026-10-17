@@ -92,6 +92,39 @@ final class BackgroundScanTests: XCTestCase {
         try await waitUntil { await spies.clean.processCallCount == callsBefore + 1 }
     }
 
+    func testDeferredCleanSuppressesRequestUntilUserActivityEnds() async throws {
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        let spies = ScanSpies(blockedPrefix: ["clean", "--dry-run"])
+        let cache = BackgroundScanCache(fileURL: temporaryFileURL())
+        var fixtures = freshFixtures(now: now, staleItems: [.clean])
+        fixtures[.clean] = BackgroundScanResult(
+            capturedAt: now.addingTimeInterval(-25 * 60 * 60),
+            payload: .cleanPreview(try makeCleanSnapshot(at: spies.previewURL))
+        )
+        cache.save(fixtures)
+        let service = makeService(spies: spies, cache: cache, now: { now })
+
+        try await waitUntil { await spies.clean.blockedCallCount == 1 }
+
+        let waitTask = Task { @MainActor in
+            await service.userDidRescanAndWaitForTermination(.clean)
+        }
+        try await waitUntil { await spies.clean.cancelCount == 1 }
+        await spies.clean.finishCancellation()
+        await waitTask.value
+
+        let callsAfterCancellation = await spies.clean.processCallCount
+        // While deferredClean is active, a request must be suppressed:
+        service.request(.clean)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let callsAfterRequest = await spies.clean.processCallCount
+        XCTAssertEqual(callsAfterRequest, callsAfterCancellation, "deferredClean must suppress request(.clean)")
+
+        // Once the user's activity clears, noteActivityChanged resumes the background clean scan:
+        service.noteActivityChanged()
+        try await waitUntil { await spies.clean.processCallCount == callsAfterCancellation + 1 }
+    }
+
     // AC-003, AC-011: results survive a relaunch, and corrupt or old-schema
     // cache files are ignored without scanning twice.
     func testCacheRoundTripAndFreshResultsSkipScanning() async throws {
@@ -182,6 +215,30 @@ final class BackgroundScanTests: XCTestCase {
         try await waitUntil { service.results[.optimize] != nil }
         service.request(.optimize)
         try await waitUntil { await spies.optimize.processCallCount == 2 }
+    }
+
+    func testCancellationFollowedImmediatelyByRequestRegistersExactlyOneNewTask() async throws {
+        let spies = ScanSpies(blockedPrefix: ["optimize", "--dry-run"])
+        let service = makeService(spies: spies, cache: BackgroundScanCache(fileURL: temporaryFileURL()))
+
+        try await waitUntil { await spies.optimize.blockedCallCount == 1 }
+        let cancelTask = Task {
+            await service.cancelAndWait(.optimize)
+        }
+        try await waitUntil { await spies.optimize.cancelCount == 1 }
+        // While cancelAndWait is in-flight, a request is safely ignored:
+        service.request(.optimize)
+
+        await spies.optimize.finishCancellation()
+        await cancelTask.value
+
+        // Now cancelAndWait has fully resolved; next request starts a single new task:
+        service.request(.optimize)
+        try await waitUntil { await spies.optimize.processCallCount == 2 }
+        await spies.optimize.releaseBlocked()
+        try await waitUntil { service.results[.optimize] != nil }
+        let finalCalls = await spies.optimize.processCallCount
+        XCTAssertEqual(finalCalls, 2, "only one task was registered after cancellation")
     }
 
     // AC-006: a write invalidates every cached result and starts a fresh pass.
