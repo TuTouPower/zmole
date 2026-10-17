@@ -78,6 +78,10 @@ protocol BackgroundScanProviding: AnyObject {
     /// Starts (or reuses) the scan for one item. Used by refresh buttons and by
     /// a page that has no data yet.
     func request(_ item: BackgroundScanItem)
+    /// Requests the scan with an explicit scheduling priority.
+    func request(_ item: BackgroundScanItem, priority: ScanPriority)
+    /// Dynamically elevates or demotes the priority of an in-flight or waiting scan.
+    func setPriority(_ item: BackgroundScanItem, _ priority: ScanPriority)
     /// Waits for the initial disk cache hydration to complete.
     func waitForHydration() async
     /// Waits for an in-flight scan of this item to complete, if any.
@@ -97,6 +101,12 @@ extension BackgroundScanProviding {
     var isHydrated: Bool { true }
     var persistedRevision: UInt64 { 0 }
     func waitForHydration() async {}
+
+    func request(_ item: BackgroundScanItem, priority: ScanPriority) {
+        request(item)
+    }
+
+    func setPriority(_ item: BackgroundScanItem, _ priority: ScanPriority) {}
 
     func userDidRescanAndWaitForTermination(_ item: BackgroundScanItem) async {
         userDidRescan(item)
@@ -143,10 +153,12 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     private let uninstallStream: UninstallListStream
     private let cleanPreviewStore: CleanPreviewStore
     private let storage: BackgroundScanStorage
+    private let scheduler: HeavyScanScheduler
     private let coordinator: OperationCoordinator
     private let accessMonitor: FullDiskAccessMonitor?
     private let periodicTick: TimeInterval
     private let nowProvider: () -> Date
+    private var elevatedItems: Set<BackgroundScanItem> = []
 
     private var tasks: [BackgroundScanItem: Task<Void, Never>] = [:]
     private var lastFailureAt: [BackgroundScanItem: Date] = [:]
@@ -162,6 +174,7 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         cleanPreviewStore: CleanPreviewStore,
         cache: BackgroundScanCache? = nil,
         storage: BackgroundScanStorage? = nil,
+        scheduler: HeavyScanScheduler? = nil,
         coordinator: OperationCoordinator,
         accessMonitor: FullDiskAccessMonitor? = nil,
         periodicTick: TimeInterval = 60,
@@ -179,6 +192,7 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
             storageInstance = BackgroundScanStorage(fileURL: BackgroundScanCache.live.fileURL, now: now)
         }
         self.storage = storageInstance
+        self.scheduler = scheduler ?? HeavyScanScheduler()
         self.coordinator = coordinator
         self.accessMonitor = accessMonitor
         self.periodicTick = periodicTick
@@ -279,6 +293,13 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     /// Starts a scan unless that item is already running. Used by the manual
     /// refresh path and by the periodic freshness check.
     func request(_ item: BackgroundScanItem) {
+        request(item, priority: .background)
+    }
+
+    func request(_ item: BackgroundScanItem, priority: ScanPriority) {
+        if priority == .userVisible {
+            setPriority(item, .userVisible)
+        }
         guard tasks[item] == nil else { return }
         if item == .installerList, !diskAccessGranted {
             // The installer scan walks Downloads/Desktop/Documents; wait for
@@ -299,6 +320,24 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         tasks[item] = Task { @MainActor [weak self] in
             await self?.run(item)
         }
+    }
+
+    func setPriority(_ item: BackgroundScanItem, _ priority: ScanPriority) {
+        if priority == .userVisible {
+            elevatedItems.insert(item)
+            Task { [scheduler] in
+                await scheduler.elevate(taskID: "bg:\(item.rawValue)")
+            }
+        } else {
+            elevatedItems.remove(item)
+            Task { [scheduler] in
+                await scheduler.demote(taskID: "bg:\(item.rawValue)")
+            }
+        }
+    }
+
+    private func priority(for item: BackgroundScanItem) -> ScanPriority {
+        elevatedItems.contains(item) ? .userVisible : .background
     }
 
     func waitForScan(_ item: BackgroundScanItem) async {
@@ -445,6 +484,19 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         defer {
             runningItems.remove(item)
             tasks[item] = nil
+        }
+
+        let permit: HeavyScanPermit
+        do {
+            permit = try await scheduler.acquire(
+                taskID: "bg:\(item.rawValue)",
+                priority: priority(for: item)
+            )
+        } catch {
+            return
+        }
+        defer {
+            Task { await permit.release() }
         }
 
         if item == .uninstallList {

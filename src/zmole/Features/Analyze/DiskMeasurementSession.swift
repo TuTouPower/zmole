@@ -78,17 +78,20 @@ final class DiskMeasurementSession: ObservableObject {
     private var workerTask: Task<Void, Never>?
     private var workerToken: Int = 0
     private var isListing: Bool = false
+    private let scheduler: HeavyScanScheduler
 
     init(
         scanner: DiskScanning,
         root: String = "/",
         config: Config = Config(),
-        store: DiskSessionStore? = nil
+        store: DiskSessionStore? = nil,
+        scheduler: HeavyScanScheduler? = nil
     ) {
         self.scanner = scanner
         self.rootPath = root
         self.config = config
         self.store = store ?? (try? DiskSessionStore(maxStorageBytes: config.maxStorageBytes)) ?? (try! DiskSessionStore(maxStorageBytes: 100 * 1024 * 1024))
+        self.scheduler = scheduler ?? HeavyScanScheduler()
     }
 
     func close() {
@@ -443,13 +446,14 @@ final class DiskMeasurementSession: ObservableObject {
     private func runQueueLoop(token: Int) async {
         await withTaskGroup(of: (String, DiskScanResult, Int).self) { group in
             var inFlight = 0
-            let maxConcurrent = 3
+            let maxConcurrent = self.scheduler.maxConcurrency
 
             while !Task.isCancelled && self.workerToken == token {
                 if inFlight < maxConcurrent, let nextItem = self.dequeueNext() {
                     let path = nextItem.path
                     let gen = nextItem.generation
                     let scanner = self.scanner
+                    let sched = self.scheduler
 
                     inFlight += 1
                     var inFlightTask: Task<DiskScanResult, Never>?
@@ -465,6 +469,12 @@ final class DiskMeasurementSession: ObservableObject {
                     )
 
                     group.addTask {
+                        let permit = try? await sched.acquire(taskID: "disk:\(path)", priority: .userVisible)
+                        defer {
+                            if let permit {
+                                Task { await permit.release() }
+                            }
+                        }
                         let measureTask = Task {
                             await scanner.measureSubtree(path, deduplicator: HardLinkDeduplicator())
                         }

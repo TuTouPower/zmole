@@ -9,7 +9,11 @@ final class BackgroundScanTests: XCTestCase {
     func testAllItemsStartInParallelAndUseReadOnlyCommands() async throws {
         let probe = ConcurrencyProbe()
         let spies = ScanSpies(probe: probe, blockFirstProcessCall: true)
-        let service = makeService(spies: spies, cache: BackgroundScanCache(fileURL: temporaryFileURL()))
+        let service = makeService(
+            spies: spies,
+            cache: BackgroundScanCache(fileURL: temporaryFileURL()),
+            scheduler: HeavyScanScheduler(maxConcurrency: 5)
+        )
 
         try await waitUntil { await spies.blockedProcessCallCount == 4 }
         let maxConcurrent = await probe.max
@@ -494,6 +498,7 @@ final class BackgroundScanTests: XCTestCase {
     private func makeService(
         spies: ScanSpies,
         cache: BackgroundScanCache,
+        scheduler: HeavyScanScheduler? = nil,
         coordinator: OperationCoordinator? = nil,
         accessMonitor: FullDiskAccessMonitor? = nil,
         periodicTick: TimeInterval = 3600,
@@ -503,6 +508,7 @@ final class BackgroundScanTests: XCTestCase {
             lanes: spies.lanes,
             cleanPreviewStore: CleanPreviewStore(fileURL: spies.previewURL),
             cache: cache,
+            scheduler: scheduler,
             coordinator: coordinator ?? OperationCoordinator(),
             accessMonitor: accessMonitor,
             periodicTick: periodicTick,

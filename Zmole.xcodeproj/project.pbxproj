@@ -60,6 +60,7 @@
 		8270D6BD09F46D38ED004EF6 /* PurgePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B23CE4C7F31BDFABF9A195 /* PurgePaths.swift */; };
 		82FED838A215CEA92F4B2D32 /* OptimizePurgePageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49669EE0AB0105F766BE1182 /* OptimizePurgePageTests.swift */; };
 		8357E024A097C6EF92F44F52 /* MoleBridgeError.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BEE154B29802D8BA24B210 /* MoleBridgeError.swift */; };
+		837E68AC5200525E2245C046 /* HeavyScanSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4069B9839D77A8476E88C934 /* HeavyScanSchedulerTests.swift */; };
 		847E40CFAE4237330B0E65D1 /* PurgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFEE226AA95D591E7CEC430F /* PurgeView.swift */; };
 		86DA45463C3C50F94EA74705 /* StatusStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22A8D1ED5B34DF4188D0304 /* StatusStreamTests.swift */; };
 		8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */; };
@@ -76,6 +77,7 @@
 		9D9ACAF2D6215B22B61C9437 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F155DB1A34BDD42384DD4A /* OverviewView.swift */; };
 		A16BD324EF1D18D53E361A2F /* CommandConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */; };
 		A35740A74F30B0E9235790FA /* CommandBusy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAC7ABDE452386AAC489B16 /* CommandBusy.swift */; };
+		A420941A1B9FFB6962BAD735 /* HeavyScanScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79075F294E09B0FE8D0D8AA4 /* HeavyScanScheduler.swift */; };
 		A769E569E65A070E26CF954F /* InstallerInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5A424E1EF896610C7E457D /* InstallerInterface.swift */; };
 		A9E3BC9E069984C4DC7AA35C /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2FF8C842174A39D87371 /* CommandPaletteView.swift */; };
 		AA08085E2058EECEEFFFDE49 /* UninstallMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217901BD849972859EAA0561 /* UninstallMetadata.swift */; };
@@ -193,6 +195,7 @@
 		3BD6E9DDA001E4C3C32A8A33 /* NavigationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationModel.swift; sourceTree = "<group>"; };
 		3CF4C16E0DACA5FCB6797FE0 /* OperationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationCoordinator.swift; sourceTree = "<group>"; };
 		3EF4365F599292D64FBECA25 /* MaintenanceOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceOutput.swift; sourceTree = "<group>"; };
+		4069B9839D77A8476E88C934 /* HeavyScanSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeavyScanSchedulerTests.swift; sourceTree = "<group>"; };
 		44C3F9D5F1E53948C6AE4CA1 /* BackgroundScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundScanTests.swift; sourceTree = "<group>"; };
 		48174D617546904A2B32F04F /* SpaceMapLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMapLayout.swift; sourceTree = "<group>"; };
 		481E9C001CEBBE2F61993BE8 /* RecoverableBusyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoverableBusyTests.swift; sourceTree = "<group>"; };
@@ -220,6 +223,7 @@
 		72581F069277886E323D5629 /* AppAssemblyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAssemblyTests.swift; sourceTree = "<group>"; };
 		77F3BC43C66FFD1FFABE5573 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		78C972BD31A9D530B068FFA0 /* mole */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mole; path = src/zmole/Resources/mole; sourceTree = SOURCE_ROOT; };
+		79075F294E09B0FE8D0D8AA4 /* HeavyScanScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeavyScanScheduler.swift; sourceTree = "<group>"; };
 		7DB7A53427073C2EC46CB33C /* DiskWalkMemoryBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskWalkMemoryBudgetTests.swift; sourceTree = "<group>"; };
 		7F7FE0EAA22198905325F47A /* NavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationTests.swift; sourceTree = "<group>"; };
 		8420B1435B244B9A28B385F9 /* AppLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLinks.swift; sourceTree = "<group>"; };
@@ -400,6 +404,7 @@
 				077938261256A5757ADCD877 /* DiskMeasurementSessionTests.swift */,
 				6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */,
 				7DB7A53427073C2EC46CB33C /* DiskWalkMemoryBudgetTests.swift */,
+				4069B9839D77A8476E88C934 /* HeavyScanSchedulerTests.swift */,
 				BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
 				4E2A3EB57EF98F5A4F9801C4 /* MoleStreamTests.swift */,
@@ -544,6 +549,7 @@
 				117AEBB68533FCBFFCF7B7E9 /* BackgroundScanService.swift */,
 				681847AFA405A693638AE93D /* BackgroundScanStorage.swift */,
 				6EAC7ABDE452386AAC489B16 /* CommandBusy.swift */,
+				79075F294E09B0FE8D0D8AA4 /* HeavyScanScheduler.swift */,
 				0A9B2282FE55EB1F2EF86557 /* MaintenanceOperation.swift */,
 				3CF4C16E0DACA5FCB6797FE0 /* OperationCoordinator.swift */,
 				1DDB92923A4F9E7A86C4525A /* OperationSession.swift */,
@@ -726,6 +732,7 @@
 				B3F3667A661632F5DE0B4F6E /* DiskMeasurementSessionTests.swift in Sources */,
 				7CD4372C0CACFC2D9E655E19 /* DiskScannerTests.swift in Sources */,
 				B010DBA296FF8D6BD9B90369 /* DiskWalkMemoryBudgetTests.swift in Sources */,
+				837E68AC5200525E2245C046 /* HeavyScanSchedulerTests.swift in Sources */,
 				D0E6D7139D18476B9A0C4132 /* InstallersPageTests.swift in Sources */,
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
 				292D2C2042E6EB9020294BD9 /* MoleStreamTests.swift in Sources */,
@@ -789,6 +796,7 @@
 				436025AEF4986E60BADF0603 /* ErrorKeyProviding.swift in Sources */,
 				B8F63B6BCA88B663D8BE40EB /* FullDiskAccess.swift in Sources */,
 				E57CCCF61B0AE5B7270FF70F /* FullDiskAccessViews.swift in Sources */,
+				A420941A1B9FFB6962BAD735 /* HeavyScanScheduler.swift in Sources */,
 				F9DB19459EF0D0E31E9C38CF /* HistorySnapshot.swift in Sources */,
 				47C413712EF1B93809099416 /* HistoryView.swift in Sources */,
 				740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */,

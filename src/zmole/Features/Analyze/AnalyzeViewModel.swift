@@ -44,11 +44,12 @@ final class AnalyzeViewModel: ObservableObject {
         scanner: DiskScanning,
         root: String = "/",
         revealer: FileRevealing = LiveFileRevealer(),
-        session: DiskMeasurementSession? = nil
+        session: DiskMeasurementSession? = nil,
+        scheduler: HeavyScanScheduler? = nil
     ) {
         self.rootPath = root
         self.revealer = revealer
-        let activeSession = session ?? DiskMeasurementSession(scanner: scanner, root: root)
+        let activeSession = session ?? DiskMeasurementSession(scanner: scanner, root: root, scheduler: scheduler)
         self.session = activeSession
         self.pathStack = [root]
 
