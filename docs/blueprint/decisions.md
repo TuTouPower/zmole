@@ -113,3 +113,12 @@
     2. 概览复用 `DiskMeasurementSession` 统一测量会话，一轮 `/Users` 遍历同时获取包含 Developer 的用户总量及当前用户 Developer 命名子树统计，消除独立重遍历。Developer 子树优先归属，跨目录硬链接归属 Developer，用户数据为 users 总量减 Developer 贡献。在 AC-010 对名额 1、2、3、4 的基准测试中（名额 1 avg ~0.024s, 名额 2 avg ~0.012s, 名额 3 avg ~0.012s, 名额 4 avg ~0.012s），并发名额 2-3 显著优于名额 1，确认生产默认并发名额 3 稳健适用。
 - 结论：选 2。移除冗余的 `estimatePool` 与 analyze 命令通道，缓存升级为 schemaVersion 3。
 - 替代：无
+
+## 014 统一测量后端的元数据读取策略（2026-10-18）
+
+- 背景：在磁盘与概览统一测量后端上，评估是否应使用 Foundation URL 批量枚举预取替代现有的逐项 POSIX `lstat` 读取。
+- 选项：
+    1. 引入 Foundation URL 批量属性预取（`contentsOfDirectory(at:includingPropertiesForKeys:)`）；
+    2. 保持 POSIX `lstat` 逐项状态读取。
+- 结论：选 2。在 spike s002 的 10 轮 AB/BA 交错基准实验中，Foundation URL 预取因为堆上为每个文件创建 `NSURL` 实例及字典属性桥接，耗时较逐项 `lstat` 增加 338%（avg 0.0505s vs 0.0115s），且因 APFS 块分配大小 `st_blocks` 与 inode 无法直接预取而仍需系统调用补取。因此坚决不采用 URL 预取，生产环境维持逐项 `lstat` 读取（见 d002、s002）。
+- 替代：无
