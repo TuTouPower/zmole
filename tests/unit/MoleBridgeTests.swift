@@ -251,6 +251,41 @@ final class MoleBridgeTests: XCTestCase {
         XCTAssertNotEqual(kill(childPID, 0), 0)
     }
 
+    func testBridgeWaitsForPipesToCloseEvenIfProcessHasExited() async throws {
+        let releaseFile = temporaryDirectory.appendingPathComponent("release-pipe")
+        let executable = try makeExecutable(
+            """
+            #!/bin/sh
+            (
+                while [ ! -f "\(releaseFile.path)" ]; do
+                    sleep 0.05
+                done
+                echo "deferred-output"
+            ) &
+            exit 42
+            """
+        )
+        let bridge = try MoleBridge(executableURL: executable)
+        let runTask = Task {
+            try await bridge.run(timeout: 10)
+        }
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let isBusy = await bridge.isBusy
+        XCTAssertTrue(isBusy)
+
+        try "done".write(to: releaseFile, atomically: true, encoding: .utf8)
+
+        do {
+            let result = try await runTask.value
+            XCTFail("Expected commandFailed with exit code 42, got success: \(result)")
+        } catch MoleBridgeError.commandFailed(let result) {
+            XCTAssertEqual(result.exitCode, 42)
+            XCTAssertTrue(result.stdout.contains("deferred-output"))
+        }
+    }
+
     private func makeExecutable(_ source: String) throws -> URL {
         let url = temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try source.write(to: url, atomically: true, encoding: .utf8)
