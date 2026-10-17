@@ -3,6 +3,7 @@ import Foundation
 struct SpaceMapTile: Identifiable {
     let entry: DiskEntry
     let rect: CGRect
+    var isAggregate = false
     var id: String { entry.id }
 }
 

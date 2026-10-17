@@ -61,6 +61,10 @@ final class PreviewLeaseCoordinator {
         lease?.markDataModified()
     }
 
+    func markDataUnmodified() {
+        lease?.markDataUnmodified()
+    }
+
     func release(clearPreviewGeneration: Bool = true) {
         lease?.release()
         lease = nil

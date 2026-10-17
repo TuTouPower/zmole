@@ -113,6 +113,22 @@ protocol DiskScanning: Sendable {
     /// `st_blocks × 512`; hard links count once per deduplicator; symlinks
     /// count only themselves; cross-device directories are excluded.
     func measureSubtree(_ path: String, deduplicator: HardLinkDeduplicator) async -> DiskScanResult
+    func listDirectory(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws
+    func measureSubtree(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws
+}
+
+extension DiskScanning {
+    func listDirectory(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws {
+        let entries = try await listDirectory(path)
+        try Task.checkCancellation()
+        try store.importResult(DiskScanResult(path: path, totalSize: entries.compactMap(\.knownSize).reduce(0, +), isReadable: true, levels: [path: DiskLevel(entries: entries, totalSize: 0)]))
+    }
+
+    func measureSubtree(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws {
+        let result = await measureSubtree(path, deduplicator: HardLinkDeduplicator())
+        try Task.checkCancellation()
+        try store.importResult(result)
+    }
 }
 
 /// Real file-system scanner. Read-only: everything comes from `lstat` and
@@ -140,6 +156,61 @@ struct LiveDiskScanner: DiskScanning {
         } onCancel: {
             work.cancel()
         }
+    }
+
+    func listDirectory(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws {
+        let work = Task.detached(priority: .utility) {
+            try Self.readLevel(path, into: store, batchLimit: batchLimit)
+            try store.recalculateAll()
+        }
+        try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+    }
+
+    func measureSubtree(_ path: String, into store: DiskSessionStore, batchLimit: Int) async throws {
+        let work = Task.detached(priority: .utility) {
+            var next: String? = path
+            while let current = next {
+                try Task.checkCancellation()
+                do {
+                    try Self.readLevel(current, into: store, batchLimit: batchLimit)
+                } catch is DiskScanError {
+                    try store.beginLevel(current)
+                    try store.finishLevel(current, readable: false, complete: true)
+                }
+                next = try store.nextUnlistedDirectory()
+            }
+            try Task.checkCancellation()
+            try store.recalculateAll()
+        }
+        try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+    }
+
+    private static func readLevel(_ path: String, into store: DiskSessionStore, batchLimit: Int) throws {
+        guard let directory = nodeStat(path), directory.isDirectory, let handle = opendir(path) else {
+            throw DiskScanError.unreadable(path)
+        }
+        defer { closedir(handle) }
+        try store.beginLevel(path)
+        var batch: [DiskEntry] = []
+        while true {
+            try Task.checkCancellation()
+            errno = 0
+            guard let node = readdir(handle) else {
+                if errno != 0 { throw DiskScanError.unreadable(path) }
+                break
+            }
+            let name = withUnsafePointer(to: &node.pointee.d_name) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: Int(MAXNAMLEN) + 1) { String(cString: $0) }
+            }
+            if name == "." || name == ".." { continue }
+            if let child = entry(name: name, parent: path, parentDevice: directory.device) { batch.append(child) }
+            if batch.count >= max(1, batchLimit) {
+                try store.appendEntries(parent: path, entries: batch)
+                batch.removeAll(keepingCapacity: true)
+            }
+        }
+        if !batch.isEmpty { try store.appendEntries(parent: path, entries: batch) }
+        try store.finishLevel(path, readable: true, complete: false)
     }
 
     struct NodeStat {

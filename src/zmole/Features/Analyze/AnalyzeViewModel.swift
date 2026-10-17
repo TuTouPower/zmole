@@ -29,6 +29,24 @@ final class AnalyzeViewModel: ObservableObject {
     @Published private(set) var canGoBack = false
     /// Directories expanded inline in the left list (paths, not navigation).
     @Published private(set) var expandedPaths: Set<String> = []
+    @Published private(set) var pageOffset = 0
+
+    var pageSize: Int { min(100, session.config.maxResidentEntries) }
+
+    func changePage(by pages: Int) {
+        pageOffset = max(0, pageOffset + pages * pageSize)
+        visibleRowsCache = nil
+    }
+
+    func resetPage() {
+        pageOffset = 0
+        visibleRowsCache = nil
+    }
+
+    func hasNextPage(search: String) -> Bool {
+        guard let path = currentPath else { return false }
+        return pageOffset + pageSize < session.store.countEntries(parentPath: path, search: search)
+    }
 
     let rootPath: String
     let session: DiskMeasurementSession
@@ -74,6 +92,7 @@ final class AnalyzeViewModel: ObservableObject {
     }
 
     private func syncWithSession() {
+        errorMessage = session.errorMessage
         guard let current = level?.path, let record = session.levelRecord(for: current) else {
             return
         }
@@ -99,8 +118,12 @@ final class AnalyzeViewModel: ObservableObject {
             return cache.rows
         }
         var rows: [AnalyzeRow] = []
+        let entries: [DiskEntry]
+        if let path = currentPath {
+            entries = (try? session.pagedEntries(path: path, offset: pageOffset, limit: pageSize, search: expandedPaths.isEmpty ? search : "", sort: sort)) ?? []
+        } else { entries = [] }
         appendRows(
-            from: level?.entries ?? [],
+            from: entries,
             depth: 0,
             total: level?.totalSize,
             into: &rows,
@@ -144,6 +167,7 @@ final class AnalyzeViewModel: ObservableObject {
 
     /// Looks a row up in the current level or any inline-expanded run.
     func entry(for path: String) -> DiskEntry? {
+        if let entry = visibleRowsCache?.rows.first(where: { $0.entry.path == path })?.entry { return entry }
         if let entry = level?.entries.first(where: { $0.path == path }) {
             return entry
         }
@@ -177,6 +201,11 @@ final class AnalyzeViewModel: ObservableObject {
         visibleRowsCache = nil
     }
 
+    var hasMappedEntries: Bool {
+        guard let path = currentPath else { return false }
+        return ((try? session.pagedEntries(path: path, limit: 1, sort: .size).first?.knownSize) ?? 0) > 0
+    }
+
     /// Cached space-map layout, keyed by level revision and pane size.
     func spaceMapTiles(size: CGSize) -> [SpaceMapTile] {
         guard let level else { return [] }
@@ -185,10 +214,13 @@ final class AnalyzeViewModel: ObservableObject {
            cache.size == size {
             return cache.tiles
         }
-        let tiles = SpaceMapLayout.tiles(
-            entries: level.entries,
-            in: CGRect(origin: .zero, size: size)
-        )
+        var entries = (try? session.pagedEntries(path: level.path, limit: pageSize, sort: .size)) ?? []
+        let represented = entries.reduce(Int64(0)) { $0 + ($1.parentContribution ?? $1.knownSize ?? 0) }
+        if level.totalSize > represented {
+            entries.append(DiskEntry(name: String(localized: "analyze.remaining_entries"), path: "", isDirectory: false, value: .size(level.totalSize - represented)))
+        }
+        let tiles = SpaceMapLayout.tiles(entries: entries, in: CGRect(origin: .zero, size: size))
+            .map { SpaceMapTile(entry: $0.entry, rect: $0.rect, isAggregate: $0.entry.path.isEmpty) }
         tilesCache = (levelRevision, size, tiles)
         return tiles
     }
@@ -243,6 +275,7 @@ final class AnalyzeViewModel: ObservableObject {
     }
 
     private func showPath(_ path: String) async {
+        resetPage()
         errorMessage = nil
         errorMessageKey = nil
         if let record = session.levelRecord(for: path) {

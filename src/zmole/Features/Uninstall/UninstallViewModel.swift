@@ -35,6 +35,9 @@ final class UninstallViewModel: ObservableObject {
     private var transientErrorKey: String?
     private var iconTask: Task<Void, Never>?
     private var scanSubscription: AnyCancellable?
+    private var adoptedResult: BackgroundScanResult?
+    private var listIsComplete = false
+    private var displayingProgress = false
 
     init(
         process: any MoleProcessControlling,
@@ -76,12 +79,21 @@ final class UninstallViewModel: ObservableObject {
         apps.filter { selectedPaths.contains($0.path) }
     }
 
+    private var sharedListIsUsable: Bool {
+        guard listIsComplete else { return false }
+        guard let scan else { return true }
+        return scan.result(for: .uninstallList) != nil
+            && !(scan.result(for: .uninstallList)?.isStale ?? true)
+            && !scan.runningItems.contains(.uninstallList)
+            && !scan.failedItems.contains(.uninstallList)
+    }
+
     var canUninstall: Bool {
-        guard !selectedPaths.isEmpty, !isListing, !session.isBusy else { return false }
+        guard sharedListIsUsable, !selectedPaths.isEmpty, !isListing, !session.isBusy else { return false }
         let resolvedPaths = Set(listings.lazy.filter(\.isResolved).map(\.path))
         return selectedPaths.isSubset(of: resolvedPaths)
     }
-    var canConfirm: Bool { session.canConfirm && leaseCoordinator.isCurrentPreview }
+    var canConfirm: Bool { sharedListIsUsable && !isListing && session.canConfirm && leaseCoordinator.isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
     var errorMessageKey: String? { transientErrorKey ?? session.result?.errorKey }
     var errorMessage: String? {
@@ -152,10 +164,7 @@ final class UninstallViewModel: ObservableObject {
             }
             if let result = scan.result(for: .uninstallList),
                 case let .uninstallRows(rows) = result.payload {
-                listings = rows
-                listCapturedAt = result.capturedAt
-                hasLoaded = true
-                startIconLoading()
+                adoptCompletedList(result, rows: rows)
                 if result.isStale {
                     scan.request(.uninstallList)
                 }
@@ -183,6 +192,7 @@ final class UninstallViewModel: ObservableObject {
     private func performList(using stream: UninstallListStream) async {
         guard !isListing else { return }
         listErrorMessage = nil
+        listIsComplete = false
         isListing = true
         defer { isListing = false }
 
@@ -197,6 +207,7 @@ final class UninstallViewModel: ObservableObject {
                 listings = merged
             }
             hasLoaded = true
+            listIsComplete = true
         } catch {
             listings = []
             hasLoaded = false
@@ -213,30 +224,51 @@ final class UninstallViewModel: ObservableObject {
     }
 
     private func syncWithScanService() {
-        guard let scan else { return }
-        let running = scan.runningItems.contains(.uninstallList)
-        isListing = running
-        if running {
-            let inProgress = scan.inProgressUninstallList()
-            if !inProgress.isEmpty {
-                listings = inProgress
-                hasLoaded = true
-                startIconLoading()
-            }
-        } else {
-            if let result = scan.result(for: .uninstallList),
-               case let .uninstallRows(rows) = result.payload {
+        guard let scan, !session.isExecuting else { return }
+        isListing = scan.runningItems.contains(.uninstallList)
+        listIsComplete = false
+        if isListing {
+            let rows = scan.inProgressUninstallList()
+            if !rows.isEmpty, listings != rows {
+                displayingProgress = true
                 listings = rows
-                listCapturedAt = result.capturedAt
-                hasLoaded = true
                 startIconLoading()
             }
-            if scan.failedItems.contains(.uninstallList) {
-                listErrorMessage = String(localized: "uninstall.error.list_failed")
-            } else {
-                listErrorMessage = nil
-            }
+        } else if let result = scan.result(for: .uninstallList),
+                  case let .uninstallRows(rows) = result.payload {
+            if displayingProgress { listings = rows }
+            displayingProgress = false
+            adoptCompletedList(result, rows: rows)
+        } else {
+            listings = []
+            hasLoaded = false
         }
+        if scan.failedItems.contains(.uninstallList) {
+            listIsComplete = false
+            listErrorMessage = String(localized: "uninstall.error.list_failed")
+        } else {
+            listErrorMessage = nil
+        }
+    }
+
+    private func adoptCompletedList(_ result: BackgroundScanResult, rows: [UninstallAppListing]) {
+        listIsComplete = !result.isStale
+        if result != adoptedResult {
+            listings = rows
+            pruneSessionState(to: Set(rows.map(\.path)))
+            selectedPaths.removeAll()
+            relatedLoadedIDs.removeAll()
+            relatedPathsByID.removeAll()
+            if !session.isBusy {
+                leaseCoordinator.release()
+                session.invalidate()
+            }
+            adoptedResult = result
+            startIconLoading()
+        }
+        hasLoaded = true
+        listCapturedAt = result.capturedAt
+        if !rows.contains(where: { $0.path == focusedAppID }) { focusedAppID = rows.first?.path }
     }
 
     private func pruneSessionState(to seenPaths: Set<String>) {
@@ -450,12 +482,12 @@ final class UninstallViewModel: ObservableObject {
                 throw UninstallViewModelError.changedTarget
             }
             selectedPaths = Set(currentPreview.selectedIDs)
+            leaseCoordinator.markDataModified()
             let result = try await process.run(
                 ["uninstall"] + currentPreview.apps.map(\.uninstallName),
                 stdin: Self.confirmationInput,
                 timeout: 600
             )
-            leaseCoordinator.markDataModified()
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             let operationResult = UninstallBatchResultParser.result(
                 result,
@@ -480,6 +512,7 @@ final class UninstallViewModel: ObservableObject {
             leaseCoordinator.invalidatePreviews()
             leaseCoordinator.release()
         } catch {
+            if CommandBusy.commandDidNotStart(error) { leaseCoordinator.markDataUnmodified() }
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true

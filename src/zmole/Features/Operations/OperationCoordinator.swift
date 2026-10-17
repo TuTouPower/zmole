@@ -94,6 +94,10 @@ final class OperationCoordinator: ObservableObject {
         return OperationLease(id: id, operation: operation, impact: resolvedImpact, coordinator: self)
     }
 
+    func restoreVersion(_ version: UInt64, for item: BackgroundScanItem) {
+        scanItemVersions[item] = max(scanItemVersions[item] ?? 0, version)
+    }
+
     func version(for item: BackgroundScanItem) -> UInt64 {
         scanItemVersions[item] ?? 0
     }
@@ -154,6 +158,10 @@ final class OperationLease {
 
     func markDataModified() {
         hasModifiedData = true
+    }
+
+    func markDataUnmodified() {
+        hasModifiedData = false
     }
 
     func release() {

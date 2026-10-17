@@ -498,6 +498,7 @@ final class OverviewViewModel: ObservableObject {
             let merged = try await storageLoader.loadSums(
                 filling: partial,
                 includingUsers: includeUsers,
+                refresh: partial == nil,
                 onProgress: { [weak self] progressiveSums in
                     Task { @MainActor [weak self] in
                         guard let self, self.estimateGeneration == generation else { return }

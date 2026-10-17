@@ -136,8 +136,8 @@ final class CleanViewModel: ObservableObject {
         previewCapturedAt = nil
 
         do {
-            let result = try await process.run(["clean"], stdin: nil, timeout: 600)
             leaseCoordinator.markDataModified()
+            let result = try await process.run(["clean"], stdin: nil, timeout: 600)
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             showBusyNotice = false
             let summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
@@ -155,7 +155,6 @@ final class CleanViewModel: ObservableObject {
             leaseCoordinator.invalidatePreviews()
             leaseCoordinator.release()
         } catch let error as MoleBridgeError where error == .cancelled {
-            leaseCoordinator.markDataModified()
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
                 id: execution.id
@@ -163,6 +162,7 @@ final class CleanViewModel: ObservableObject {
             leaseCoordinator.invalidatePreviews()
             leaseCoordinator.release()
         } catch {
+            if CommandBusy.commandDidNotStart(error) { leaseCoordinator.markDataUnmodified() }
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
