@@ -2,12 +2,18 @@
 
 本文件只保留当前有效一节。过时段落由 `repo-hygiene` 迁入 `docs/archive/handoff.md`。
 
-## 2026-10-17T10:30:00+08:00 adoption-review → owner
+## 2026-10-18T05:25:00+08:00 task-integrate → owner
 
-- 当前焦点：`docs/reviews/review_20261017_054534` 采纳项（A1–A85）在隔离 worktree 落地中；实施完成后需跑全量门禁并在用户确认后合并。
-- branch：adoption_20261017（worktree `../zmole_adoption_20261017`；基点 main `288e3e5`，审阅归档 commit）
-- head_commit：288e3e5（worktree 内的采纳项改动尚未提交）
-- 已完成：t001–t039 全部归档；UI 基线（t035–t039）落地；审阅与决策归档（288e3e5）；MoleBridge 加固、i18n 错误 key、并发/取消/日志等采纳项在 worktree 实施
-- 未完成：采纳项全量验证（xcodebuild test + 集成脚本）；`docs/specs_index.md` 需求级 spec 全量补写（A82）；运行截图入库（A83）；Release zip 终验
-- 陷阱：不公证（Gatekeeper 步骤见 README）；退出清理已由 AppDelegate 取消活跃 runner（限时 2s）；demo 数据根仅接受临时目录内路径；不 spawn 系统 `mo`
-- 下一步：worktree 内 `docs/reviews/review_20261017_054534/adoption_decision.md` 为唯一范围来源；验证通过后由用户决定合并与后续 task
+- 当前焦点：完成从 `t045` 至 `t050`（共 14 个 task）全量线性链式实施、审查、归档与主干集成。
+- branch：main
+- head_commit：f57409dfeaf0
+- 已完成：
+    - `t045`–`t058` 及 `t050` 全部 14 个 task 实施收尾与归档，合并入主干。
+    - 全局重扫描资源调度器 `HeavyScanScheduler`（并发名额 3，防饥饿 3，ADR 012）。
+    - 磁盘测量外存化 `DiskSessionStore`（有界工作集 4000，ADR 011）。
+    - 后台缓存串行存储所有者 `BackgroundScanStorage` 离开 MainActor。
+    - 概览接入统一 `DiskMeasurementSession`，消除 Developer 目录独立重遍历，缓存升级为 schema 3（ADR 013）。
+    - 元数据预取对照试验（spike s002）证实预取慢 338%，决策保持逐项 `lstat` 读取（ADR 014，finding d002）。
+    - 全量 379 个 Swift 单测通过、147 个 pytest contract 测试通过、4 条集成脚本通过。
+- 未完成：无待办 task（backlog 已全量闭环）。
+- 下一步：按需进行外部发布打包或新需求规划。
