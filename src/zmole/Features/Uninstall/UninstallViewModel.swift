@@ -22,7 +22,7 @@ final class UninstallViewModel: ObservableObject {
     private let targetChecker: UninstallTargetChecking
     private let iconProvider: UninstallIconProviding
     private let revealer: FileRevealing
-    private weak var prewarm: (any PrewarmResultProviding)?
+    private weak var scan: (any BackgroundScanProviding)?
 
     private var relatedLoadedIDs: Set<String> = []
     private let session = OperationSession<UninstallPreviewSnapshot>()
@@ -37,7 +37,7 @@ final class UninstallViewModel: ObservableObject {
         targetChecker: UninstallTargetChecking = LiveUninstallTargetChecker(),
         iconProvider: UninstallIconProviding = LiveUninstallIconProvider(),
         revealer: FileRevealing = LiveFileRevealer(),
-        prewarm: (any PrewarmResultProviding)? = nil
+        scan: (any BackgroundScanProviding)? = nil
     ) {
         self.process = process
         self.listStream = listStream
@@ -45,31 +45,29 @@ final class UninstallViewModel: ObservableObject {
         self.targetChecker = targetChecker
         self.iconProvider = iconProvider
         self.revealer = revealer
-        self.prewarm = prewarm
+        self.scan = scan
         leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         leaseCoordinator.onInvalidation = { [weak self] in
             guard let self, self.session.preview != nil else { return false }
-            self.session.expirePreview(errorKey: "operation.error.stale_preview")
+            self.session.expirePreview(errorKey: "operation.error.stale_scan")
             return true
         }
     }
 
     var operationState: OperationState<UninstallPreviewSnapshot> { session.state }
     var result: OperationResult? { session.result }
-    var preview: UninstallPreviewSnapshot? { session.preview }
-    var isPreviewing: Bool { session.isPreviewing }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
 
-    /// Rows whose identity is fully resolved (previewable/uninstallable).
+    /// Rows whose identity is fully resolved (selectable/uninstallable).
     var apps: [UninstallApp] { listings.compactMap(\.uninstallApp) }
 
     var selectedApps: [UninstallApp] {
         apps.filter { selectedPaths.contains($0.path) }
     }
 
-    var canPreview: Bool {
+    var canUninstall: Bool {
         guard !selectedPaths.isEmpty, !isListing, !session.isBusy else { return false }
         let resolvedPaths = Set(listings.lazy.filter(\.isResolved).map(\.path))
         return selectedPaths.isSubset(of: resolvedPaths)
@@ -105,7 +103,7 @@ final class UninstallViewModel: ObservableObject {
 
     func loadList() async {
         guard !isListing, !session.isBusy else { return }
-        prewarm?.userDidRescan(.uninstallList)
+        scan?.userDidRescan(.uninstallList)
         leaseCoordinator.release()
         session.invalidate()
         selectedPaths.removeAll()
@@ -193,7 +191,7 @@ final class UninstallViewModel: ObservableObject {
     }
 
     private func adoptPrewarmList() -> Bool {
-        guard let result = prewarm?.takeResult(.uninstallList),
+        guard let result = scan?.result(for: .uninstallList),
               case let .uninstallRows(rows) = result.payload else { return false }
         listings = rows
         hasLoaded = true
@@ -216,16 +214,6 @@ final class UninstallViewModel: ObservableObject {
                 }
             }
         }
-    }
-
-    func cancelPreview() async {
-        guard let operationID = session.beginPreviewCancellation() else { return }
-        await process.cancel()
-        session.finishCancelled(
-            OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
-            id: operationID
-        )
-        leaseCoordinator.release()
     }
 
     // MARK: - Selection
@@ -345,10 +333,12 @@ final class UninstallViewModel: ObservableObject {
         return String(path[..<lastSpace])
     }
 
-    // MARK: - Preview / execution
+    // MARK: - Confirmation / execution
 
-    func previewUninstall() async {
-        guard !isListing, !session.isBusy else { return }
+    /// Opens the confirmation sheet for the current selection. Associated
+    /// files stay an optional per-app check, not a gating step.
+    func requestConfirmation() {
+        guard canUninstall else { return }
         leaseCoordinator.release()
         session.invalidate()
         clearTransientError()
@@ -359,75 +349,15 @@ final class UninstallViewModel: ObservableObject {
             setTransientError(error)
             return
         }
-        guard leaseCoordinator.acquire(.uninstall) else {
-            showBusyNotice = true
-            return
-        }
-        guard let operationID = session.beginPreview() else {
-            leaseCoordinator.release()
-            return
-        }
-        showBusyNotice = false
         leaseCoordinator.captureGeneration()
-
-        do {
-            let result = try await process.run(
-                ["uninstall", "--dry-run"] + batch.map(\.uninstallName),
-                stdin: Self.confirmationInput,
-                timeout: 120
+        session.adoptPreview(
+            UninstallPreviewSnapshot(
+                generation: UUID(),
+                apps: batch,
+                selectedIDs: selectedPaths,
+                output: ""
             )
-            guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
-            guard leaseCoordinator.isCurrentPreview else {
-                session.fail(
-                    OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
-                    id: operationID
-                )
-                leaseCoordinator.release()
-                return
-            }
-            guard result.exitCode == 0 else {
-                throw MoleBridgeError.commandFailed(result)
-            }
-            session.acceptPreview(
-                UninstallPreviewSnapshot(
-                    generation: operationID,
-                    apps: batch,
-                    selectedIDs: selectedPaths,
-                    output: MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
-                ),
-                id: operationID
-            )
-            leaseCoordinator.release(clearPreviewGeneration: false)
-        } catch let error as MoleBridgeError where error == .cancelled {
-            session.finishCancelled(
-                OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
-                id: operationID
-            )
-            leaseCoordinator.release()
-        } catch {
-            guard session.accepts(operationID) else { return }
-            if CommandBusy.isBusy(error) {
-                showBusyNotice = true
-                session.invalidate()
-                leaseCoordinator.release()
-                return
-            }
-            let summary = (error as? MoleBridgeError).flatMap { commandError -> String? in
-                if case let .commandFailed(result) = commandError {
-                    return MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
-                }
-                return commandError.localizedDescription
-            }
-            session.fail(
-                OperationResult(status: .failed, summary: summary, errorKey: "uninstall.error.failed"),
-                id: operationID
-            )
-            leaseCoordinator.release()
-        }
-    }
-
-    func requestConfirmation() {
-        guard canConfirm else { return }
+        )
         _ = session.beginConfirmation()
     }
 
@@ -439,8 +369,7 @@ final class UninstallViewModel: ObservableObject {
 
     func confirmExecution() async {
         guard session.isConfirmationPresented, canConfirm,
-              let currentPreview = session.preview,
-              let previewID = PreviewOperationID.from(session.state) else { return }
+              let currentPreview = session.preview else { return }
         guard leaseCoordinator.acquire(.uninstall) else {
             showBusyNotice = true
             session.cancelConfirmation()

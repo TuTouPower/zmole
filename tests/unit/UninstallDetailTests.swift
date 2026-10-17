@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class UninstallDetailTests: XCTestCase {
-    func testBatchPreviewUsesOnlySelectedUninstallNamesAndConfirmationInput() async {
+    func testConfirmingBatchUsesOnlySelectedUninstallNamesAndConfirmationInput() async {
         let process = DetailProcessSpy()
         let viewModel = makeViewModel(process: process)
 
@@ -11,12 +11,13 @@ final class UninstallDetailTests: XCTestCase {
         let apps = viewModel.apps
         viewModel.toggleSelection(apps[0])
         viewModel.toggleSelection(apps[1])
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
+        await viewModel.confirmExecution()
 
         let invocations = await process.invocations
-        let preview = invocations.last { $0.arguments.contains("--dry-run") }
-        XCTAssertEqual(preview?.arguments, ["uninstall", "--dry-run", "Alpha App", "Beta Tool"])
-        XCTAssertEqual(preview?.stdin, Data("y\n".utf8))
+        XCTAssertEqual(invocations.count, 1, "the confirmation must execute directly, without a preview process")
+        XCTAssertEqual(invocations[0].arguments, ["uninstall", "Alpha App", "Beta Tool"])
+        XCTAssertEqual(invocations[0].stdin, Data("y\n".utf8))
     }
 
     func testFocusAndSelectionAreIndependentOfEachOther() async {
@@ -117,16 +118,15 @@ final class UninstallDetailTests: XCTestCase {
         let viewModel = makeViewModel(process: process)
         await viewModel.loadListIfNeeded()
         viewModel.toggleSelection(viewModel.apps[0])
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
         XCTAssertTrue(viewModel.canConfirm)
 
-        viewModel.requestConfirmation()
         viewModel.cancelConfirmation()
 
         let invocations = await process.invocations
-        XCTAssertFalse(invocations.contains { $0.arguments.first == "uninstall" && !$0.arguments.contains("--dry-run") })
-        XCTAssertNil(viewModel.preview)
+        XCTAssertTrue(invocations.isEmpty, "cancel must not spawn any process")
         XCTAssertFalse(viewModel.canConfirm)
+        XCTAssertFalse(viewModel.isConfirmationPresented)
     }
 
     func testUnknownSizeIsNilAndTotalUsesBodyEstimateWording() throws {
@@ -170,18 +170,12 @@ final class UninstallDetailTests: XCTestCase {
         let apps = viewModel.apps
         viewModel.toggleSelection(apps[0])
         viewModel.toggleSelection(apps[1])
-        await viewModel.previewUninstall()
-
         viewModel.requestConfirmation()
         await viewModel.confirmExecution()
 
         let invocations = await process.invocations
-        let execution = invocations.last { invocation in
-            invocation.arguments.first == "uninstall"
-                && !invocation.arguments.contains("--dry-run")
-        }
-        XCTAssertEqual(execution?.arguments, ["uninstall", "Alpha App", "Beta Tool"])
-        XCTAssertNil(viewModel.preview)
+        XCTAssertEqual(invocations.count, 1)
+        XCTAssertEqual(invocations[0].arguments, ["uninstall", "Alpha App", "Beta Tool"])
     }
 
     func testZeroSizeStringIsUnknown() {
@@ -193,19 +187,19 @@ final class UninstallDetailTests: XCTestCase {
         XCTAssertNil(app.sizeText)
     }
 
-    func testAnotherWriteInvalidatesAnUninstallPreview() async {
+    func testAnotherWriteInvalidatesTheUninstallConfirmation() async {
         let coordinator = OperationCoordinator()
         let viewModel = makeViewModel(process: DetailProcessSpy(), coordinator: coordinator)
 
         await viewModel.loadListIfNeeded()
         viewModel.toggleSelection(viewModel.apps[0])
-        await viewModel.previewUninstall()
+        viewModel.requestConfirmation()
         XCTAssertTrue(viewModel.canConfirm)
 
         // A write elsewhere (e.g. a clean run) bumps the shared generation.
         coordinator.invalidatePreviews()
 
-        XCTAssertNil(viewModel.preview, "another write must expire the uninstall preview")
+        XCTAssertFalse(viewModel.isConfirmationPresented, "another write must close the stale sheet")
         XCTAssertFalse(viewModel.canConfirm)
     }
 

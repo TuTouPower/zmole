@@ -29,7 +29,7 @@ final class OverviewLayoutTests: XCTestCase {
         XCTAssertEqual(card.scoreText, "—")
         XCTAssertEqual(card.status, .unknown)
         XCTAssertEqual(card.tiles.map(\.value), ["—", "—", "—"])
-        XCTAssertEqual(card.tiles[1].note, "overview.reclaim_no_preview")
+        XCTAssertEqual(card.tiles[1].note, "overview.reclaim_no_scan")
     }
 
     func testHealthStatusThresholds() {
