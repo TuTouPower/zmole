@@ -5,9 +5,10 @@ import Foundation
 struct AnalyzeRow: Equatable, Sendable, Identifiable {
     let entry: DiskEntry
     let depth: Int
-    /// Total of the row's immediate parent, used for the "% of parent" column.
-    /// Nil while the parent's own size is still computing.
-    let parentTotal: Int64?
+    /// Total of the directory currently being browsed. Every row uses the same
+    /// denominator, including inline-expanded descendants, so direct children
+    /// of the current level sum to 100%.
+    let total: Int64?
 
     var id: String { entry.path }
 }
@@ -78,7 +79,8 @@ final class AnalyzeViewModel: ObservableObject {
 
     /// Cached filter+sort for the visible list, keyed by level revision so
     /// repeated body evaluations do not re-sort (ICU compare) the whole level.
-    /// Expanded directories contribute their children as indented rows.
+    /// Expanded directories contribute their children as indented rows, all
+    /// sharing the current directory's total as their denominator.
     func visibleRows(search: String, sort: AnalyzeSort) -> [AnalyzeRow] {
         if let cache = visibleRowsCache,
            cache.revision == levelRevision,
@@ -87,7 +89,14 @@ final class AnalyzeViewModel: ObservableObject {
             return cache.rows
         }
         var rows: [AnalyzeRow] = []
-        appendRows(from: level?.entries ?? [], depth: 0, parentTotal: level?.totalSize, into: &rows, search: search, sort: sort)
+        appendRows(
+            from: level?.entries ?? [],
+            depth: 0,
+            total: level?.totalSize,
+            into: &rows,
+            search: search,
+            sort: sort
+        )
         visibleRowsCache = (levelRevision, search, sort, rows)
         return rows
     }
@@ -95,14 +104,14 @@ final class AnalyzeViewModel: ObservableObject {
     private func appendRows(
         from entries: [DiskEntry],
         depth: Int,
-        parentTotal: Int64?,
+        total: Int64?,
         into rows: inout [AnalyzeRow],
         search: String,
         sort: AnalyzeSort
     ) {
         for entry in AnalyzeListOrder.sorted(entries, by: sort) {
             if search.isEmpty || entry.name.localizedCaseInsensitiveContains(search) {
-                rows.append(AnalyzeRow(entry: entry, depth: depth, parentTotal: parentTotal))
+                rows.append(AnalyzeRow(entry: entry, depth: depth, total: total))
             }
             guard entry.isDirectory,
                   expandedPaths.contains(entry.path),
@@ -110,7 +119,7 @@ final class AnalyzeViewModel: ObservableObject {
             appendRows(
                 from: children,
                 depth: depth + 1,
-                parentTotal: entry.knownSize,
+                total: total,
                 into: &rows,
                 search: search,
                 sort: sort

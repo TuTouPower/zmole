@@ -164,15 +164,34 @@ final class DiskExplorerTests: XCTestCase {
         let rows = viewModel.visibleRows(search: "", sort: .size)
         let child = try XCTUnwrap(rows.first { $0.entry.name == "Safari.app" })
         XCTAssertEqual(child.depth, 1)
-        XCTAssertNil(child.parentTotal, "an unmeasured parent shows no share yet")
+        XCTAssertEqual(child.total, 50, "every row shares the current level total")
         XCTAssertEqual(scanner.listRequests, ["/root", "/root/Applications"])
 
         scanner.releaseMeasures()
         try await waitUntil {
             let refreshed = viewModel.visibleRows(search: "", sort: .size)
             let freshChild = refreshed.first { $0.entry.name == "Safari.app" }
-            return freshChild?.entry.knownSize == 300 && freshChild?.parentTotal == 300
+            return freshChild?.entry.knownSize == 300 && freshChild?.total == 350
         }
+    }
+
+    func testCurrentLevelDirectChildrenSumToFullShare() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "Alpha", path: "/root/Alpha", isDirectory: true, value: .size(300)),
+            DiskEntry(name: "Big", path: "/root/Big", isDirectory: true, value: .size(700)),
+            DiskEntry(name: "notes.txt", path: "/root/notes.txt", isDirectory: false, value: .size(100))
+        ]
+        scanner.blockedMeasures.insert("/root/Alpha")
+        scanner.blockedMeasures.insert("/root/Big")
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        let rows = viewModel.visibleRows(search: "", sort: .size)
+        let total = try XCTUnwrap(rows.first?.total)
+        let shares = rows.compactMap { AnalyzeArea.share(of: $0.entry.knownSize, total: total) }
+        XCTAssertEqual(shares.reduce(0, +), 1.0, accuracy: 0.0001)
+        scanner.releaseMeasures()
     }
 
     func testCollapsingDirectoryHidesInlineChildren() async throws {
