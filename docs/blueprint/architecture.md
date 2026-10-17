@@ -91,7 +91,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ## Demo 装配边界
 
-`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态且仅在 `--demo` 下生效；`--demo-data-root` 只接受用户临时目录内的路径（越界值忽略并回退随机 scratch 目录），将 clean-list 与 whitelist 写入该目录，不触碰 `~/.config/mole/`。
+`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态且仅在 `--demo` 下生效；`--demo-data-root` 只接受用户临时目录内的路径（越界值忽略并回退随机 scratch 目录），将 clean-list 与 whitelist 写入该目录，不触碰 `~/.config/mole/`。demo 假件、fixture 与 `DemoConfiguration` 集中在 `App/DemoSupport.swift`；`AppDependencies.swift` 只保留生产装配与装配辅助（`MoleProcessBox`、unavailable 通道）。
 
 ## 与上游关系
 
