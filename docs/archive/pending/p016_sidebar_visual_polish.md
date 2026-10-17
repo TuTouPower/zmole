@@ -7,4 +7,4 @@
     3. **移除清理按钮右侧预估大小**：`navItem` 中 `destination == .clean` 时右侧显示的 `cleanViewModel.lastReclaimBytes` 空间角标移除，保持导航栏条目清爽一致。
     4. **移除状态按钮右侧蓝点**：`navItem` 中 `destination == .status` 时右侧在采样期间显示的蓝色圆点（`Circle().fill(MoleTheme.accent)`）移除。
 - 边界：仅修改侧边栏呈现，不破坏导航逻辑、目的地选择与快捷键；不改动各业务页内部实现。
-- 处理：未开
+- 处理：t045

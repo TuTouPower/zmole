@@ -7,4 +7,4 @@
     3. **项目清理（Purge）**：`src/zmole/Features/Purge/PurgeView.swift` 的 `outputPanel` 中，输出滚动区域（当前仅 `minHeight: 260`）增加 `maxHeight` 限制，使底部的「执行清除」按钮保持在可预期视口内。
     4. **清理历史记录（History）**：`src/zmole/Features/History/HistoryView.swift` 的 `HistorySnapshotContent` 表格区域增加合理高度限制与独立滚动，多行记录时避免无限撑高页面。
 - 边界：只控制列表/内容区域视口约束与滚动行为，不改变列表项内容、过滤筛选与执行命令。
-- 处理：未开
+- 处理：t045
