@@ -77,3 +77,12 @@
     2. 确认蓝系：HTML 降为布局参考，色彩以应用图标为准
 - 结论：选 2。`MoleTheme.accent`/`accentStrong` 为唯一色源，`UtilityStyle.accent` 直接引用 `MoleTheme.accent`；`ui_contract.md` 的参考资料声明同步更新。
 - 替代：无
+
+## 010 磁盘测量统计事实与派生去重分离（2026-10-18）
+
+- 背景：旧磁盘扫描在 ViewModel 内持有多路 worker，任务组取空后新入队导致 worker 终止并残留待测项；且依赖共享的 `HardLinkDeduplicator` 边测边标记，导致目录自身合计随兄弟 worker 完成顺序漂移，祖先结果被较新 listing generation 拦截。
+- 选项：
+    1. 仅在 worker 退出前补一次启动并保留全局 deduplicator
+    2. 由会话服务 `DiskMeasurementSession` 统一持有任务队列、在途调度与世代，底层仅记录设备+inode 与分配块测量事实；独立目录自身合计与父统计范围去重贡献分离并分别命名，兄弟间共享 inode 归属按规范化路径排序确定
+- 结论：选 2。消除队列饥饿，保证兄弟完成顺序与祖先展开不改变去重结果，迟到结果按世代丢弃。
+- 替代：无

@@ -558,6 +558,70 @@ final class DiskExplorerTests: XCTestCase {
         XCTAssertTrue(source.contains("DiskSplitLayout.resized"), "the drag must resize the panes")
     }
 
+    func testQueueWorkerConsumesRequestsEnqueuedWhileInFlightFinishes() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "A", path: "/root/A", isDirectory: true, value: .computing)
+        ]
+        scanner.listings["/other"] = [
+            DiskEntry(name: "B", path: "/other/B", isDirectory: true, value: .computing)
+        ]
+        scanner.blockedMeasures.insert("/root/A")
+        scanner.results["/root/A"] = Self.result(path: "/root/A", total: 100, files: [("A_file.txt", 100)])
+        scanner.results["/other/B"] = Self.result(path: "/other/B", total: 200, files: [("B_file.txt", 200)])
+
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        try await waitUntil { scanner.measureRequests.contains("/root/A") }
+
+        await viewModel.openDirectory(DiskEntry(name: "other", path: "/other", isDirectory: true, value: .size(0)))
+
+        scanner.releaseMeasures()
+
+        try await waitUntil {
+            viewModel.level?.entries.first { $0.name == "B" }?.knownSize == 200
+        }
+        XCTAssertFalse(viewModel.isScanning)
+    }
+
+    func testAncestorMeasurementCompletesChildrenListedLaterWithoutStallingOnGeneration() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "sub", path: "/root/sub", isDirectory: true, value: .computing)
+        ]
+        scanner.listings["/root/sub"] = [
+            DiskEntry(name: "leaf", path: "/root/sub/leaf", isDirectory: true, value: .computing)
+        ]
+        scanner.blockedMeasures.insert("/root/sub")
+        scanner.results["/root/sub"] = DiskScanResult(
+            path: "/root/sub",
+            totalSize: 420,
+            isReadable: true,
+            levels: [
+                "/root/sub": DiskLevel(
+                    entries: [
+                        DiskEntry(name: "leaf", path: "/root/sub/leaf", isDirectory: true, value: .size(420))
+                    ],
+                    totalSize: 420
+                )
+            ]
+        )
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        try await waitUntil { scanner.measureRequests.contains("/root/sub") }
+
+        await viewModel.openDirectory(DiskEntry(name: "sub", path: "/root/sub", isDirectory: true, value: .computing))
+
+        scanner.releaseMeasures()
+
+        try await waitUntil {
+            viewModel.level?.entries.first { $0.name == "leaf" }?.knownSize == 420
+        }
+        XCTAssertEqual(viewModel.level?.totalSize, 420)
+    }
+
     nonisolated private static func analyzeSource(_ file: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
