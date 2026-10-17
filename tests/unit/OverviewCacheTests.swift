@@ -137,7 +137,9 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         XCTAssertFalse(viewModel.estimateNeedsRefresh)
 
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         XCTAssertTrue(viewModel.estimateInvalidated)
         XCTAssertTrue(viewModel.estimateNeedsRefresh)
         viewModel.startEstimate(usedBytes: 300)
@@ -469,7 +471,9 @@ final class OverviewCacheTests: XCTestCase {
 
         // A write invalidation must re-probe every segment, not only the
         // missing ones: the resolved segments predate the write.
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         viewModel.startEstimate(usedBytes: 300)
         for _ in 0..<400 {
             let hits = await recorder.paths.filter { $0 == "/Applications" }.count
@@ -566,7 +570,9 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         viewModel.startEstimate(usedBytes: 300)
         await gate.waitUntilPaused()
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         await gate.release()
         await viewModel.waitForEstimate()
 
@@ -621,7 +627,9 @@ final class OverviewCacheTests: XCTestCase {
 
         viewModel.startEstimate(usedBytes: 300)
         await firstScanGate.waitUntilPaused()
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         await firstScanGate.release()
 
         // The invalidated first scan completes all four segments on its own;

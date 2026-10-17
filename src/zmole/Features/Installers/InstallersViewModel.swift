@@ -187,6 +187,9 @@ final class InstallersViewModel: ObservableObject {
         }
         selectedPaths.subtract(removedPaths)
         failures = rejected
+        if !removedPaths.isEmpty {
+            lease?.markDataModified()
+        }
         candidates = candidates.filter { !removedPaths.contains($0.path) }
         lastListing = lastListing.filter { !removedPaths.contains($0.path) }
     }
