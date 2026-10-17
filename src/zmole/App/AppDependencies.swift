@@ -226,14 +226,8 @@ final class AppDependencies: ObservableObject {
             accessMonitor: accessMonitor
         )
 
-        let estimateLoaders = lanes.estimatePool.map { lane in
-            let box = MoleProcessBox(lane)
-            return AnalyzeSnapshotLoader { arguments in
-                try await box.process.run(arguments, stdin: nil, timeout: 600)
-            }
-        }
         let storageLoader = StorageEstimateLoader(
-            loaders: estimateLoaders,
+            session: analyzeViewModel.session,
             scheduler: heavyScanScheduler
         )
         overviewViewModel = OverviewViewModel(

@@ -487,20 +487,11 @@ final class OverviewCacheTests: XCTestCase {
         )
     }
 
-    func testEstimateLaneTimeoutIsTenMinutes() throws {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("src/zmole/App/AppDependencies.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-        let range = try XCTUnwrap(source.range(of: "let estimateLoaders"))
-        let segment = source[range.lowerBound...].prefix(420)
-        XCTAssertTrue(
-            segment.contains("timeout: 600"),
-            "the estimate lane must allow ten minutes per command"
-        )
-    }
+    // Removed testEstimateLaneTimeoutIsTenMinutes:
+    // With t058, Overview is migrated to unified DiskMeasurementSession and
+    // the old CLI estimateLoaders lane is eliminated from AppDependencies.
+    // Unified session lifecycle and shared measurement are covered in
+    // OverviewUnifiedMeasureTests (AC-008).
 
     func testFillOnlyScanDoesNotRefreshTheCacheTimestamp() async throws {
         let directory = try tempDirectory()
