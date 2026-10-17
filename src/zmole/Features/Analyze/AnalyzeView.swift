@@ -272,7 +272,7 @@ struct AnalyzeView: View {
                 .foregroundStyle(.secondary)
                 .layoutPriority(1)
             Spacer(minLength: 8)
-            percentCell(row.entry, total: row.parentTotal)
+            percentCell(row.entry, total: row.total)
                 .frame(width: 108, alignment: .trailing)
         }
         .padding(.leading, CGFloat(row.depth) * 14)
