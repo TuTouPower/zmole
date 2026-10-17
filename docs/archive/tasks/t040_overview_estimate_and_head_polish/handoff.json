@@ -1,0 +1,24 @@
+{
+  "tid": "t040",
+  "attempt": 1,
+  "execution_id": "b921d506b6f6420c8db62293cf405404",
+  "status": "done",
+  "branch": "t040_overview_estimate_and_head_polish",
+  "base_sha": "c4a338897084ae66378113b0e88061f9c4f3e397",
+  "tests": "xcodebuild build -scheme Zmole (0 error); xcodebuild test -scheme Zmole -destination 'platform=macOS' (279 pass, incl. new overview estimate cases: runs-without-used-bytes, incomplete-renders-persists-retries-once, invalidation-rescans-all, fill-only-keeps-capturedAt, invalidation-escalates-follow-up, 600s-timeout assertion); git diff --check clean",
+  "blackbox": "Demo (no real mole) launch of the built app on overview with zh-Hans/light, en/dark, and 1100x700: no eyebrow copy anywhere (page title only), four overview cards share one fixed height with no clipping or overlap, incomplete-state legends visible. TCC first-run prompts are system behavior and were dismissed during shots; screenshots reviewed visually (not committed).",
+  "review": "single: review_general.md PASS at round 3 (rounds 1-2 FAIL: 1 important f001 + f002-f005 minors fixed, f006 residual accepted as p014); reviewed_scope e82a4d342c2f2bba; no unresolved blocking findings",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/OverviewCacheTests.swift testEstimateRunsWithoutUsedBytesAndOtherSegmentArrivesLater", "src/zmole/Features/Overview/OverviewView.swift .task starts estimate before history", "src/zmole/Features/Overview/OverviewViewModel.swift startEstimate"],
+    "AC-002": ["tests/unit/OverviewCacheTests.swift testEstimateRunsWithoutUsedBytesAndOtherSegmentArrivesLater (otherBytes after late used space; no rescan)", "src/zmole/Features/Overview/OverviewViewModel.swift usedBytesDidChange"],
+    "AC-003": ["tests/unit/OverviewCacheTests.swift testIncompleteScanRendersPersistsAndRetriesMissingSegmentsOnce", "src/zmole/Features/Overview/OverviewView.swift overview.storage.incomplete marker"],
+    "AC-004": ["tests/unit/OverviewCacheTests.swift testIncompleteScanRendersPersistsAndRetriesMissingSegmentsOnce (partial persisted; retry fills only missing)", "tests/unit/OverviewCacheTests.swift testPartialHistoricalCacheRendersFirstThenCompleteScanOverwrites", "tests/unit/OverviewCacheTests.swift testFillOnlyScanDoesNotRefreshTheCacheTimestamp"],
+    "AC-005": ["tests/unit/OverviewCacheTests.swift testEstimateTaskIsNotTiedToTheStartingCaller", "src/zmole/Features/Overview/OverviewViewModel.swift startEstimate detaches the scan task"],
+    "AC-006": ["tests/unit/OverviewCacheTests.swift testCancelledScanDoesNotPersistAnything", "tests/unit/OverviewCacheTests.swift testSystemSegmentIsUnavailableWhenAnyChildProbeFails"],
+    "AC-007": ["tests/unit/OverviewCacheTests.swift testEstimateLaneTimeoutIsTenMinutes", "src/zmole/App/AppDependencies.swift estimateLoaders timeout 600"],
+    "AC-008": ["tests/unit/UiAlignmentTests.swift testNoEyebrowCopyRemainsAnywhere", "src/zmole/Resources/Localizable.xcstrings 11 eyebrow keys removed"],
+    "AC-009": ["tests/unit/UiAlignmentTests.swift testOverviewCardsShareOneFixedHeight", "src/zmole/Features/Overview/OverviewView.swift OverviewCardLayout.cardHeight 264 used by four cards", "demo screenshots 1200x780 light/dark and 1100x700 (visual, not committed)"]
+  },
+  "pending": ["p014"],
+  "findings": []
+}

@@ -113,7 +113,8 @@ final class OverviewTests: XCTestCase {
         let viewModel = OverviewViewModel(storageLoader: loader, historyLoader: historyLoader)
 
         await viewModel.refreshHistory()
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 100)
+        viewModel.startEstimate(usedBytes: 100)
+        await viewModel.waitForEstimate()
         XCTAssertEqual(viewModel.breakdown.applicationsBytes, 10)
         XCTAssertTrue(viewModel.hasRecentOperations)
         XCTAssertEqual(viewModel.recentOperations.first?.command, "clean")

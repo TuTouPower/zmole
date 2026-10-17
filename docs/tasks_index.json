@@ -2,54 +2,5 @@
     "generated_by": ".repo_template/scripts/task.py",
     "authority": "docs/tasks/{tid}_{slug}/task.md front matter",
     "workspace": ".",
-    "tasks": [
-        {
-            "tid": "t040",
-            "slug": "overview_estimate_and_head_polish",
-            "title": "概览存储估算修复与页头卡片清理",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "single",
-            "review_limit": "5",
-            "verify_limit": "5",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "note": "用户 2026-10-17 批准（来源 p013；含去页头 eyebrow 小字与概览四卡等高）",
-            "dir": "docs/tasks/t040_overview_estimate_and_head_polish"
-        },
-        {
-            "tid": "t041",
-            "slug": "demo_support_extraction",
-            "title": "demo 假件与装配拆分（review A57）",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "review_limit": "5",
-            "verify_limit": "5",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "note": "review_20261017_054534 A57（用户 2026-10-17 批准执行）；纯搬迁零行为变化，来源 adoption_decision.md",
-            "dir": "docs/tasks/t041_demo_support_extraction"
-        },
-        {
-            "tid": "t042",
-            "slug": "preview_lease_coordinator",
-            "title": "租约与预览世代样板收敛（review A85）",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "review_limit": "5",
-            "verify_limit": "5",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "note": "review_20261017_054534 A85（用户 2026-10-17 批准执行）；三个写路径 ViewModel 租约样板收敛，来源 adoption_decision.md",
-            "dir": "docs/tasks/t042_preview_lease_coordinator"
-        }
-    ]
+    "tasks": []
 }

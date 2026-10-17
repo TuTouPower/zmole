@@ -15,7 +15,6 @@ struct HistoryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 MolePageHead(
-                    eyebrow: "history.eyebrow",
                     title: "history.title",
                     subtitle: "history.subtitle"
                 ) {

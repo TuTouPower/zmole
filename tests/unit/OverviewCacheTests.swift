@@ -61,7 +61,8 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         XCTAssertEqual(viewModel.breakdown, .placeholder)
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
         XCTAssertEqual(viewModel.breakdown.applicationsBytes, 40)
         let scanCount = await counts.value
         XCTAssertGreaterThan(scanCount, 0, "missing cache must fall back to a scan")
@@ -84,7 +85,8 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         XCTAssertFalse(viewModel.estimateNeedsRefresh)
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
         let freshCount = await counts.value
         XCTAssertEqual(freshCount, 0, "a fresh cache must not re-scan")
     }
@@ -107,7 +109,8 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         XCTAssertTrue(viewModel.estimateNeedsRefresh)
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
         let staleCount = await counts.value
         XCTAssertEqual(staleCount, 4)
         let saved = try XCTUnwrap(cache.load(now: now))
@@ -137,40 +140,62 @@ final class OverviewCacheTests: XCTestCase {
         coordinator.invalidatePreviews()
         XCTAssertTrue(viewModel.estimateInvalidated)
         XCTAssertTrue(viewModel.estimateNeedsRefresh)
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
         XCTAssertFalse(viewModel.estimateInvalidated)
     }
 
-    func testIncompleteScanIsNeitherPersistedNorRendered() async throws {
+    func testIncompleteScanRendersPersistsAndRetriesMissingSegmentsOnce() async throws {
         let directory = try tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = makeCache(directory)
         let now = Date(timeIntervalSince1970: 5_000_000)
-        let counts = EstimateCounter()
-        let clock = MutableNow(now)
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                if path.hasPrefix("/System/") { return nil }
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
         let viewModel = OverviewViewModel(
-            storageLoader: makeLoader(counts: counts, failing: ["/System/Library"]),
+            storageLoader: loader,
             historyLoader: nil,
             storageCache: cache,
-            now: { clock.now }
+            incompleteRetryDelay: 0.05,
+            now: { now }
         )
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
 
+        // The resolved segments render even though the system segment failed.
+        XCTAssertEqual(viewModel.breakdown.applicationsBytes, 40)
+        XCTAssertNil(viewModel.breakdown.systemBytes)
+        XCTAssertFalse(viewModel.breakdown.isComplete, "the incomplete marker stays visible")
+
+        // The completed partial scan is persisted.
+        let saved = try XCTUnwrap(cache.load(now: now))
+        XCTAssertFalse(saved.sums.isComplete)
+        XCTAssertEqual(saved.sums.applications, 40)
+        XCTAssertNil(saved.sums.system)
+
+        // Exactly one follow-up retry ran, and it re-probed only the missing
+        // segment.
+        let paths = await recorder.paths
         XCTAssertEqual(
-            viewModel.breakdown,
-            .placeholder,
-            "a scan that missed a path must not become the authoritative estimate"
+            paths.filter { $0 == "/Applications" }.count, 1,
+            "the retry must not re-probe resolved segments"
         )
-        XCTAssertNil(cache.load(now: now), "a partial scan must not write a cache")
-        XCTAssertFalse(
-            viewModel.estimateNeedsRefresh,
-            "a failed scan backs off before retrying"
-        )
-        clock.advance(by: OverviewViewModel.estimateFailureCooldown + 60)
-        XCTAssertTrue(
-            viewModel.estimateNeedsRefresh,
-            "after the cool-down the next appearance retries"
+        XCTAssertEqual(
+            paths.filter { $0 == "/System/Library" }.count, 2,
+            "exactly one follow-up retry may run per scan"
         )
     }
 
@@ -198,7 +223,8 @@ final class OverviewCacheTests: XCTestCase {
             now: { now }
         )
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
 
         XCTAssertEqual(viewModel.breakdown, .placeholder)
         XCTAssertNil(cache.load(now: now), "a cancelled scan must not write a cache")
@@ -225,13 +251,17 @@ final class OverviewCacheTests: XCTestCase {
         XCTAssertEqual(viewModel.breakdown.applicationsBytes, 40, "the historical cache renders first")
         XCTAssertTrue(viewModel.estimateNeedsRefresh)
 
-        await viewModel.refreshEstimateIfNeeded(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
 
         XCTAssertTrue(viewModel.breakdown.isComplete)
         XCTAssertEqual(viewModel.breakdown.systemBytes, 25)
         let saved = try XCTUnwrap(cache.load(now: now))
         XCTAssertTrue(saved.sums.isComplete)
-        XCTAssertEqual(saved.capturedAt, now, "the complete scan overwrites the partial cache")
+        XCTAssertEqual(
+            saved.capturedAt, oldCapture,
+            "the fill-only scan keeps the original capture time for the reused segments"
+        )
     }
 
     func testSystemSegmentNeverProbesTheDataVolume() async throws {
@@ -311,6 +341,75 @@ final class OverviewCacheTests: XCTestCase {
         )
     }
 
+    func testEstimateRunsWithoutUsedBytesAndOtherSegmentArrivesLater() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let counts = EstimateCounter()
+        let viewModel = OverviewViewModel(
+            storageLoader: makeLoader(counts: counts),
+            historyLoader: nil,
+            now: { Date(timeIntervalSince1970: 5_000_000) }
+        )
+
+        // The scan starts with no status sample at all.
+        viewModel.startEstimate(usedBytes: nil)
+        await viewModel.waitForEstimate()
+
+        XCTAssertEqual(
+            viewModel.breakdown.applicationsBytes, 40,
+            "the scan must not wait for the status sample"
+        )
+        XCTAssertEqual(viewModel.breakdown.systemBytes, 25)
+        XCTAssertNil(
+            viewModel.breakdown.otherBytes,
+            "other stays a placeholder until used space arrives"
+        )
+
+        viewModel.usedBytesDidChange(500)
+        XCTAssertEqual(
+            viewModel.breakdown.otherBytes,
+            500 - (40 + 25 + 30 + 60),
+            "other derives from the late used-space value without rescanning"
+        )
+        let scanCount = await counts.value
+        XCTAssertEqual(scanCount, 4, "the late used-space value must not trigger a rescan")
+    }
+
+    func testEstimateTaskIsNotTiedToTheStartingCaller() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let gate = ScanGate()
+        let loader = StorageEstimateLoader(
+            directorySize: { _ in
+                await gate.pauseOnce()
+                return 10
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            now: { Date(timeIntervalSince1970: 5_000_000) }
+        )
+
+        // Simulates the page task: it starts the scan and then lingers while
+        // the scan runs; the cancellation below lands mid-scan.
+        let caller = Task { @MainActor in
+            viewModel.startEstimate(usedBytes: 100)
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+        }
+        await gate.waitUntilPaused()
+        caller.cancel()
+        await caller.value
+        await gate.release()
+        await viewModel.waitForEstimate()
+
+        XCTAssertEqual(
+            viewModel.breakdown.applicationsBytes, 10,
+            "cancelling the starting task must not cancel the scan"
+        )
+    }
+
     func testIncompleteCacheIsNotTreatedAsFresh() async throws {
         let directory = try tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -353,15 +452,169 @@ final class OverviewCacheTests: XCTestCase {
             now: { now }
         )
 
-        let scan = Task { @MainActor in await viewModel.refreshEstimateIfNeeded(usedBytes: 100) }
+        viewModel.startEstimate(usedBytes: 100)
         await gate.waitUntilPaused()
         coordinator.invalidatePreviews()
         await gate.release()
-        await scan.value
+        await viewModel.waitForEstimate()
 
         XCTAssertTrue(
             viewModel.estimateInvalidated,
             "an invalidation that lands mid-scan must not be cleared by the scan"
+        )
+    }
+
+    func testInvalidationRescansResolvedSegmentsInsteadOfOnlyFilling() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = makeCache(directory)
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        let coordinator = OperationCoordinator()
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                if path.hasPrefix("/System/") { return nil }
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            storageCache: cache,
+            coordinator: coordinator,
+            incompleteRetryDelay: 5,
+            now: { now }
+        )
+
+        // First scan lands partial (system segment fails) and persists it.
+        viewModel.startEstimate(usedBytes: 300)
+        for _ in 0..<400 where cache.load(now: now) == nil {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let afterFirstScan = await recorder.paths
+        XCTAssertEqual(afterFirstScan.filter { $0 == "/Applications" }.count, 1)
+
+        // A write invalidation must re-probe every segment, not only the
+        // missing ones: the resolved segments predate the write.
+        coordinator.invalidatePreviews()
+        viewModel.startEstimate(usedBytes: 300)
+        for _ in 0..<400 {
+            let hits = await recorder.paths.filter { $0 == "/Applications" }.count
+            if hits >= 2 { break }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let afterRescan = await recorder.paths
+        XCTAssertEqual(
+            afterRescan.filter { $0 == "/Applications" }.count, 2,
+            "an invalidation must re-probe resolved segments, not only fill missing ones"
+        )
+    }
+
+    func testEstimateLaneTimeoutIsTenMinutes() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("src/zmole/App/AppDependencies.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let range = try XCTUnwrap(source.range(of: "let estimateLoaders"))
+        let segment = source[range.lowerBound...].prefix(420)
+        XCTAssertTrue(
+            segment.contains("timeout: 600"),
+            "the estimate lane must allow ten minutes per command"
+        )
+    }
+
+    func testFillOnlyScanDoesNotRefreshTheCacheTimestamp() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = makeCache(directory)
+        let captured = Date(timeIntervalSince1970: 5_000_000)
+        cache.save(StorageSums(applications: 40, system: nil, developer: 30, users: 90), capturedAt: captured)
+        let clock = MutableNow(captured.addingTimeInterval(5 * 3_600))
+        let viewModel = OverviewViewModel(
+            storageLoader: makeLoader(counts: EstimateCounter()),
+            historyLoader: nil,
+            storageCache: cache,
+            incompleteRetryDelay: 5,
+            now: { clock.now }
+        )
+
+        viewModel.primeEstimate(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await viewModel.waitForEstimate()
+
+        let saved = try XCTUnwrap(cache.load(now: clock.now))
+        XCTAssertTrue(saved.sums.isComplete)
+        XCTAssertEqual(
+            saved.capturedAt, captured,
+            "a fill-only scan must not refresh the cache timestamp for reused segments"
+        )
+
+        // Once the original capture time passes the TTL, the estimate goes
+        // stale again and the next trigger rescans everything.
+        clock.advance(by: StorageEstimateCache.timeToLive + 60)
+        XCTAssertTrue(viewModel.estimateNeedsRefresh)
+    }
+
+    func testInvalidationDuringScanEscalatesFollowUpToFullRescan() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = makeCache(directory)
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        cache.save(StorageSums(applications: 40, system: nil, developer: 30, users: 90), capturedAt: now)
+        let coordinator = OperationCoordinator()
+        let gate = ScanGate()
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                await gate.pauseOnce()
+                if path.hasPrefix("/System/") { return nil }
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            storageCache: cache,
+            coordinator: coordinator,
+            incompleteRetryDelay: 0.05,
+            now: { now }
+        )
+
+        // Fill-only first scan (the cache only misses the system segment).
+        viewModel.primeEstimate(usedBytes: 300)
+        viewModel.startEstimate(usedBytes: 300)
+        await gate.waitUntilPaused()
+        coordinator.invalidatePreviews()
+        await gate.release()
+        await viewModel.waitForEstimate()
+
+        // The follow-up must escalate to a full rescan because a write landed
+        // mid-scan; a fill-only follow-up would never re-probe /Applications.
+        let paths = await recorder.paths
+        XCTAssertEqual(
+            paths.filter { $0 == "/Applications" }.count, 1,
+            "a mid-scan invalidation must escalate the follow-up to a full rescan"
+        )
+        let probeCount = await recorder.paths.count
+        XCTAssertEqual(
+            probeCount, 5,
+            "fill-only first pass probes one segment; the escalated follow-up probes all four"
         )
     }
 
@@ -400,6 +653,7 @@ private actor ScanGate {
             if paused { return }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
+        XCTFail("ScanGate never observed a paused probe")
     }
 
     func release() {
@@ -408,7 +662,7 @@ private actor ScanGate {
     }
 }
 
-/// Injectable, advanceable clock for back-off tests.
+/// Injectable, advanceable clock for TTL tests.
 private final class MutableNow: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Date

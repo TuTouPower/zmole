@@ -281,27 +281,33 @@ final class OverviewViewModel: ObservableObject {
     private let historyLoader: HistorySnapshotLoader?
     private let storageCache: StorageEstimateCache?
     private let now: @Sendable () -> Date
+    private let incompleteRetryDelay: TimeInterval
     private var cacheEntry: StorageEstimateCacheEntry?
+    private var sums: StorageSums?
+    private var lastUsedBytes: Int64?
     private var isEstimating = false
+    private var estimateTask: Task<Void, Never>?
+    private var incompleteRetryTask: Task<Void, Never>?
+    private var incompleteRetryScheduled = false
     private var invalidationCount = 0
-    private var lastEstimateFailureAt: Date?
     private var coordinatorSubscription: AnyCancellable?
 
-    /// Cool-down before a failed estimate is retried, so a persistently
-    /// unreadable path does not restart a multi-process scan on every page
-    /// appearance.
-    static let estimateFailureCooldown: TimeInterval = 30 * 60
+    /// Delay before a completed-but-partial scan retries the missing segments
+    /// once. Tests inject a short delay.
+    static let defaultIncompleteRetryDelay: TimeInterval = 60
 
     init(
         storageLoader: StorageEstimateLoader?,
         historyLoader: HistorySnapshotLoader?,
         storageCache: StorageEstimateCache? = nil,
         coordinator: OperationCoordinator? = nil,
+        incompleteRetryDelay: TimeInterval = OverviewViewModel.defaultIncompleteRetryDelay,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.storageLoader = storageLoader
         self.historyLoader = historyLoader
         self.storageCache = storageCache
+        self.incompleteRetryDelay = incompleteRetryDelay
         self.now = now
         if let coordinator {
             coordinatorSubscription = coordinator.$invalidationGeneration
@@ -317,31 +323,71 @@ final class OverviewViewModel: ObservableObject {
         storageLoader = nil
         historyLoader = nil
         storageCache = nil
+        incompleteRetryDelay = Self.defaultIncompleteRetryDelay
         now = Date.init
     }
 
     var hasRecentOperations: Bool { !recentOperations.isEmpty }
 
-    /// Renders a cached estimate immediately (no analyze). Call before
-    /// `refreshEstimateIfNeeded` so the page never waits on a scan.
+    /// Renders a cached estimate immediately (no analyze) and remembers it so
+    /// the first scan only fills the segments the cache is missing.
     func primeEstimate(usedBytes: Int64?) {
+        updateUsedBytes(usedBytes)
         guard breakdown == .placeholder else { return }
         guard let entry = storageCache?.load(now: now()) else { return }
         cacheEntry = entry
+        sums = entry.sums
         breakdown = entry.sums.breakdown(usedBytes: usedBytes)
     }
 
+    /// True when a scan should run: nothing scanned yet, missing segments,
+    /// an invalidation, or a stale complete cache.
     var estimateNeedsRefresh: Bool {
         guard storageLoader != nil else { return false }
         if estimateInvalidated { return true }
-        if let lastFailureAt = lastEstimateFailureAt,
-           now().timeIntervalSince(lastFailureAt) < Self.estimateFailureCooldown {
-            return false
+        guard let sums else { return true }
+        guard sums.isComplete else { return true }
+        guard let cacheEntry else { return false }
+        return storageCache?.isStale(cacheEntry, now: now()) ?? false
+    }
+
+    /// Starts the directory scan without waiting for the status sample. The
+    /// task is owned by the view model, so leaving the page does not cancel a
+    /// running scan. An invalidation or a stale cache rescans every segment;
+    /// a merely incomplete estimate only fills the missing segments.
+    func startEstimate(usedBytes: Int64?) {
+        updateUsedBytes(usedBytes)
+        guard !isEstimating, estimateNeedsRefresh else { return }
+        let fillMissingOnly = !estimateInvalidated && !isCacheStale && sums?.isComplete == false
+        estimateTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runEstimate(fillMissingOnly: fillMissingOnly, isFollowUp: false)
         }
-        guard let cacheEntry else { return true }
-        // A partial cache must not suppress a retry for the failed paths.
-        guard cacheEntry.sums.isComplete else { return true }
-        return storageCache?.isStale(cacheEntry, now: now()) ?? true
+    }
+
+    /// Test/assembly hook: waits for the scheduled estimate work, including
+    /// the one-shot incomplete retry, to finish.
+    func waitForEstimate() async {
+        await estimateTask?.value
+        await incompleteRetryTask?.value
+    }
+
+    /// Keeps the derived "other" segment in sync when the status sample
+    /// arrives, without rescanning the directories.
+    func usedBytesDidChange(_ usedBytes: Int64?) {
+        updateUsedBytes(usedBytes)
+    }
+
+    private func updateUsedBytes(_ usedBytes: Int64?) {
+        lastUsedBytes = usedBytes
+        if let sums {
+            breakdown = sums.breakdown(usedBytes: usedBytes)
+        }
+    }
+
+    private var isCacheStale: Bool {
+        guard let cacheEntry else { return false }
+        return storageCache?.isStale(cacheEntry, now: now()) ?? false
     }
 
     /// Loads the recent history once per overview appearance.
@@ -366,48 +412,63 @@ final class OverviewViewModel: ObservableObject {
         }
     }
 
-    /// Computes the estimate unless a valid, fresh cache already covers it.
-    func refreshEstimateIfNeeded(usedBytes: Int64?) async {
-        guard estimateNeedsRefresh else { return }
-        await computeEstimate(usedBytes: usedBytes)
-    }
-
-    private func computeEstimate(usedBytes: Int64?) async {
-        guard let storageLoader, let usedBytes, !isEstimating else { return }
+    /// Computes the estimate in the background (not tied to the caller's
+    /// task). A completed scan — even a partial one — becomes the visible
+    /// estimate and is persisted; missing segments stay placeholders.
+    /// `fillMissingOnly` skips segments that are already resolved;
+    /// `isFollowUp` marks the one-shot retry so it never schedules another.
+    private func runEstimate(fillMissingOnly: Bool, isFollowUp: Bool) async {
+        guard let storageLoader, !isEstimating else { return }
         isEstimating = true
         let invalidationsAtStart = invalidationCount
         defer { isEstimating = false }
         do {
-            let sums = try await storageLoader.loadSums()
-            // A scan that could not read every path is not persisted and never
-            // replaces the live breakdown; the next appearance retries after
-            // the failure cool-down.
-            guard sums.isComplete else {
-                lastEstimateFailureAt = now()
-                overviewLog.error("storage estimate incomplete; backing off")
-                return
-            }
-            breakdown = sums.breakdown(usedBytes: usedBytes)
-            let capturedAt = now()
-            storageCache?.save(sums, capturedAt: capturedAt)
+            // A write invalidation always forces a full rescan, even for the
+            // one-shot follow-up: resolved segments predate the write.
+            let allowFill = fillMissingOnly && !estimateInvalidated
+            let partial = (allowFill && sums?.isComplete == false) ? sums : nil
+            let merged = try await storageLoader.loadSums(filling: partial)
+            sums = merged
+            breakdown = merged.breakdown(usedBytes: lastUsedBytes)
+            // A fill-only scan reuses resolved segments, so it must not
+            // refresh the cache timestamp: the older capture time keeps the
+            // TTL honest for the reused segments.
+            let capturedAt = partial == nil ? now() : (cacheEntry?.capturedAt ?? now())
+            storageCache?.save(merged, capturedAt: capturedAt)
             cacheEntry = StorageEstimateCacheEntry(
                 schemaVersion: StorageEstimateCache.schemaVersion,
                 capturedAt: capturedAt,
-                sums: sums
+                sums: merged
             )
-            lastEstimateFailureAt = nil
             // Keep the estimate marked stale if a write invalidated it mid-scan.
             if invalidationCount == invalidationsAtStart {
                 estimateInvalidated = false
+            }
+            if !merged.isComplete, !isFollowUp, !incompleteRetryScheduled {
+                scheduleIncompleteRetry()
             }
         } catch is CancellationError {
             // A cancelled scan must not write a cache later launches would
             // trust, and must not replace the current estimate.
         } catch {
-            // Same rule for unexpected loader failures; record the category
-            // and back off so the page does not rescan on every appearance.
-            lastEstimateFailureAt = now()
             overviewLog.error("storage estimate failed: \(String(describing: type(of: error)), privacy: .public)")
+        }
+    }
+
+    /// Schedules exactly one follow-up scan for the still-missing segments,
+    /// so a partial estimate keeps filling without rescanning known segments.
+    private func scheduleIncompleteRetry() {
+        incompleteRetryScheduled = true
+        incompleteRetryTask = Task { [weak self] in
+            guard let self else { return }
+            let delay = UInt64(max(0, self.incompleteRetryDelay) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            self.incompleteRetryScheduled = false
+            // Another scan may have completed (or completed the missing
+            // segments) while this retry was sleeping.
+            guard self.sums?.isComplete == false else { return }
+            await self.runEstimate(fillMissingOnly: true, isFollowUp: true)
         }
     }
 }
