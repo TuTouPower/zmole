@@ -440,12 +440,19 @@ final class OverviewViewModel: ObservableObject {
                 capturedAt: capturedAt,
                 sums: merged
             )
-            // Keep the estimate marked stale if a write invalidated it mid-scan.
-            if invalidationCount == invalidationsAtStart {
+            // A write that landed mid-scan makes this merged result — even a
+            // complete one — potentially predate the write. Keep the estimate
+            // stale and schedule a full rescan instead of trusting it.
+            let invalidatedDuringScan = invalidationCount != invalidationsAtStart
+            if !invalidatedDuringScan {
                 estimateInvalidated = false
             }
-            if !merged.isComplete, !isFollowUp, !incompleteRetryScheduled {
-                scheduleIncompleteRetry()
+            if invalidatedDuringScan || !merged.isComplete, !incompleteRetryScheduled {
+                // The one-shot retry never chains another unless a new write
+                // landed while it was running.
+                if invalidatedDuringScan || !isFollowUp {
+                    scheduleIncompleteRetry()
+                }
             }
         } catch is CancellationError {
             // A cancelled scan must not write a cache later launches would
@@ -455,8 +462,9 @@ final class OverviewViewModel: ObservableObject {
         }
     }
 
-    /// Schedules exactly one follow-up scan for the still-missing segments,
-    /// so a partial estimate keeps filling without rescanning known segments.
+    /// Schedules exactly one follow-up scan for the still-missing segments or
+    /// for an estimate a write invalidated while the scan was in flight, so a
+    /// partial estimate keeps filling without rescanning known segments.
     private func scheduleIncompleteRetry() {
         incompleteRetryScheduled = true
         incompleteRetryTask = Task { [weak self] in
@@ -466,8 +474,9 @@ final class OverviewViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             self.incompleteRetryScheduled = false
             // Another scan may have completed (or completed the missing
-            // segments) while this retry was sleeping.
-            guard self.sums?.isComplete == false else { return }
+            // segments) while this retry was sleeping; a still-stale estimate
+            // from an invalidation must rescan even when the sums are complete.
+            guard self.sums?.isComplete == false || self.estimateInvalidated else { return }
             await self.runEstimate(fillMissingOnly: true, isFollowUp: true)
         }
     }
