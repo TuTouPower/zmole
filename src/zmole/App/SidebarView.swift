@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 struct SidebarView: View {
     @ObservedObject var navigation: NavigationModel
-    @FocusState private var focusedDestination: AppDestination?
     @State private var showingAbout = false
 
     var body: some View {
@@ -68,7 +67,6 @@ struct SidebarView: View {
 
     private func navItem(_ destination: AppDestination) -> some View {
         let isSelected = navigation.destination == destination
-        let isFocused = focusedDestination == destination
         return Button {
             navigation.select(destination)
         } label: {
@@ -85,17 +83,10 @@ struct SidebarView: View {
             .frame(height: 38)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? MoleTheme.surface : Color.clear, in: RoundedRectangle(cornerRadius: MoleTheme.radiusSM))
-            .overlay {
-                if isFocused {
-                    RoundedRectangle(cornerRadius: MoleTheme.radiusSM)
-                        .stroke(MoleTheme.accent, lineWidth: 1.5)
-                        .padding(1)
-                }
-            }
             .contentShape(RoundedRectangle(cornerRadius: MoleTheme.radiusSM))
         }
         .buttonStyle(.plain)
-        .focused($focusedDestination, equals: destination)
+        .focusable(false)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .withoutSystemFocusRing()
     }

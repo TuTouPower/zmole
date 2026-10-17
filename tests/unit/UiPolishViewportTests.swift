@@ -22,12 +22,12 @@ final class UiPolishViewportTests: XCTestCase {
             "Sidebar must suppress system blue focus ring (AC-001)"
         )
         XCTAssertTrue(
-            source.contains("focusedDestination") || source.contains("@FocusState"),
-            "Sidebar must track keyboard focus state for theme styling (AC-011)"
+            source.contains("focusable(false)"),
+            "Sidebar navigation buttons must be non-focusable to prevent focus ring (p016)"
         )
-        XCTAssertTrue(
-            source.contains("MoleTheme.accent"),
-            "Sidebar must style keyboard focus with theme accent (AC-011)"
+        XCTAssertFalse(
+            source.contains("stroke(MoleTheme.accent"),
+            "Sidebar navigation buttons must not draw blue accent outline (p016)"
         )
     }
 
