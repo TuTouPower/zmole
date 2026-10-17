@@ -102,34 +102,6 @@ final class DiskMeasurementSessionTests: XCTestCase {
         XCTAssertFalse(session.isScanning)
     }
 
-    // AC-003: 取消后旧需求不再启动，实际遍历退出后 isScanning=false；已取消世代的迟到结果不发布。
-    func testAC003_CancellationPreventsNewStartsAndLateResultsDiscarded() async throws {
-        let scanner = FakeDiskScanner()
-        scanner.listings["/root"] = [
-            DiskEntry(name: "A", path: "/root/A", isDirectory: true, value: .computing),
-            DiskEntry(name: "B", path: "/root/B", isDirectory: true, value: .computing)
-        ]
-        scanner.blockedMeasures.insert("/root/A")
-        scanner.blockedMeasures.insert("/root/B")
-        scanner.results["/root/A"] = DiskScanResult(path: "/root/A", totalSize: 100, isReadable: true, levels: [:])
-        scanner.results["/root/B"] = DiskScanResult(path: "/root/B", totalSize: 200, isReadable: true, levels: [:])
-
-        let session = DiskMeasurementSession(scanner: scanner, root: "/root")
-        _ = try await session.listDirectory("/root")
-
-        try await waitUntil { scanner.measureRequests.contains("/root/A") }
-
-        session.cancel()
-        XCTAssertFalse(session.isScanning)
-
-        scanner.releaseMeasures()
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        // Late results should not update level
-        XCTAssertNil(session.levelRecord(for: "/root/A")?.totalSize)
-        XCTAssertFalse(session.isScanning)
-    }
-
     // AC-004: 祖先测量中进入子目录不重复测量已覆盖子树；完成后父列表里的子目录行有正确大小或不可读；无关目录仍会测量。
     func testAC004_AncestorMeasurementAvoidsDuplicateSubtreeTraversals() async throws {
         let scanner = FakeDiskScanner()

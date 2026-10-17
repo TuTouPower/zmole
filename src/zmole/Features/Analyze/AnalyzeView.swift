@@ -65,6 +65,8 @@ struct AnalyzeView: View {
         .task {
             if viewModel.level == nil, !viewModel.isListing { await viewModel.loadOverview() }
         }
+        .onChange(of: search) { _ in viewModel.resetPage() }
+        .onChange(of: sort) { _ in viewModel.resetPage() }
         .onChange(of: viewModel.currentPath) { _ in
             selectedPath = nil
             search = ""
@@ -233,6 +235,16 @@ struct AnalyzeView: View {
                 }
             }
             .listStyle(.sidebar)
+            HStack {
+                Button("analyze.previous_page") { viewModel.changePage(by: -1) }
+                    .disabled(viewModel.pageOffset == 0)
+                Spacer()
+                Button("analyze.next_page") { viewModel.changePage(by: 1) }
+                    .disabled(!viewModel.hasNextPage(search: search))
+            }
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
             Divider()
             HStack(spacing: 8) {
                 Text("analyze.current_total").foregroundStyle(.secondary)
@@ -354,8 +366,7 @@ struct AnalyzeView: View {
             }
             .padding(14)
             Divider()
-            let drawable = level.entries.filter { ($0.knownSize ?? 0) > 0 }
-            if drawable.isEmpty {
+            if !viewModel.hasMappedEntries {
                 UtilityEmptyState(symbol: "folder", title: "analyze.no_sizes", message: "analyze.no_sizes_detail")
             } else {
                 GeometryReader { proxy in
@@ -402,7 +413,7 @@ struct AnalyzeView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 6))
         .onTapGesture(count: 2) { openDirectory(tile.entry) }
-        .onTapGesture(count: 1) { selectedPath = tile.entry.path }
+        .onTapGesture(count: 1) { if !tile.isAggregate { selectedPath = tile.entry.path } }
         .accessibilityLabel(Text(verbatim: tile.entry.name + ", " + UtilityStyle.bytes(tile.entry.knownSize ?? 0)))
         .help(tile.entry.path + " · " + UtilityStyle.bytes(tile.entry.knownSize ?? 0))
     }

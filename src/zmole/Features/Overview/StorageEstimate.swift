@@ -215,6 +215,7 @@ struct StorageEstimateLoader: Sendable {
     func loadSums(
         filling existing: StorageSums? = nil,
         includingUsers: Bool = true,
+        refresh: Bool = false,
         onProgress: (@Sendable (StorageSums) -> Void)? = nil
     ) async throws -> StorageSums {
         let expandedHome = homeDirectory.hasPrefix("~") ? (NSHomeDirectory() + homeDirectory.dropFirst()) : homeDirectory
@@ -234,6 +235,7 @@ struct StorageEstimateLoader: Sendable {
         }
 
         if let session {
+            if refresh { await session.invalidateMeasurements() }
             var initialPaths: [String] = []
             if existing?.applications == nil { initialPaths.append(applicationsPath) }
             if includingUsers {
@@ -253,12 +255,13 @@ struct StorageEstimateLoader: Sendable {
                 return res
             }
 
-        let aggregator = ProbeAggregator(
-            initialSums: existing ?? StorageSums(),
-            systemPaths: Set(systemPaths),
-            developerPath: developerPath,
-            onProgress: onProgress
-        )
+            let aggregator = ProbeAggregator(
+                initialSums: existing ?? StorageSums(),
+                systemPaths: Set(systemPaths),
+                developerPath: developerPath,
+                applicationsPath: applicationsPath, usersPath: usersPath,
+                onProgress: onProgress
+            )
 
             let workQueue = ProbeWorkQueue(paths: allPaths)
             let workerCount = min(allPaths.count, max(1, scheduler?.maxConcurrency ?? 3))
@@ -274,7 +277,7 @@ struct StorageEstimateLoader: Sendable {
                                 let outcome = await session.measureSubtreeOutcome(usersPath)
                                 if outcome.isReadable {
                                     let usersTotal = outcome.size ?? 0
-                                    let devSize = session.subtreeTotal(for: developerPath) ?? session.selfDeduplicatedSize(for: developerPath) ?? 0
+                                    let devSize = session.isSubtreeReadable(for: developerPath) ? session.selfDeduplicatedSize(for: developerPath) : nil
                                     await aggregator.recordUsersAndDeveloper(usersTotal: usersTotal, developerSize: devSize)
                                 } else {
                                     await aggregator.record(path: usersPath, size: nil)
@@ -289,6 +292,7 @@ struct StorageEstimateLoader: Sendable {
                 try await group.waitForAll()
             }
 
+            try Task.checkCancellation()
             return await aggregator.finalSums(includingUsers: includingUsers, hadExistingUsers: existing?.users != nil)
         }
 
@@ -310,6 +314,7 @@ struct StorageEstimateLoader: Sendable {
             initialSums: existing ?? StorageSums(),
             systemPaths: Set(systemPaths),
             developerPath: channelDevPath,
+            applicationsPath: applicationsPath, usersPath: usersPath,
             onProgress: onProgress
         )
 
@@ -339,6 +344,7 @@ struct StorageEstimateLoader: Sendable {
             try await group.waitForAll()
         }
 
+        try Task.checkCancellation()
         return await aggregator.finalSums(includingUsers: includingUsers, hadExistingUsers: existing?.users != nil)
     }
 
@@ -351,6 +357,8 @@ private actor ProbeAggregator {
     private var currentSums: StorageSums
     private let systemPaths: Set<String>
     private let developerPath: String
+    private let applicationsPath: String
+    private let usersPath: String
     private var systemSizes: [String: Int64] = [:]
     private var systemHasFailure = false
     private let onProgress: (@Sendable (StorageSums) -> Void)?
@@ -359,28 +367,31 @@ private actor ProbeAggregator {
         initialSums: StorageSums,
         systemPaths: Set<String>,
         developerPath: String = "~/Library/Developer",
+        applicationsPath: String = "/Applications", usersPath: String = "/Users",
         onProgress: (@Sendable (StorageSums) -> Void)?
     ) {
         self.currentSums = initialSums
         self.systemPaths = systemPaths
         self.developerPath = developerPath
+        self.applicationsPath = applicationsPath
+        self.usersPath = usersPath
         self.onProgress = onProgress
     }
 
-    func recordUsersAndDeveloper(usersTotal: Int64, developerSize: Int64) {
+    func recordUsersAndDeveloper(usersTotal: Int64, developerSize: Int64?) {
         currentSums.users = usersTotal
         currentSums.developer = developerSize
         onProgress?(currentSums)
     }
 
     func record(path: String, size: Int64?) {
-        if path == "/Applications" {
+        if path == applicationsPath {
             currentSums.applications = size
             onProgress?(currentSums)
         } else if path == developerPath || path == "~/Library/Developer" {
             currentSums.developer = size
             onProgress?(currentSums)
-        } else if path == "/Users" {
+        } else if path == usersPath {
             currentSums.users = size
             onProgress?(currentSums)
         } else if systemPaths.contains(path) {

@@ -22,6 +22,11 @@ actor BackgroundScanStorage {
     private let onDecodeOrRead: (@Sendable () -> Void)?
     private let onBeforeLoadRead: (@Sendable () async -> Void)?
     private var failingWrite: Bool = false
+    private var didPersist: (@Sendable (UInt64, Error?) async -> Void)?
+
+    func observePersistence(_ observer: @escaping @Sendable (UInt64, Error?) async -> Void) {
+        didPersist = observer
+    }
 
     init(
         fileURL: URL,
@@ -54,18 +59,11 @@ actor BackgroundScanStorage {
 
         let loaded = cache.load()
 
-        var merged = loaded
-        if let pending = pendingSnapshot {
-            for (key, val) in pending {
-                merged[key] = val
-            }
-        }
-        for (key, val) in persistedResults {
-            merged[key] = val
-        }
-
-        persistedResults = merged
-        return merged
+        // Submissions are complete snapshots, including deletions. Once a
+        // revision was accepted, loading must not resurrect absent keys.
+        guard acceptedRevision == 0 else { return pendingSnapshot ?? persistedResults }
+        persistedResults = loaded
+        return loaded
     }
 
     func submit(
@@ -159,5 +157,6 @@ actor BackgroundScanStorage {
         } catch {
             lastWriteError = error
         }
+        await didPersist?(persistedRevision, lastWriteError)
     }
 }

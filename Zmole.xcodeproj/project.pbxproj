@@ -84,6 +84,7 @@
 		A9E3BC9E069984C4DC7AA35C /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2FF8C842174A39D87371 /* CommandPaletteView.swift */; };
 		AA08085E2058EECEEFFFDE49 /* UninstallMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217901BD849972859EAA0561 /* UninstallMetadata.swift */; };
 		AA8D736869D40DF4DC49C08F /* StatusSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */; };
+		AAD6AEC5EA28E4B903E50DA1 /* ReviewRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE8514D3E3BE2DDF0BE5973 /* ReviewRegressionTests.swift */; };
 		AB5AFAFAAF3EA57ED83BE1B4 /* ScopedInvalidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C457C56D0A342F61D6732A /* ScopedInvalidationTests.swift */; };
 		B00C6BA0020F252D7443B75D /* MaintenanceOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A9B2282FE55EB1F2EF86557 /* MaintenanceOperation.swift */; };
 		B010DBA296FF8D6BD9B90369 /* DiskWalkMemoryBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB7A53427073C2EC46CB33C /* DiskWalkMemoryBudgetTests.swift */; };
@@ -257,6 +258,7 @@
 		AA5580A9DFC3B8F3208C705E /* InstallersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallersViewModel.swift; sourceTree = "<group>"; };
 		AA8A8DE64794BD0226809316 /* MoleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleTheme.swift; sourceTree = "<group>"; };
 		AACED876BFD4FD95E9D889A9 /* SpaceMapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMapTests.swift; sourceTree = "<group>"; };
+		AAE8514D3E3BE2DDF0BE5973 /* ReviewRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRegressionTests.swift; sourceTree = "<group>"; };
 		AE334F91E7FFB8672701E61E /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
 		AF2EB672BEFFE0EEB17596B0 /* UninstallListStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallListStream.swift; sourceTree = "<group>"; };
 		B22A8D1ED5B34DF4188D0304 /* StatusStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusStreamTests.swift; sourceTree = "<group>"; };
@@ -427,6 +429,7 @@
 				F8B3146102CA598B7C7281C1 /* PrewarmPageAttachTests.swift */,
 				A145B3ECE0F0C79F37B7E371 /* PurgeTests.swift */,
 				481E9C001CEBBE2F61993BE8 /* RecoverableBusyTests.swift */,
+				AAE8514D3E3BE2DDF0BE5973 /* ReviewRegressionTests.swift */,
 				21C457C56D0A342F61D6732A /* ScopedInvalidationTests.swift */,
 				0391D87DF3F9EA9DF705E4A1 /* SettingsHistoryTests.swift */,
 				AACED876BFD4FD95E9D889A9 /* SpaceMapTests.swift */,
@@ -758,6 +761,7 @@
 				C65168228FB396C52446458A /* PrewarmPageAttachTests.swift in Sources */,
 				8F25AB167737D8E414A1209B /* PurgeTests.swift in Sources */,
 				1164778E525B44BFA6B1BE03 /* RecoverableBusyTests.swift in Sources */,
+				AAD6AEC5EA28E4B903E50DA1 /* ReviewRegressionTests.swift in Sources */,
 				AB5AFAFAAF3EA57ED83BE1B4 /* ScopedInvalidationTests.swift in Sources */,
 				F47BF9624D37B2C3B64BDB9C /* SettingsHistoryTests.swift in Sources */,
 				441AA6BA031C74AF4BBC9174 /* SpaceMapTests.swift in Sources */,

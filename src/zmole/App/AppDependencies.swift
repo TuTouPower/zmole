@@ -37,6 +37,7 @@ private final class MoleProcessBox: @unchecked Sendable {
 
 @MainActor
 final class AppDependencies: ObservableObject {
+    let heavyScanScheduler: HeavyScanScheduler
     let coordinator: OperationCoordinator
     let fullDiskAccessMonitor: FullDiskAccessMonitor
     let cleanViewModel: CleanViewModel
@@ -122,6 +123,7 @@ final class AppDependencies: ObservableObject {
         let sharedCoordinator = OperationCoordinator()
         coordinator = sharedCoordinator
         let heavyScanScheduler = HeavyScanScheduler(maxConcurrency: HeavyScanScheduler.defaultConcurrency)
+        self.heavyScanScheduler = heavyScanScheduler
         let accessMonitor = configuration.isEnabled
             ? FullDiskAccessMonitor(probe: { true })
             : FullDiskAccessMonitor()
@@ -207,7 +209,7 @@ final class AppDependencies: ObservableObject {
                 root: DemoDiskScanner.root
             )
         } else {
-            analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
+            analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/", scheduler: heavyScanScheduler)
         }
 
         let policy = StatusFeaturePolicy()

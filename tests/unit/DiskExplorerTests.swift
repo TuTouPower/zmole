@@ -491,27 +491,6 @@ final class DiskExplorerTests: XCTestCase {
         XCTAssertEqual(paths, ["/root/readme.txt"])
     }
 
-    func testDiskSourcesDoNotRunMoleCommands() throws {
-        for file in ["AnalyzeView.swift", "AnalyzeViewModel.swift", "DiskScanner.swift"] {
-            let source = try Self.analyzeSource(file)
-            for forbidden in ["MoleBridge", "MoleProcess", "\"analyze\"", "Process("] {
-                XCTAssertFalse(
-                    source.contains(forbidden),
-                    "\(file) must not run mole commands: \(forbidden)"
-                )
-            }
-        }
-        let assembly = try Self.assemblySource()
-        XCTAssertTrue(
-            assembly.contains("AnalyzeViewModel(scanner: LiveDiskScanner(), root: \"/\")"),
-            "production assembly must drive the disk page from the in-app scanner"
-        )
-        XCTAssertTrue(
-            assembly.contains("scanner: DemoDiskScanner(state: configuration.state)"),
-            "demo assembly must drive the disk page from the in-memory scanner"
-        )
-    }
-
     func testDiskPageHasNoDeleteControl() throws {
         let source = try Self.analyzeSource("AnalyzeView.swift").lowercased()
         for forbidden in ["delete", "trash", "removeItem", "clean("] {

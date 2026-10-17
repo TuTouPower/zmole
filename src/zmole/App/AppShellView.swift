@@ -27,10 +27,10 @@ struct AppShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             dependencies.fullDiskAccessMonitor.refresh()
         }
-        .onReceive(dependencies.statusPolicy.$isEnabled) { enabled in
-            if !enabled {
-                Task { await dependencies.statusViewModel.applyPolicyChange(enabled: false) }
-            } else {
+        .onReceive(dependencies.statusPolicy.$isEnabled) { _ in
+            Task { @MainActor in
+                let enabled = dependencies.statusPolicy.isEnabled
+                await dependencies.statusViewModel.applyPolicyChange(enabled: enabled)
                 updateStatusWatch()
             }
         }
@@ -127,6 +127,20 @@ struct AppShellView: View {
     /// The status watch runs only while the overview or status page is visible.
     /// Navigating away stops the shared process, satisfying the leave-page rule.
     private func updateStatusWatch() {
+        let selectedItem: BackgroundScanItem?
+        switch navigation.destination {
+        case .uninstall: selectedItem = .uninstallList
+        case .installers: selectedItem = .installerList
+        case .clean: selectedItem = .clean
+        case .optimize: selectedItem = .optimize
+        case .purge: selectedItem = .purge
+        default: selectedItem = nil
+        }
+        for item in BackgroundScanItem.allCases {
+            dependencies.scanService?.setPriority(item, item == selectedItem ? .userVisible : .background)
+        }
+        dependencies.analyzeViewModel.session.setUserVisible(navigation.destination == .disk || navigation.destination == .overview)
+
         guard dependencies.statusPolicy.isEnabled else {
             Task { await dependencies.statusViewModel.stop() }
             return

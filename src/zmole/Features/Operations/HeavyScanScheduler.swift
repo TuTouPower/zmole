@@ -57,6 +57,7 @@ actor HeavyScanScheduler {
         taskID: String,
         priority: ScanPriority = .background
     ) async throws -> HeavyScanPermit {
+        try Task.checkCancellation()
         if activeCount < maxConcurrency {
             activeCount += 1
             let permitID = UUID()
@@ -69,7 +70,8 @@ actor HeavyScanScheduler {
         let seq = sequenceCounter
 
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
                 let req = QueuedRequest(
                     id: requestID,
                     taskID: taskID,

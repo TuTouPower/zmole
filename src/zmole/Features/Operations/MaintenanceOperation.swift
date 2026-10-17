@@ -169,8 +169,8 @@ class MaintenanceViewModel: ObservableObject {
         previewCapturedAt = nil
 
         do {
-            let result = try await process.run(kind.executionArguments, stdin: nil, timeout: 600)
             leaseCoordinator.markDataModified()
+            let result = try await process.run(kind.executionArguments, stdin: nil, timeout: 600)
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             let summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
             if result.exitCode == 0 {
@@ -188,6 +188,7 @@ class MaintenanceViewModel: ObservableObject {
             leaseCoordinator.invalidatePreviews()
             leaseCoordinator.release()
         } catch {
+            if CommandBusy.commandDidNotStart(error) { leaseCoordinator.markDataUnmodified() }
             guard session.accepts(execution.id) else { return }
             let summary: String?
             if case let MoleBridgeError.commandFailed(result) = error {

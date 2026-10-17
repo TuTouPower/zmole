@@ -25,6 +25,7 @@ final class InstallersViewModel: ObservableObject {
     private var lease: OperationLease?
     private var removalCancelled = false
     private var scanSubscription: AnyCancellable?
+    private var adoptedResult: BackgroundScanResult?
 
     init(
         interface: InstallerInterface,
@@ -55,6 +56,8 @@ final class InstallersViewModel: ObservableObject {
 
     var canConfirm: Bool {
         !isListing && !isRemoving
+            && !(scan?.failedItems.contains(.installerList) ?? false)
+            && !(scan?.result(for: .installerList)?.isStale ?? false)
             && !selectedPaths.isEmpty
             && selectedPaths.isSubset(of: Set(lastListing.map(\.path)))
     }
@@ -78,15 +81,11 @@ final class InstallersViewModel: ObservableObject {
             }
             if let result = scan.result(for: .installerList),
                case let .installerCandidates(list) = result.payload {
-                candidates = list
-                lastListing = list
-                listCapturedAt = result.capturedAt
-            if result.isStale {
-                scan.request(.installerList)
+                adoptList(result, candidates: list)
+                if result.isStale { scan.request(.installerList) }
+                return
             }
-            return
-        }
-        await self.scan()
+            await self.scan()
         } else {
             await scanFromInterface()
         }
@@ -130,16 +129,28 @@ final class InstallersViewModel: ObservableObject {
     }
 
     private func syncWithScanService() {
-        guard let scan else { return }
+        guard let scan, !isRemoving else { return }
         isListing = scan.runningItems.contains(.installerList)
-        if !isListing {
-            if let result = scan.result(for: .installerList),
-               case let .installerCandidates(list) = result.payload {
-                candidates = list
-                lastListing = list
-                listCapturedAt = result.capturedAt
-            }
+        if !isListing, let result = scan.result(for: .installerList),
+           case let .installerCandidates(list) = result.payload {
+            adoptList(result, candidates: list)
         }
+        if scan.failedItems.contains(.installerList) {
+            errorMessageKey = "installers.error.command_failed"
+        } else {
+            errorMessageKey = nil
+        }
+    }
+
+    private func adoptList(_ result: BackgroundScanResult, candidates list: [InstallerCandidate]) {
+        guard result != adoptedResult else { return }
+        candidates = list
+        lastListing = list
+        listCapturedAt = result.capturedAt
+        selectedPaths.removeAll()
+        isConfirmationPresented = false
+        failures = []
+        adoptedResult = result
     }
 
     func toggleSelection(_ candidate: InstallerCandidate) {

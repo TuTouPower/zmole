@@ -128,7 +128,11 @@ final class StatusViewModel: ObservableObject {
         policy?.setEnabled(enabled)
         if !enabled {
             await stop()
+            guard !isFeatureEnabled else { return }
             snapshot = nil
+            lastUpdatedAt = nil
+            errorMessage = nil
+            errorMessageKey = nil
             series = []
             isSampling = false
         }

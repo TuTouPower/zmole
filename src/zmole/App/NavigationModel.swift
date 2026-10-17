@@ -38,6 +38,7 @@ final class NavigationModel: ObservableObject {
 
         policySubscription = policy?.$isEnabled.sink { [weak self] enabled in
             guard let self else { return }
+            self.objectWillChange.send()
             if !enabled && self.destination == .status {
                 self.destination = .overview
             }
