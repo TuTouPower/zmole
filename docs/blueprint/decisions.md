@@ -25,7 +25,7 @@
 
 - 背景：目标用户是不认识的人；维护者暂不办理 Apple Developer Program。
 - 选项：Developer ID + 公证；不公证依赖 Gatekeeper「仍要打开」。
-- 结论：GitHub Release 发公证前的 `.zip`（内含 `Zmole.app`）。README 必须写清放行步骤与 `xattr -cr` 备路。本地 ad-hoc 签名。Sparkle 与 dmg 后做。
+- 结论：GitHub Release 发公证前的 `.zip`（内含 `Zmole.app`）。README 必须写清放行步骤与 `xattr -cr` 备路。本地自签证书 `Zmole Local Signing` 签名（登录钥匙串，一次授予 TCC/FDA 后跨重建保留）。Sparkle 与 dmg 后做。
 - 替代：无
 
 ## 004 第一版只包装有稳定输出的能力（2026-09-21）
