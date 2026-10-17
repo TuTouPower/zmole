@@ -49,6 +49,7 @@
 		6792B5847403BC703996C809 /* DiskSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83AB8EAD531D259EE035696 /* DiskSessionStore.swift */; };
 		68591EE839D8ADFDC6FBCDB9 /* AnalyzeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304AEC9B636DA0C6B2041240 /* AnalyzeViewModel.swift */; };
 		6BE21E7D5FBE43B5A9BBEBFA /* OverviewCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212A3B08B1A3A34ED5C94DEF /* OverviewCacheTests.swift */; };
+		6D64A6EC55F2265CDF58581E /* EstimateWorkQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD40B825DE6986CFED698AEC /* EstimateWorkQueueTests.swift */; };
 		740FC84BEB40BC398BF22B6A /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE61BB9A8CB6E4013D935BF /* HistoryViewModel.swift */; };
 		779967147344D4DD8A8DC025 /* AppDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1C581239BC7637CAAA4EB5 /* AppDestination.swift */; };
 		78F4FF168EE5ECCDEB30B56A /* BundledMoleInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37585961676DC444F7EB2A0 /* BundledMoleInfo.swift */; };
@@ -259,6 +260,7 @@
 		B2D086638ADEC2C21DC02533 /* CommandConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandConcurrencyTests.swift; sourceTree = "<group>"; };
 		B76D4F97CC2D295465B4473E /* OverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewTests.swift; sourceTree = "<group>"; };
 		B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSnapshot.swift; sourceTree = "<group>"; };
+		BD40B825DE6986CFED698AEC /* EstimateWorkQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EstimateWorkQueueTests.swift; sourceTree = "<group>"; };
 		BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallersPageTests.swift; sourceTree = "<group>"; };
 		C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeView.swift; sourceTree = "<group>"; };
 		C491322D5C013BAD4866E09D /* DiskMeasurementSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskMeasurementSession.swift; sourceTree = "<group>"; };
@@ -404,6 +406,7 @@
 				077938261256A5757ADCD877 /* DiskMeasurementSessionTests.swift */,
 				6B457DEFFE89F2C4B82DA829 /* DiskScannerTests.swift */,
 				7DB7A53427073C2EC46CB33C /* DiskWalkMemoryBudgetTests.swift */,
+				BD40B825DE6986CFED698AEC /* EstimateWorkQueueTests.swift */,
 				4069B9839D77A8476E88C934 /* HeavyScanSchedulerTests.swift */,
 				BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */,
 				0BD5F03A7069D3147B70289F /* MoleBridgeTests.swift */,
@@ -732,6 +735,7 @@
 				B3F3667A661632F5DE0B4F6E /* DiskMeasurementSessionTests.swift in Sources */,
 				7CD4372C0CACFC2D9E655E19 /* DiskScannerTests.swift in Sources */,
 				B010DBA296FF8D6BD9B90369 /* DiskWalkMemoryBudgetTests.swift in Sources */,
+				6D64A6EC55F2265CDF58581E /* EstimateWorkQueueTests.swift in Sources */,
 				837E68AC5200525E2245C046 /* HeavyScanSchedulerTests.swift in Sources */,
 				D0E6D7139D18476B9A0C4132 /* InstallersPageTests.swift in Sources */,
 				7CBBBD562EEA8D825C936932 /* MoleBridgeTests.swift in Sources */,
