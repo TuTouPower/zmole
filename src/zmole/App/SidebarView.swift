@@ -4,8 +4,7 @@ import SwiftUI
 @MainActor
 struct SidebarView: View {
     @ObservedObject var navigation: NavigationModel
-    @ObservedObject var statusViewModel: StatusViewModel
-    @ObservedObject var cleanViewModel: CleanViewModel
+    @FocusState private var focusedDestination: AppDestination?
     @State private var showingAbout = false
 
     var body: some View {
@@ -48,13 +47,8 @@ struct SidebarView: View {
                 .resizable()
                 .frame(width: 30, height: 30)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("app.name")
-                    .font(.system(size: 16, weight: .bold))
-                Text("app.tagline")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoleTheme.subtle)
-            }
+            Text("app.name")
+                .font(.system(size: 16, weight: .bold))
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 22)
@@ -74,6 +68,7 @@ struct SidebarView: View {
 
     private func navItem(_ destination: AppDestination) -> some View {
         let isSelected = navigation.destination == destination
+        let isFocused = focusedDestination == destination
         return Button {
             navigation.select(destination)
         } label: {
@@ -84,30 +79,25 @@ struct SidebarView: View {
                 Text(destination.titleKey)
                     .font(.system(size: 13))
                 Spacer(minLength: 0)
-                if destination == .clean, let bytes = cleanViewModel.lastReclaimBytes {
-                    Text(verbatim: ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(MoleTheme.accentStrong)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(MoleTheme.accentSoft, in: RoundedRectangle(cornerRadius: 7))
-                }
-                if destination == .status, statusViewModel.isSampling {
-                    Circle()
-                        .fill(MoleTheme.accent)
-                        .frame(width: 6, height: 6)
-                        .accessibilityHidden(true)
-                }
             }
             .foregroundStyle(MoleTheme.text)
             .padding(.horizontal, 10)
             .frame(height: 38)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? MoleTheme.surface : Color.clear, in: RoundedRectangle(cornerRadius: MoleTheme.radiusSM))
+            .overlay {
+                if isFocused {
+                    RoundedRectangle(cornerRadius: MoleTheme.radiusSM)
+                        .stroke(MoleTheme.accent, lineWidth: 1.5)
+                        .padding(1)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: MoleTheme.radiusSM))
         }
         .buttonStyle(.plain)
+        .focused($focusedDestination, equals: destination)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .withoutSystemFocusRing()
     }
 
     private var footer: some View {
@@ -155,5 +145,16 @@ struct SidebarView: View {
 
     private static var osVersion: String {
         ProcessInfo.processInfo.operatingSystemVersionString
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func withoutSystemFocusRing() -> some View {
+        if #available(macOS 14.0, *) {
+            self.focusEffectDisabled()
+        } else {
+            self
+        }
     }
 }

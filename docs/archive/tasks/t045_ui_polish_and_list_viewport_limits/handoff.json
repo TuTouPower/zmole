@@ -1,0 +1,26 @@
+{
+  "tid": "t045",
+  "attempt": 1,
+  "execution_id": "665f7ae04e8c4b60bde12f3a8ba3af43",
+  "status": "done",
+  "branch": "t045_ui_polish_and_list_viewport_limits",
+  "base_sha": "bf5e8602a91df70c8b2cf9c4dd3c11c0a916c83d",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (302 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests passed",
+  "review": "single: review_general.md PASS round 1, reviewed_scope 241cee0df6df92a2, 0 finding",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/App/SidebarView.swift withoutSystemFocusRing", "tests/unit/UiPolishViewportTests.swift testSidebarSuppressesSystemFocusRingAndStylesThemeFocus"],
+    "AC-002": ["src/zmole/App/SidebarView.swift brand without app.tagline", "tests/unit/UiPolishViewportTests.swift testSidebarBrandDropsTagline"],
+    "AC-003": ["src/zmole/App/SidebarView.swift navItem without lastReclaimBytes", "tests/unit/UiPolishViewportTests.swift testSidebarDropsCleanReclaimBadgeAndStatusDot"],
+    "AC-004": ["src/zmole/App/SidebarView.swift navItem without sampling dot", "src/zmole/App/AppShellView.swift without unused ViewModels"],
+    "AC-005": ["src/zmole/Features/Installers/InstallersView.swift listCard candidates ScrollView + fixed toolbar & remove footer", "tests/unit/UiPolishViewportTests.swift testInstallersListHasDedicatedScrollViewAndFixedFooter"],
+    "AC-006": ["src/zmole/Features/Optimize/OptimizeView.swift planCard ScrollView + fixed execute button", "tests/unit/UiPolishViewportTests.swift testOptimizePlanSeparatesScrollableContentFromFixedExecuteButton"],
+    "AC-007": ["src/zmole/Features/Purge/PurgeView.swift outputPanel ScrollView + fixed execute button", "tests/unit/UiPolishViewportTests.swift testPurgeOutputSeparatesScrollableOutputFromFixedExecuteButton"],
+    "AC-008": ["src/zmole/Features/History/HistoryView.swift HistorySnapshotContent headerRow + rows ScrollView", "tests/unit/UiPolishViewportTests.swift testHistoryTableSeparatesScrollableRowsFromFixedHeader"],
+    "AC-009": ["src/zmole/Features/Settings/SettingsView.swift scrollContentBackground(.hidden) + MoleTheme.background", "tests/unit/UiPolishViewportTests.swift testSettingsUsesMoleThemeBackground"],
+    "AC-010": ["tests/unit/UiPolishViewportTests.swift layout constraints", "testing.md demo smoke"],
+    "AC-011": ["src/zmole/App/SidebarView.swift @FocusState focusedDestination + MoleTheme.accent outline", "tests/unit/UiPolishViewportTests.swift testSidebarSuppressesSystemFocusRingAndStylesThemeFocus"]
+  },
+  "pending": [],
+  "findings": []
+}

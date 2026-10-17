@@ -32,68 +32,71 @@ struct PurgeView: View {
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                MolePageHead(
-                    title: "purge.title",
-                    subtitle: "purge.page_subtitle"
-                ) {
-                    refreshOrCancelButton
-                    if let capturedAt = viewModel.previewCapturedAt {
-                        Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
-                            .font(.system(size: 11))
-                            .foregroundStyle(MoleTheme.muted)
-                    }
-                }
-
-                UtilityNotice(title: "purge.permanent_note", symbol: "exclamationmark.triangle", isError: true)
-                UtilityNotice(title: "purge.scan_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
-
-                HStack(spacing: 8) {
-                    Button("purge.paths.edit") { showingPathsEditor = true }
-                        .buttonStyle(.bordered)
-                    Button("purge.whitelist") { onOpenSettings() }
-                        .buttonStyle(.bordered)
-                    Spacer()
-                }
-
-                if viewModel.isRefreshing {
-                    UtilityBusyState(title: "purge.refreshing")
-                } else if viewModel.isExecuting {
-                    UtilityBusyState(title: "purge.executing")
-                } else if let preview = viewModel.preview {
-                    outputPanel(output: preview.output)
-                } else if viewModel.scanFailed {
-                    VStack(spacing: 12) {
-                        UtilityNotice(title: "purge.scan_failed", symbol: "exclamationmark.triangle", isError: true)
-                        Button("purge.refresh") { viewModel.refreshMaintenance() }
-                            .buttonStyle(.bordered)
-                    }
-                    .frame(minHeight: 200)
-                } else {
-                    UtilityEmptyState(symbol: "hammer", title: "sidebar.purge", message: "purge.empty_hint")
-                        .frame(minHeight: 200)
-                }
-
-                if viewModel.showBusyNotice {
-                    RecoverableBusyNotice()
-                }
-                if viewModel.scanFailed, viewModel.preview != nil {
-                    UtilityNotice(title: "purge.scan_failed", symbol: "exclamationmark.triangle", isError: true)
-                }
-                if let errorMessageKey = viewModel.errorMessageKey {
-                    UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
-                } else if let errorMessage = viewModel.errorMessage {
-                    UtilityNotice(title: "purge.error_title", detail: errorMessage, isError: true)
-                }
-                if let executionSummary = viewModel.executionSummary,
-                   !executionSummary.isEmpty,
-                   viewModel.result?.status == .succeeded {
-                    UtilityNotice(title: "purge.result", detail: executionSummary, symbol: "checkmark.circle")
+        VStack(alignment: .leading, spacing: 14) {
+            MolePageHead(
+                title: "purge.title",
+                subtitle: "purge.page_subtitle"
+            ) {
+                refreshOrCancelButton
+                if let capturedAt = viewModel.previewCapturedAt {
+                    Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoleTheme.muted)
                 }
             }
-            .padding(24)
+
+            UtilityNotice(title: "purge.permanent_note", symbol: "exclamationmark.triangle", isError: true)
+            UtilityNotice(title: "purge.scan_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
+
+            HStack(spacing: 8) {
+                Button("purge.paths.edit") { showingPathsEditor = true }
+                    .buttonStyle(.bordered)
+                Button("purge.whitelist") { onOpenSettings() }
+                    .buttonStyle(.bordered)
+                Spacer()
+            }
+
+            if viewModel.isRefreshing {
+                UtilityBusyState(title: "purge.refreshing")
+                Spacer()
+            } else if viewModel.isExecuting {
+                UtilityBusyState(title: "purge.executing")
+                Spacer()
+            } else if let preview = viewModel.preview {
+                outputPanel(output: preview.output)
+            } else if viewModel.scanFailed {
+                VStack(spacing: 12) {
+                    UtilityNotice(title: "purge.scan_failed", symbol: "exclamationmark.triangle", isError: true)
+                    Button("purge.refresh") { viewModel.refreshMaintenance() }
+                        .buttonStyle(.bordered)
+                }
+                .frame(minHeight: 200)
+                Spacer()
+            } else {
+                UtilityEmptyState(symbol: "hammer", title: "sidebar.purge", message: "purge.empty_hint")
+                    .frame(minHeight: 200)
+                Spacer()
+            }
+
+            if viewModel.showBusyNotice {
+                RecoverableBusyNotice()
+            }
+            if viewModel.scanFailed, viewModel.preview != nil {
+                UtilityNotice(title: "purge.scan_failed", symbol: "exclamationmark.triangle", isError: true)
+            }
+            if let errorMessageKey = viewModel.errorMessageKey {
+                UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
+            } else if let errorMessage = viewModel.errorMessage {
+                UtilityNotice(title: "purge.error_title", detail: errorMessage, isError: true)
+            }
+            if let executionSummary = viewModel.executionSummary,
+               !executionSummary.isEmpty,
+               viewModel.result?.status == .succeeded {
+                UtilityNotice(title: "purge.result", detail: executionSummary, symbol: "checkmark.circle")
+            }
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(MoleTheme.background)
     }
 
@@ -128,7 +131,7 @@ struct PurgeView: View {
                     .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
             }
-            .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(12)
             .background(MoleTheme.surface2, in: RoundedRectangle(cornerRadius: 8))
             HStack {
@@ -140,6 +143,7 @@ struct PurgeView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }

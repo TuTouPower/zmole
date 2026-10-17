@@ -39,6 +39,7 @@ struct SettingsView: View {
             .padding(.bottom, 10)
             settingsForm
         }
+        .background(MoleTheme.background)
     }
 
     private var settingsForm: some View {
@@ -112,6 +113,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(MoleTheme.background)
         .navigationTitle("sidebar.settings")
         .task {
             if whitelistViewModel?.document == nil { whitelistViewModel?.load() }

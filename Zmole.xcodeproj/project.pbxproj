@@ -96,6 +96,7 @@
 		D0E6D7139D18476B9A0C4132 /* InstallersPageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */; };
 		D20C3A6E074116FFA9FD4D37 /* UtilityUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D509E460B4BF5E50857F5819 /* UtilityUI.swift */; };
 		D4CCA5EF8679CD2249AC866A /* WhitelistDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD077229323936A83CC3D9E /* WhitelistDocument.swift */; };
+		D57708BBD8D38E4EB86AFDA9 /* UiPolishViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BA32F548776AA51F9BBB91 /* UiPolishViewportTests.swift */; };
 		DB0049C989A19BE6B273902A /* CleanPageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75D2F971AB0AF22C45A07EE /* CleanPageTests.swift */; };
 		DC6D47A62518EF10A4463EC4 /* InstallersViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5580A9DFC3B8F3208C705E /* InstallersViewModel.swift */; };
 		DE8AAE4C2DD1366B4BEE2B67 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE334F91E7FFB8672701E61E /* StatusViewModel.swift */; };
@@ -236,6 +237,7 @@
 		B9CA1B5594E2FBE36595F473 /* StatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSnapshot.swift; sourceTree = "<group>"; };
 		BDC3387B05235D4790EF91C2 /* InstallersPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallersPageTests.swift; sourceTree = "<group>"; };
 		C281472BBF1171DB9C3235F8 /* AnalyzeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeView.swift; sourceTree = "<group>"; };
+		C6BA32F548776AA51F9BBB91 /* UiPolishViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UiPolishViewportTests.swift; sourceTree = "<group>"; };
 		C8EBF2E151E802DD0B763AE3 /* MoleBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoleBridge.swift; sourceTree = "<group>"; };
 		CA5416FC9E3CAC1D410AF5C5 /* WhitelistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModel.swift; sourceTree = "<group>"; };
 		CACC7DBC161EB4B26713C875 /* Zmole.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zmole.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -385,6 +387,7 @@
 				AACED876BFD4FD95E9D889A9 /* SpaceMapTests.swift */,
 				B22A8D1ED5B34DF4188D0304 /* StatusStreamTests.swift */,
 				D3920DF5A477564AFE1C0407 /* UiAlignmentTests.swift */,
+				C6BA32F548776AA51F9BBB91 /* UiPolishViewportTests.swift */,
 				5B730F405584390AA384CFB6 /* UninstallDetailTests.swift */,
 				97FDB94D6FF5B64C4FC810DB /* UninstallStreamTests.swift */,
 				85FA0BA2B2FDEE2AEA4FA9AC /* UninstallTargetCheckerTests.swift */,
@@ -700,6 +703,7 @@
 				441AA6BA031C74AF4BBC9174 /* SpaceMapTests.swift in Sources */,
 				86DA45463C3C50F94EA74705 /* StatusStreamTests.swift in Sources */,
 				EAACD30EFE7EC87C6933A0CF /* UiAlignmentTests.swift in Sources */,
+				D57708BBD8D38E4EB86AFDA9 /* UiPolishViewportTests.swift in Sources */,
 				EC42409FF166D2F145E7FF7E /* UninstallDetailTests.swift in Sources */,
 				5BC879CA1125434D19C191D5 /* UninstallStreamTests.swift in Sources */,
 				2D3C6CCC525E7A7F2B0B1669 /* UninstallTargetCheckerTests.swift in Sources */,

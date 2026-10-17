@@ -17,7 +17,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 安装包不使用上游全屏菜单：捆绑 installer 增加非交互接口 `--list-json`（列出绝对路径、字节大小、来源、身份）与 `--remove <path> --size <n> --identity <id>`（只接受调用方会话名单里的路径；直接核对目标自身——仍在扫描根内、该深度、候选扩展名，且大小与身份未变——`MOLE_DELETE_MODE=trash` 移入废纸篓，失败保留原文件）。删除不重新遍历扫描根（t029）；扫描规则仍由捆绑脚本负责，界面（t023）只消费该接口。
 
-设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理结果失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
+设置页字段：界面语言（跟随系统/简中/繁中/英文）与外观（跟随系统/浅色/深色）经 `@AppStorage` 持久化并即时生效；设置页底色统一使用 `MoleTheme.background`；长列表与输出页面（安装包、优化、项目清理、历史）统一按可用视口布局，页头与操作区常驻可见视口，列表或输出作为独立滚动所有者；侧边栏品牌区仅保留 App 名称，导航按钮禁用系统蓝色焦点框并采用主题轮廓焦点样式；登录项用 `SMAppService` 注册/取消，失败时开关保持关闭并显示原因；项目扫描目录复用项目清理的 `purge_paths` 编辑器；两份白名单——clean（路径）与 optimize（任务 id）——分别编辑 `~/.config/mole/whitelist` 与 `~/.config/mole/whitelist_optimize`，保存成功后使清理结果失效；CLI 行显示捆绑 `SOURCE_VERSION` 的 tag 与 bundle 内路径，不探测系统 `mo`；关于见设置与侧边栏底部。不做菜单栏常驻，关闭最后一个窗口即退出进程。
 
 ## App 装配与共享协调
 
