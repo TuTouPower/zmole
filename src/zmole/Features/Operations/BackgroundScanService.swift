@@ -67,15 +67,19 @@ struct BackgroundScanLanes {
 /// user-visible refresh.
 @MainActor
 protocol BackgroundScanProviding: AnyObject {
+    var isHydrated: Bool { get }
+    var persistedRevision: UInt64 { get }
     var runningItems: Set<BackgroundScanItem> { get }
     var failedItems: Set<BackgroundScanItem> { get }
-    /// Emits whenever results, running state or failure state changes.
+    /// Emits whenever results, running state, failure state or persistence watermark changes.
     var statePublisher: AnyPublisher<Void, Never> { get }
     func result(for item: BackgroundScanItem) -> BackgroundScanResult?
     func inProgressUninstallList() -> [UninstallAppListing]
     /// Starts (or reuses) the scan for one item. Used by refresh buttons and by
     /// a page that has no data yet.
     func request(_ item: BackgroundScanItem)
+    /// Waits for the initial disk cache hydration to complete.
+    func waitForHydration() async
     /// Waits for an in-flight scan of this item to complete, if any.
     func waitForScan(_ item: BackgroundScanItem) async
     /// Cancels the item's scan and resolves after its process has terminated.
@@ -90,6 +94,10 @@ protocol BackgroundScanProviding: AnyObject {
 }
 
 extension BackgroundScanProviding {
+    var isHydrated: Bool { true }
+    var persistedRevision: UInt64 { 0 }
+    func waitForHydration() async {}
+
     func userDidRescanAndWaitForTermination(_ item: BackgroundScanItem) async {
         userDidRescan(item)
     }
@@ -114,10 +122,14 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     /// A failed item without any result is retried at most this often.
     static let failureRetryInterval: TimeInterval = 60 * 60
 
-    @Published private(set) var results: [BackgroundScanItem: BackgroundScanResult]
+    @Published private(set) var results: [BackgroundScanItem: BackgroundScanResult] = [:]
     @Published private(set) var runningItems: Set<BackgroundScanItem> = []
     @Published private(set) var failedItems: Set<BackgroundScanItem> = []
     @Published private(set) var inProgressUninstallRows: [UninstallAppListing] = []
+    @Published private(set) var isHydrated: Bool = false
+    @Published private(set) var memoryRevision: UInt64 = 0
+    @Published private(set) var persistedRevision: UInt64 = 0
+    @Published private(set) var lastWriteError: Error?
 
     func inProgressUninstallList() -> [UninstallAppListing] {
         inProgressUninstallRows
@@ -130,7 +142,7 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     private let lanes: BackgroundScanLanes
     private let uninstallStream: UninstallListStream
     private let cleanPreviewStore: CleanPreviewStore
-    private let cache: BackgroundScanCache
+    private let storage: BackgroundScanStorage
     private let coordinator: OperationCoordinator
     private let accessMonitor: FullDiskAccessMonitor?
     private let periodicTick: TimeInterval
@@ -141,12 +153,15 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     private var deferredClean = false
     private var deferredInstaller = false
     private var periodicTask: Task<Void, Never>?
+    private var cleanReadTask: Task<CleanPreviewSnapshot, Error>?
+    private var hydrationTask: Task<Void, Never>?
     private var subscriptions: [AnyCancellable] = []
 
     init(
         lanes: BackgroundScanLanes,
         cleanPreviewStore: CleanPreviewStore,
-        cache: BackgroundScanCache,
+        cache: BackgroundScanCache? = nil,
+        storage: BackgroundScanStorage? = nil,
         coordinator: OperationCoordinator,
         accessMonitor: FullDiskAccessMonitor? = nil,
         periodicTick: TimeInterval = 60,
@@ -155,28 +170,43 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         self.lanes = lanes
         self.uninstallStream = UninstallListStream(streaming: lanes.uninstallStreaming)
         self.cleanPreviewStore = cleanPreviewStore
-        self.cache = cache
+        let storageInstance: BackgroundScanStorage
+        if let storage {
+            storageInstance = storage
+        } else if let cache {
+            storageInstance = BackgroundScanStorage(fileURL: cache.fileURL, now: now)
+        } else {
+            storageInstance = BackgroundScanStorage(fileURL: BackgroundScanCache.live.fileURL, now: now)
+        }
+        self.storage = storageInstance
         self.coordinator = coordinator
         self.accessMonitor = accessMonitor
         self.periodicTick = periodicTick
         nowProvider = now
-        results = cache.load()
         coordinator.settledOperations.sink { [weak self] _, impact in
             Task { @MainActor in await self?.applyImpact(impact) }
         }
         .store(in: &subscriptions)
-        refreshIfDue()
+        self.hydrationTask = Task { @MainActor [weak self] in
+            await self?.hydrate()
+        }
         startPeriodicRefresh()
     }
 
     // MARK: - BackgroundScanProviding
 
     var statePublisher: AnyPublisher<Void, Never> {
-        Publishers.Merge4(
-            $results.map { _ in () },
-            $runningItems.map { _ in () },
-            $failedItems.map { _ in () },
-            $inProgressUninstallRows.map { _ in () }
+        Publishers.Merge(
+            Publishers.Merge4(
+                $results.map { _ in () },
+                $runningItems.map { _ in () },
+                $failedItems.map { _ in () },
+                $inProgressUninstallRows.map { _ in () }
+            ),
+            Publishers.Merge(
+                $isHydrated.map { _ in () },
+                $persistedRevision.map { _ in () }
+            )
         )
         .eraseToAnyPublisher()
     }
@@ -185,11 +215,37 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         results[item]
     }
 
+    func waitForHydration() async {
+        await hydrationTask?.value
+    }
+
+    private func hydrate() async {
+        let loaded = await storage.load()
+        guard !Task.isCancelled else { return }
+        for (item, loadedResult) in loaded {
+            if let existing = results[item] {
+                if loadedResult.capturedAt > existing.capturedAt {
+                    results[item] = loadedResult
+                }
+            } else {
+                results[item] = loadedResult
+            }
+        }
+        isHydrated = true
+        persistedRevision = await storage.persistedRevision
+        refreshIfDue()
+    }
+
     func userDidRescan(_ item: BackgroundScanItem) {
         if item == .clean { deferredClean = true }
         if item == .installerList { deferredInstaller = false }
         if results.removeValue(forKey: item) != nil {
-            cache.save(results)
+            memoryRevision += 1
+            let rev = memoryRevision
+            let snapshot = results
+            Task { [storage] in
+                await storage.submit(results: snapshot, revision: rev, isPriority: true)
+            }
         }
         failedItems.remove(item)
         lastFailureAt.removeValue(forKey: item)
@@ -205,7 +261,13 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         if item == .clean { deferredClean = true }
         if item == .installerList { deferredInstaller = false }
         if results.removeValue(forKey: item) != nil {
-            cache.save(results)
+            memoryRevision += 1
+            let rev = memoryRevision
+            let snapshot = results
+            await storage.submit(results: snapshot, revision: rev, isPriority: true)
+            let watermark = await storage.flush()
+            persistedRevision = watermark
+            lastWriteError = await storage.lastWriteError
         }
         failedItems.remove(item)
         lastFailureAt.removeValue(forKey: item)
@@ -240,16 +302,33 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     }
 
     func waitForScan(_ item: BackgroundScanItem) async {
+        if !isHydrated {
+            await hydrationTask?.value
+        }
         await tasks[item]?.value
     }
 
     func cancelAndWait(_ item: BackgroundScanItem) async {
-        guard let task = tasks[item] else { return }
+        guard let task = tasks[item] else {
+            if item == .clean, let readTask = cleanReadTask {
+                readTask.cancel()
+                _ = await readTask.result
+                cleanReadTask = nil
+            }
+            return
+        }
         // Flip the cancellation bit before waiting on the lane so a scan that
         // finishes in the meantime cannot write its stale result back.
         task.cancel()
+        if item == .clean, let readTask = cleanReadTask {
+            readTask.cancel()
+        }
         await cancelLane(item)
         await task.value
+        if item == .clean, let readTask = cleanReadTask {
+            _ = await readTask.result
+            cleanReadTask = nil
+        }
         // `run`'s defer clears the registry entry before the task completes,
         // so a newer task can never be overwritten here.
     }
@@ -258,6 +337,7 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     /// `refreshInterval`. Failures without a result back off to
     /// `failureRetryInterval`; failures with a cached result keep it.
     func refreshIfDue(now: Date? = nil) {
+        guard isHydrated else { return }
         let now = now ?? nowProvider()
         for item in BackgroundScanItem.allCases {
             guard shouldRefresh(item, now: now) else { continue }
@@ -282,9 +362,36 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         noteActivityChanged()
     }
 
+    // MARK: - Lifecycle & Storage Control
+
+    func flush() async -> UInt64 {
+        let watermark = await storage.flush()
+        persistedRevision = watermark
+        lastWriteError = await storage.lastWriteError
+        return watermark
+    }
+
+    func close(budget: TimeInterval = 1.0) async -> UInt64 {
+        periodicTask?.cancel()
+        for (_, task) in tasks {
+            task.cancel()
+        }
+        let watermark = await storage.close(budget: budget)
+        persistedRevision = watermark
+        lastWriteError = await storage.lastWriteError
+        return watermark
+    }
+
+    func retryPending() async {
+        await storage.retryPending()
+        persistedRevision = await storage.persistedRevision
+        lastWriteError = await storage.lastWriteError
+    }
+
     // MARK: - Execution
 
     private func shouldRefresh(_ item: BackgroundScanItem, now: Date) -> Bool {
+        guard isHydrated else { return false }
         if failedItems.contains(item), let failedAt = lastFailureAt[item] {
             return now.timeIntervalSince(failedAt) >= Self.failureRetryInterval
         }
@@ -370,6 +477,8 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
                 }
                 flushTask?.cancel()
                 inProgressUninstallRows = []
+                memoryRevision += 1
+                let rev = memoryRevision
                 let currentVersion = coordinator.version(for: item)
                 let isStale = (startedVersion < currentVersion)
                 results[item] = BackgroundScanResult(
@@ -381,7 +490,16 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
                 )
                 failedItems.remove(item)
                 lastFailureAt.removeValue(forKey: item)
-                cache.save(results)
+                let snapshot = results
+                Task { [weak self, storage] in
+                    await storage.submit(results: snapshot, revision: rev, isPriority: false)
+                    let watermark = await storage.persistedRevision
+                    let err = await storage.lastWriteError
+                    await MainActor.run { [weak self] in
+                        self?.persistedRevision = watermark
+                        self?.lastWriteError = err
+                    }
+                }
                 return
             } catch {
                 guard !Task.isCancelled, !Self.isCancellation(error) else { return }
@@ -394,6 +512,8 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         do {
             let payload = try await payload(for: item)
             guard !Task.isCancelled else { return }
+            memoryRevision += 1
+            let rev = memoryRevision
             let currentVersion = coordinator.version(for: item)
             let isStale = (startedVersion < currentVersion)
             results[item] = BackgroundScanResult(
@@ -405,7 +525,16 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
             )
             failedItems.remove(item)
             lastFailureAt.removeValue(forKey: item)
-            cache.save(results)
+            let snapshot = results
+            Task { [weak self, storage] in
+                await storage.submit(results: snapshot, revision: rev, isPriority: false)
+                let watermark = await storage.persistedRevision
+                let err = await storage.lastWriteError
+                await MainActor.run { [weak self] in
+                    self?.persistedRevision = watermark
+                    self?.lastWriteError = err
+                }
+            }
         } catch {
             guard !Task.isCancelled, !Self.isCancellation(error) else { return }
             // Keep the previous result, if any; surface the failure so the page
@@ -423,7 +552,12 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
                 results[item] = existing.markingStale(targetVersion: currentVersion)
             }
         }
-        cache.save(results)
+        memoryRevision += 1
+        let rev = memoryRevision
+        let snapshot = results
+        await storage.submit(results: snapshot, revision: rev, isPriority: true)
+        persistedRevision = await storage.persistedRevision
+        lastWriteError = await storage.lastWriteError
         for item in impact.scanItems {
             request(item)
         }
@@ -450,7 +584,32 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
             guard result.exitCode == 0 else {
                 throw MoleBridgeError.commandFailed(result)
             }
-            return .cleanPreview(try cleanPreviewStore.read(generation))
+            guard !Task.isCancelled else { throw CancellationError() }
+
+            let store = self.cleanPreviewStore
+            let readTask = Task.detached(priority: .userInitiated) { () -> CleanPreviewSnapshot in
+                try await store.readAsync(generation)
+            }
+            self.cleanReadTask = readTask
+            defer {
+                if self.cleanReadTask == readTask {
+                    self.cleanReadTask = nil
+                }
+            }
+
+            let snapshot: CleanPreviewSnapshot
+            do {
+                snapshot = try await withTaskCancellationHandler {
+                    try await readTask.value
+                } onCancel: {
+                    readTask.cancel()
+                }
+            } catch {
+                _ = await readTask.result
+                throw error
+            }
+            guard !Task.isCancelled else { throw CancellationError() }
+            return .cleanPreview(snapshot)
         case .optimize:
             let result = try await lanes.optimize.run(
                 ["optimize", "--dry-run"],

@@ -73,6 +73,9 @@ final class InstallersViewModel: ObservableObject {
         guard diskAccessGranted else { return }
         guard candidates.isEmpty, !isListing, !isRemoving else { return }
         if let scan {
+            if !scan.isHydrated {
+                await scan.waitForHydration()
+            }
             if let result = scan.result(for: .installerList),
                case let .installerCandidates(list) = result.payload {
                 candidates = list

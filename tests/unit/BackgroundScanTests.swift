@@ -339,8 +339,11 @@ final class BackgroundScanTests: XCTestCase {
         ]))
         let service = try XCTUnwrap(dependencies.scanService, "demo pages need a data source")
 
+        let cachePath = root.appendingPathComponent("background_scan_cache.json").path
         for _ in 0..<500 {
-            if service.result(for: .clean) != nil, service.result(for: .optimize) != nil {
+            if service.result(for: .clean) != nil,
+               service.result(for: .optimize) != nil,
+               FileManager.default.fileExists(atPath: cachePath) {
                 break
             }
             try await Task.sleep(nanoseconds: 10_000_000)

@@ -57,6 +57,10 @@ struct BackgroundScanCache: Sendable {
     }
 
     func save(_ results: [BackgroundScanItem: BackgroundScanResult]) {
+        try? saveThrowing(results)
+    }
+
+    func saveThrowing(_ results: [BackgroundScanItem: BackgroundScanResult]) throws {
         let entries = Dictionary(
             uniqueKeysWithValues: results.map { item, result in
                 (
@@ -72,14 +76,12 @@ struct BackgroundScanCache: Sendable {
                 )
             }
         )
-        guard let data = try? JSONEncoder().encode(
+        let data = try JSONEncoder().encode(
             BackgroundScanCacheFile(schemaVersion: Self.schemaVersion, entries: entries)
-        ) else {
-            return
-        }
+        )
         let directory = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: fileURL, options: .atomic)
     }
 }
 
