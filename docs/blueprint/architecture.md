@@ -50,7 +50,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提交须失败或排队（第一版：拒绝并保持忙碌）。`cancel` 结束该进程组。超时同上。终态：成功 / 失败（非零或无法解析）/ 取消；把 stdout/stderr 摘要交给 UI。切走页面不自动再开一个进程。写端管道忽略 SIGPIPE（fd 级 `F_SETNOSIGPIPE`），SIGTERM→SIGKILL 前复核进程组身份（`getpgid(pid) == pid`）；应用退出时由 AppDelegate 取消全部活跃 runner，限时等待 2 秒。子进程环境在启动时剥离全部 `MOLE_*` 变量，其余继承。
 
-`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、clean 执行、optimize、purge、概览估算）各持独立 `MoleBridge`，互不阻塞；概览估算持 3 条通道以并发探测多个目录（单通道内串行）；卸载名单流与后台扫描各持独立实例（后台五类扫描每种一条通道，可并行）；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页不占通道：它在应用内只读扫描（见下节）。
+`MoleBridge` 每个实例只允许一个 active runner。App 装配按命令类型分通道（`MoleCommandLanes`）：每个一次性消费者（history、uninstall、installer、clean 执行、optimize、purge）各持独立 `MoleBridge`，互不阻塞；卸载名单流与后台扫描各持独立实例（后台五类扫描每种一条通道，可并行）；`status --watch` 与 `clean --dry-run` 流各持独立实例。写入命令之间仍由 `OperationCoordinator` 单一租约互斥，与通道数量无关。磁盘页与概览估算不占命令通道：二者在应用内由统一只读测量后端（`DiskMeasurementSession`）共享事实与资源调度（见下节）。
 
 ### 卸载名单与确认
 
@@ -84,15 +84,15 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。状态功能停用时，采样指标显示明确「已停用」，不继续显示旧值。概览磁盘容量使用独立的轻量卷容量查询（`VolumeCapacityProviding`），不依赖 `status-go`；状态停用时磁盘容量与目录估算仍可正常刷新。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
 
-磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用 `analyze` 目录求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。探测经 `HeavyScanScheduler` 准入并由空闲通道按工作队列逐项领取（`/Applications`、`Developer`、`/Users` 稳定顺序排在系统子项前），分段完成立即发布更新卡片展示。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
+磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 复用统一测量会话 `DiskMeasurementSession`：一轮 `/Users` 遍历同时获取包含 Developer 的用户总量及当前用户 `Library/Developer` 命名子树统计，消除独立 Developer 重遍历与旧 `estimatePool` / analyze 目录命令通道。分类归属明确：当前用户 Developer 拥有优先归属；跨 Developer 与其他用户路径的硬链接在 users 范围只计一次且归属 Developer；显示用户数据为 users 去重总量减 Developer 贡献（非负且相加等于 users 总量）。系统段按 `/System` 顶层目录子项逐个探测并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一必要子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。探测经 `HeavyScanScheduler` 准入并由空闲通道按工作队列逐项领取（`/Applications`、`/Users` 稳定顺序排在系统子项前），分段完成立即发布更新卡片展示。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
 
-估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入即先用缓存即时渲染并启动目录扫描（“其他”用实时 status 已用现算；status 迟到只更新“其他”，不影响扫描与已有分段）。触发点为：概览出现、写入失效信号、已用空间由无到有（仅重派生展示，不重扫）。完成的扫描（含部分）即展示并落盘；缺失段保持占位并保留「估算不完整」标记，随后自动补扫一次且只探测缺失段；写入失效落在扫描在飞期间时，即使该次扫描完整结束也保留失效状态并自动补排一次全量重扫；无 FDA 时 `/Users` 段整段跳过、不留补扫（授权事件到来再全量重扫）；扫描任务由 ViewModel 持有，不随视图消失取消。缓存超过 TTL（6 小时）或收到写入失效信号时全量重算并回写；超过最大年龄（7 天）或 schema 不符即作废。扫描被取消（应用退出）时不落盘。估算通道单条命令超时 600 秒。不提供手动计算按钮。
+估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`，当前版本 3）。概览进入即先用缓存即时渲染并启动目录扫描（“其他”用实时 status 已用现算；status 迟到只更新“其他”，不影响扫描与已有分段）。触发点为：概览出现、写入失效信号、已用空间由无到有（仅重派生展示，不重扫）。完成的扫描（含部分）即展示并落盘；缺失段保持占位并保留「估算不完整」标记，随后自动补扫一次且只探测缺失段；写入失效落在扫描在飞期间时，即使该次扫描完整结束也保留失效状态并自动补排一次全量重扫；无 FDA 时 `/Users` 段整段跳过、不留补扫（授权事件到来再全量重扫；无 FDA 时允许独立测量可读的 Developer 子树）；扫描任务由 ViewModel 持有，不随视图消失取消。缓存超过 TTL（6 小时）或收到写入失效信号时全量重算并回写；超过最大年龄（7 天）或 schema 不符即作废（旧 schema 1/2 缓存整体丢弃重算）。扫描被取消（应用退出）时不落盘。不提供手动计算按钮。
 
 最近操作复用 `history --json`。概览不再绘制趋势条；状态页的系统负载图在采样点不足时显示等待说明，不伪造趋势。
 
 ## 磁盘页扫描
 
-磁盘页不调用 mole：生产扫描根是 `/`，底层由统一测量会话服务 `DiskMeasurementSession` 持有排队、在途任务、扫描世代与结果事实，`AnalyzeViewModel` 仅负责页面浏览与交互展示。扫描使用 `LiveDiskScanner` 只读遍历（`lstat`）。文件大小取 `st_blocks × 512`；符号链接只计链接自身；同一统计范围内的硬链接只计一次（兄弟目录间共享 inode 按规范化路径排序确定归属，不随 worker 完成先后改变；独立目录自身合计与父范围去重贡献分别命名和独立计入）；与父目录设备号不同的子目录标记为 `.otherDevice` 不计入父合计，进入后单独计算。进入正在测量的祖先目录下的子目录时复用祖先在途遍历，不重复扫描；祖先完成后通知全部消费者并推送到最新终态。会话队列保持消费，退出、补位与取消由同一状态所有者串行仲裁；「重新分析」推进世代并取消旧请求，迟到结果不污染新世代。会话共享全局内存驻留预算（生产默认 4000 条目），超出预算的目录及 inode 索引由临时数据库 `DiskSessionStore` 外存化，内存仅保留工作集，按需分页并支持带背压的分批发布；临时空间超限或写入失败保留上一完整快照且不认证部分合计为最终值；会话取消与关闭后释放句柄并清理临时文件。demo 模式注入内存目录源，不读真实文件系统。概览五段估算仍走 `analyze`，与本路径无关。
+磁盘页不调用 mole：生产扫描根是 `/`，底层由统一测量会话服务 `DiskMeasurementSession` 持有排队、在途任务、扫描世代与结果事实，`AnalyzeViewModel` 仅负责页面浏览与交互展示。扫描使用 `LiveDiskScanner` 只读遍历（`lstat`）。文件大小取 `st_blocks × 512`；符号链接只计链接自身；同一统计范围内的硬链接只计一次（兄弟目录间共享 inode 按规范化路径排序确定归属，不随 worker 完成先后改变；独立目录自身合计与父范围去重贡献分别命名和独立计入）；与父目录设备号不同的子目录标记为 `.otherDevice` 不计入父合计，进入后单独计算。进入正在测量的祖先目录下的子目录时复用祖先在途遍历，不重复扫描；祖先完成后通知全部消费者并推送到最新终态。会话队列保持消费，退出、补位与取消由同一状态所有者串行仲裁；「重新分析」推进世代并取消旧请求，迟到结果不污染新世代。会话共享全局内存驻留预算（生产默认 4000 条目），超出预算的目录及 inode 索引由临时数据库 `DiskSessionStore` 外存化，内存仅保留工作集，按需分页并支持带背压的分批发布；临时空间超限或写入失败保留上一完整快照且不认证部分合计为最终值；会话取消与关闭后释放句柄并清理临时文件。demo 模式注入内存目录源，不读真实文件系统。概览五段估算复用同一 `DiskMeasurementSession`，与磁盘页共享测量事实，消除重复遍历与 analyze 通道。
 
 ## Demo 装配边界
 

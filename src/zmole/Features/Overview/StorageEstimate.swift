@@ -84,20 +84,47 @@ struct StorageEstimateLoader: Sendable {
     typealias DirectorySize = @Sendable (String) async throws -> Int64?
     typealias SystemChildren = @Sendable () throws -> [String]
 
-    /// Each channel is an independent analyze runner; probes are distributed
-    /// across channels so several paths can be measured in parallel.
+    private let session: DiskMeasurementSession?
     private let channels: [DirectorySize]
     private let systemChildren: SystemChildren
     private let scheduler: HeavyScanScheduler?
+    private let homeDirectory: String
+    private let applicationsPath: String
+    private let usersPath: String
 
     init(
-        directorySize: @escaping DirectorySize,
+        session: DiskMeasurementSession,
+        home: String = NSHomeDirectory(),
+        applicationsPath: String = "/Applications",
+        usersPath: String = "/Users",
         systemChildren: @escaping SystemChildren = {
             try StorageEstimateLoader.directoryChildren(of: "/System")
         },
         scheduler: HeavyScanScheduler? = nil
     ) {
-        channels = [directorySize]
+        self.session = session
+        self.channels = []
+        self.homeDirectory = home
+        self.applicationsPath = applicationsPath
+        self.usersPath = usersPath
+        self.systemChildren = systemChildren
+        self.scheduler = scheduler
+    }
+
+    init(
+        directorySize: @escaping DirectorySize,
+        applicationsPath: String = "/Applications",
+        usersPath: String = "/Users",
+        systemChildren: @escaping SystemChildren = {
+            try StorageEstimateLoader.directoryChildren(of: "/System")
+        },
+        scheduler: HeavyScanScheduler? = nil
+    ) {
+        self.session = nil
+        self.channels = [directorySize]
+        self.homeDirectory = NSHomeDirectory()
+        self.applicationsPath = applicationsPath
+        self.usersPath = usersPath
         self.systemChildren = systemChildren
         self.scheduler = scheduler
     }
@@ -105,10 +132,16 @@ struct StorageEstimateLoader: Sendable {
     init(
         loader: AnalyzeSnapshotLoader,
         home: String = NSHomeDirectory(),
+        applicationsPath: String = "/Applications",
+        usersPath: String = "/Users",
         scheduler: HeavyScanScheduler? = nil
     ) {
-        channels = [Self.directorySize(for: loader, home: home)]
-        systemChildren = {
+        self.session = nil
+        self.channels = [Self.directorySize(for: loader, home: home)]
+        self.homeDirectory = home
+        self.applicationsPath = applicationsPath
+        self.usersPath = usersPath
+        self.systemChildren = {
             try Self.directoryChildren(of: "/System")
         }
         self.scheduler = scheduler
@@ -119,12 +152,15 @@ struct StorageEstimateLoader: Sendable {
     init(
         loaders: [AnalyzeSnapshotLoader] = [],
         channels: [DirectorySize] = [],
+        applicationsPath: String = "/Applications",
+        usersPath: String = "/Users",
         systemChildren: @escaping SystemChildren = {
             try StorageEstimateLoader.directoryChildren(of: "/System")
         },
         scheduler: HeavyScanScheduler? = nil,
         home: String = NSHomeDirectory()
     ) {
+        self.session = nil
         if !channels.isEmpty {
             self.channels = channels
         } else if !loaders.isEmpty {
@@ -132,6 +168,9 @@ struct StorageEstimateLoader: Sendable {
         } else {
             self.channels = []
         }
+        self.homeDirectory = home
+        self.applicationsPath = applicationsPath
+        self.usersPath = usersPath
         self.systemChildren = systemChildren
         self.scheduler = scheduler
     }
@@ -178,14 +217,10 @@ struct StorageEstimateLoader: Sendable {
         includingUsers: Bool = true,
         onProgress: (@Sendable (StorageSums) -> Void)? = nil
     ) async throws -> StorageSums {
-        let applicationsPath = "/Applications"
-        let developerPath = "~/Library/Developer"
-        let usersPath = "/Users"
-
-        var probePaths: [String] = []
-        if existing?.applications == nil { probePaths.append(applicationsPath) }
-        if existing?.developer == nil { probePaths.append(developerPath) }
-        if includingUsers, existing?.users == nil { probePaths.append(usersPath) }
+        let expandedHome = homeDirectory.hasPrefix("~") ? (NSHomeDirectory() + homeDirectory.dropFirst()) : homeDirectory
+        let developerPath = expandedHome + "/Library/Developer"
+        let applicationsPath = self.applicationsPath
+        let usersPath = self.usersPath
 
         var systemPaths: [String] = []
         if existing?.system == nil {
@@ -198,6 +233,72 @@ struct StorageEstimateLoader: Sendable {
             systemPaths = systemChildrenNames.map { "/System/" + $0 }
         }
 
+        if let session {
+            var initialPaths: [String] = []
+            if existing?.applications == nil { initialPaths.append(applicationsPath) }
+            if includingUsers {
+                if existing?.users == nil || existing?.developer == nil {
+                    initialPaths.append(usersPath)
+                }
+            } else {
+                if existing?.developer == nil {
+                    initialPaths.append(developerPath)
+                }
+            }
+
+            let allPaths = initialPaths + systemPaths
+            guard !allPaths.isEmpty else {
+                let res = existing ?? StorageSums()
+                onProgress?(res)
+                return res
+            }
+
+        let aggregator = ProbeAggregator(
+            initialSums: existing ?? StorageSums(),
+            systemPaths: Set(systemPaths),
+            developerPath: developerPath,
+            onProgress: onProgress
+        )
+
+            let workQueue = ProbeWorkQueue(paths: allPaths)
+            let workerCount = min(allPaths.count, max(1, scheduler?.maxConcurrency ?? 3))
+
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for _ in 0..<workerCount {
+                    group.addTask { @MainActor in
+                        while !Task.isCancelled {
+                            guard let path = await workQueue.dequeue() else { break }
+                            try Task.checkCancellation()
+
+                            if path == usersPath {
+                                let outcome = await session.measureSubtreeOutcome(usersPath)
+                                if outcome.isReadable {
+                                    let usersTotal = outcome.size ?? 0
+                                    let devSize = session.subtreeTotal(for: developerPath) ?? session.selfDeduplicatedSize(for: developerPath) ?? 0
+                                    await aggregator.recordUsersAndDeveloper(usersTotal: usersTotal, developerSize: devSize)
+                                } else {
+                                    await aggregator.record(path: usersPath, size: nil)
+                                }
+                            } else {
+                                let outcome = await session.measureSubtreeOutcome(path)
+                                await aggregator.record(path: path, size: outcome.isReadable ? outcome.size : nil)
+                            }
+                        }
+                    }
+                }
+                try await group.waitForAll()
+            }
+
+            return await aggregator.finalSums(includingUsers: includingUsers, hadExistingUsers: existing?.users != nil)
+        }
+
+        // Fallback for mock channels/directorySize
+        let channelDevPath = homeDirectory == NSHomeDirectory() ? "~/Library/Developer" : developerPath
+        var probePaths: [String] = []
+        if existing?.applications == nil { probePaths.append(applicationsPath) }
+        if existing?.developer == nil { probePaths.append(channelDevPath) }
+        if includingUsers, existing?.users == nil { probePaths.append(usersPath) }
+
         let allPaths = probePaths + systemPaths
         guard !allPaths.isEmpty else {
             let res = existing ?? StorageSums()
@@ -208,6 +309,7 @@ struct StorageEstimateLoader: Sendable {
         let aggregator = ProbeAggregator(
             initialSums: existing ?? StorageSums(),
             systemPaths: Set(systemPaths),
+            developerPath: channelDevPath,
             onProgress: onProgress
         )
 
@@ -248,6 +350,7 @@ struct StorageEstimateLoader: Sendable {
 private actor ProbeAggregator {
     private var currentSums: StorageSums
     private let systemPaths: Set<String>
+    private let developerPath: String
     private var systemSizes: [String: Int64] = [:]
     private var systemHasFailure = false
     private let onProgress: (@Sendable (StorageSums) -> Void)?
@@ -255,39 +358,44 @@ private actor ProbeAggregator {
     init(
         initialSums: StorageSums,
         systemPaths: Set<String>,
+        developerPath: String = "~/Library/Developer",
         onProgress: (@Sendable (StorageSums) -> Void)?
     ) {
         self.currentSums = initialSums
         self.systemPaths = systemPaths
+        self.developerPath = developerPath
         self.onProgress = onProgress
     }
 
+    func recordUsersAndDeveloper(usersTotal: Int64, developerSize: Int64) {
+        currentSums.users = usersTotal
+        currentSums.developer = developerSize
+        onProgress?(currentSums)
+    }
+
     func record(path: String, size: Int64?) {
-        switch path {
-        case "/Applications":
+        if path == "/Applications" {
             currentSums.applications = size
             onProgress?(currentSums)
-        case "~/Library/Developer":
+        } else if path == developerPath || path == "~/Library/Developer" {
             currentSums.developer = size
             onProgress?(currentSums)
-        case "/Users":
+        } else if path == "/Users" {
             currentSums.users = size
             onProgress?(currentSums)
-        default:
-            if systemPaths.contains(path) {
-                if let size {
-                    systemSizes[path] = size
-                } else {
-                    systemHasFailure = true
-                }
-                if systemHasFailure {
-                    currentSums.system = nil
-                    onProgress?(currentSums)
-                } else if systemSizes.count == systemPaths.count {
-                    let total = systemSizes.values.reduce(Int64(0), +)
-                    currentSums.system = total
-                    onProgress?(currentSums)
-                }
+        } else if systemPaths.contains(path) {
+            if let size {
+                systemSizes[path] = size
+            } else {
+                systemHasFailure = true
+            }
+            if systemHasFailure {
+                currentSums.system = nil
+                onProgress?(currentSums)
+            } else if systemSizes.count == systemPaths.count {
+                let total = systemSizes.values.reduce(Int64(0), +)
+                currentSums.system = total
+                onProgress?(currentSums)
             }
         }
     }

@@ -231,11 +231,41 @@ final class DiskMeasurementSession: ObservableObject {
     }
 
     func subtreeTotal(for path: String) -> Int64? {
-        records[path]?.totalSize
+        records[path]?.totalSize ?? subtreeFactsMap[path]?.selfSize
     }
 
     func selfDeduplicatedSize(for path: String) -> Int64? {
         records[path]?.selfDeduplicatedSize ?? subtreeFactsMap[path]?.selfSize
+    }
+
+    func isSubtreeReadable(for path: String) -> Bool {
+        records[path]?.isReadable ?? subtreeFactsMap[path]?.isReadable ?? true
+    }
+
+    func measureSubtreeOutcome(_ path: String) async -> (size: Int64?, isReadable: Bool) {
+        if let rec = records[path] {
+            return (rec.totalSize, rec.isReadable)
+        }
+        if let facts = subtreeFactsMap[path] {
+            return (facts.selfSize, facts.isReadable)
+        }
+        let sub = subscribe(path: path)
+        defer { sub.cancel() }
+
+        while !Task.isCancelled {
+            if let rec = records[path] {
+                return (rec.totalSize, rec.isReadable)
+            }
+            if let facts = subtreeFactsMap[path] {
+                return (facts.selfSize, facts.isReadable)
+            }
+            if !isScanning && inFlightTasks[path] == nil && !pendingQueue.contains(where: { $0.path == path }) {
+                let rec = records[path]
+                return (rec?.totalSize ?? subtreeFactsMap[path]?.selfSize, rec?.isReadable ?? subtreeFactsMap[path]?.isReadable ?? false)
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return (records[path]?.totalSize ?? subtreeFactsMap[path]?.selfSize, records[path]?.isReadable ?? subtreeFactsMap[path]?.isReadable ?? false)
     }
 
     // MARK: - Directory Listing

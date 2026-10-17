@@ -1,0 +1,51 @@
+{
+  "tid": "t058",
+  "attempt": 1,
+  "execution_id": "98c4aaea5f64416b8f8102c030863a48",
+  "status": "done",
+  "branch": "t058_users_developer_overlap",
+  "base_sha": "4e6a7b02451bae4fc43e02b064bc49c94c3dfccc",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (374 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 46da0104eae79a0a, 0 finding",
+  "ac_evidence": {
+    "AC-002": [
+      "src/zmole/Features/Overview/StorageEstimate.swift ProbeAggregator.recordUsersAndDeveloper",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC002_UsersAndDeveloperAttributionMatchesContract"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Overview/StorageEstimate.swift systemChildren Volumes filter",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC003_SystemVolumesExcludedAndFailureMakesSystemUnavailable"
+    ],
+    "AC-004": [
+      "src/zmole/Features/Overview/StorageEstimate.swift loadSums session mode",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC004_SingleWalkOfUsersMeasuresBothUsersAndDeveloperWithoutSecondWalk"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC002_UsersAndDeveloperAttributionMatchesContract"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Overview/StorageEstimate.swift subtreeTotal attribution",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC006_CrossDirectoryHardlinkAttributedToDeveloper"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Overview/StorageEstimate.swift FDA check and standalone developer probe",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC007_NoFDAWalksDeveloperOnlyIfReadable"
+    ],
+    "AC-008": [
+      "src/zmole/App/AppDependencies.swift session injection",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC008_OverviewAndDiskShareSameSessionAndActualWalk"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Overview/StorageEstimateCache.swift schemaVersion 3",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC009_Schema2CacheIsDiscardedAndSchema3IsAuthoritative"
+    ],
+    "AC-010": [
+      "docs/blueprint/decisions.md ADR 013",
+      "tests/unit/OverviewUnifiedMeasureTests.swift testAC010_Deploy_BenchmarkFinalUnifiedBackend"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}
