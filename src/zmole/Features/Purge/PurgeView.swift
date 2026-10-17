@@ -32,7 +32,6 @@ struct PurgeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 MolePageHead(
-                    eyebrow: "purge.eyebrow",
                     title: "purge.title",
                     subtitle: "purge.page_subtitle"
                 ) {

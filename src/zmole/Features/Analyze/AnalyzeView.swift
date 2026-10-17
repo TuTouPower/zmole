@@ -41,7 +41,6 @@ struct AnalyzeView: View {
     var body: some View {
         VStack(spacing: 0) {
             MolePageHead(
-                eyebrow: "analyze.eyebrow",
                 title: "analyze.title",
                 subtitle: "analyze.read_only"
             ) {

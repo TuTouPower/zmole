@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Shared metrics for the four overview cards.
+enum OverviewCardLayout {
+    /// All four cards share one fixed height so the two rows stay aligned.
+    static let cardHeight: CGFloat = 264
+}
+
 @MainActor
 struct OverviewView: View {
     @ObservedObject var statusViewModel: StatusViewModel
@@ -37,32 +43,24 @@ struct OverviewView: View {
         .background(MoleTheme.background)
         .navigationTitle("overview.title")
         .task {
-            await viewModel.refreshHistory()
-            // The estimate renders from cache immediately and only scans in the
-            // background (on its own lane) when the cache is missing or stale.
-            await waitForUsedBytes()
-            guard !Task.isCancelled else { return }
+            // Start the estimate first: it must not wait for the history
+            // command, and its task is owned by the view model so leaving the
+            // page does not cancel a running scan.
             viewModel.primeEstimate(usedBytes: usedBytes)
-            await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes)
+            viewModel.startEstimate(usedBytes: usedBytes)
+            await viewModel.refreshHistory()
+        }
+        .onChange(of: usedBytes) { newValue in
+            viewModel.usedBytesDidChange(newValue)
         }
         .onChange(of: viewModel.estimateInvalidated) { invalidated in
             guard invalidated else { return }
-            Task { await viewModel.refreshEstimateIfNeeded(usedBytes: usedBytes) }
-        }
-    }
-
-    /// Event-driven wait for the first status sample that exposes the primary
-    /// disk; ends when the page task is cancelled.
-    private func waitForUsedBytes() async {
-        guard usedBytes == nil else { return }
-        for await _ in statusViewModel.$snapshot.values {
-            if usedBytes != nil || Task.isCancelled { return }
+            viewModel.startEstimate(usedBytes: usedBytes)
         }
     }
 
     private var head: some View {
         MolePageHead(
-            eyebrow: "overview.eyebrow",
             title: "overview.title"
         ) {
             Button {
@@ -102,11 +100,6 @@ struct OverviewView: View {
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("overview.health.eyebrow")
-                        .font(.system(size: 10, weight: .semibold))
-                        .textCase(.uppercase)
-                        .tracking(0.5)
-                        .foregroundStyle(MoleTheme.accentStrong)
                     Text(LocalizedStringKey(card.status.titleKey))
                         .font(.system(size: 22, weight: .bold))
                     Text("overview.health.body")
@@ -124,7 +117,12 @@ struct OverviewView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: OverviewCardLayout.cardHeight,
+            maxHeight: OverviewCardLayout.cardHeight,
+            alignment: .topLeading
+        )
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
@@ -230,7 +228,12 @@ struct OverviewView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: OverviewCardLayout.cardHeight,
+            maxHeight: OverviewCardLayout.cardHeight,
+            alignment: .topLeading
+        )
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
@@ -308,7 +311,12 @@ struct OverviewView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: OverviewCardLayout.cardHeight,
+            maxHeight: OverviewCardLayout.cardHeight,
+            alignment: .topLeading
+        )
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }
@@ -361,7 +369,12 @@ struct OverviewView: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: OverviewCardLayout.cardHeight,
+            maxHeight: OverviewCardLayout.cardHeight,
+            alignment: .topLeading
+        )
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }

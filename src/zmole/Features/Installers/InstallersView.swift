@@ -58,7 +58,6 @@ struct InstallersView: View {
 
     private var head: some View {
         MolePageHead(
-            eyebrow: "installers.eyebrow",
             title: "installers.title",
             subtitle: "installers.subtitle"
         ) {

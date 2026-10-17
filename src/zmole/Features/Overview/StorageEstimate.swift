@@ -153,40 +153,51 @@ struct StorageEstimateLoader: Sendable {
     /// Runs the directory probes concurrently across channels (each channel
     /// executes at most one command at a time). Throws `CancellationError`
     /// when the scan is cancelled, so callers never treat a cancelled pass as
-    /// a complete result.
-    func loadSums() async throws -> StorageSums {
+    /// a complete result. Segments already resolved in `existing` are not
+    /// probed again, so a follow-up scan only fills the missing segments.
+    func loadSums(filling existing: StorageSums? = nil) async throws -> StorageSums {
         let applicationsPath = "/Applications"
         let developerPath = "~/Library/Developer"
         let usersPath = "/Users"
 
-        let systemChildrenNames: [String]
-        do {
-            systemChildrenNames = try systemChildren().filter { $0 != "Volumes" }.sorted()
-        } catch {
-            systemChildrenNames = []
-        }
-        let systemPaths = systemChildrenNames.map { "/System/" + $0 }
+        var probePaths: [String] = []
+        if existing?.applications == nil { probePaths.append(applicationsPath) }
+        if existing?.developer == nil { probePaths.append(developerPath) }
+        if existing?.users == nil { probePaths.append(usersPath) }
 
-        let sizes = try await probeSizes(
-            for: [applicationsPath, developerPath, usersPath] + systemPaths
-        )
-
-        var systemTotal: Int64 = 0
-        var systemComplete = !systemPaths.isEmpty
-        for path in systemPaths {
-            if let size = sizes[path] ?? nil {
-                systemTotal += size
-            } else {
-                systemComplete = false
-                break
+        var systemPaths: [String] = []
+        if existing?.system == nil {
+            let systemChildrenNames: [String]
+            do {
+                systemChildrenNames = try systemChildren().filter { $0 != "Volumes" }.sorted()
+            } catch {
+                systemChildrenNames = []
             }
+            systemPaths = systemChildrenNames.map { "/System/" + $0 }
+        }
+
+        let sizes = try await probeSizes(for: probePaths + systemPaths)
+
+        var system: Int64? = existing?.system
+        if system == nil {
+            var systemTotal: Int64 = 0
+            var systemComplete = !systemPaths.isEmpty
+            for path in systemPaths {
+                if let size = sizes[path] ?? nil {
+                    systemTotal += size
+                } else {
+                    systemComplete = false
+                    break
+                }
+            }
+            system = systemComplete ? systemTotal : nil
         }
 
         return StorageSums(
-            applications: sizes[applicationsPath] ?? nil,
-            system: systemComplete ? systemTotal : nil,
-            developer: sizes[developerPath] ?? nil,
-            users: sizes[usersPath] ?? nil
+            applications: existing?.applications ?? (sizes[applicationsPath] ?? nil),
+            system: system,
+            developer: existing?.developer ?? (sizes[developerPath] ?? nil),
+            users: existing?.users ?? (sizes[usersPath] ?? nil)
         )
     }
 

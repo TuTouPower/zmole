@@ -50,7 +50,7 @@ struct CleanView: View {
     }
 
     private var head: some View {
-        MolePageHead(eyebrow: "clean.eyebrow", title: "clean.title", subtitle: "clean.subtitle") {
+        MolePageHead(title: "clean.title", subtitle: "clean.subtitle") {
             if viewModel.isPreviewing {
                 Button("clean.cancel") { Task { await viewModel.cancelPreview() } }
             } else if viewModel.isExecuting {

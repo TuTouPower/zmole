@@ -29,7 +29,6 @@ struct StatusView: View {
 
     private var pageHead: some View {
         MolePageHead(
-            eyebrow: "status.eyebrow",
             title: "status.title",
             subtitle: "status.subtitle"
         ) {

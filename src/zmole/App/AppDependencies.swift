@@ -696,7 +696,7 @@ final class AppDependencies: ObservableObject {
         let estimateLoaders = lanes.estimatePool.map { lane in
             let box = MoleProcessBox(lane)
             return AnalyzeSnapshotLoader { arguments in
-                try await box.process.run(arguments, stdin: nil, timeout: 120)
+                try await box.process.run(arguments, stdin: nil, timeout: 600)
             }
         }
         let storageLoader = StorageEstimateLoader(loaders: estimateLoaders)
