@@ -24,8 +24,8 @@ app="$derived_data/Build/Products/Release/Zmole.app"
 test -d "$app"
 /usr/bin/codesign --verify --deep --strict "$app"
 signing_info="$(/usr/bin/codesign -dv --verbose=4 "$app" 2>&1)"
-if ! printf '%s\n' "$signing_info" | /usr/bin/grep -Eq 'Signature=adhoc|flags=.*\(adhoc\)'; then
-    printf '%s\n' "Release app must use an ad-hoc signature" >&2
+if ! printf '%s\n' "$signing_info" | /usr/bin/grep -qF 'Authority=Zmole Local Signing'; then
+    printf '%s\n' "Release app must be signed with \"Zmole Local Signing\"; run scripts/setup_signing_identity.sh" >&2
     exit 1
 fi
 

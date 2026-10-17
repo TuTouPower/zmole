@@ -6,13 +6,14 @@
 
 ## doctor_cmd
 
-环境前置检查：模板工具链可收集；`md_kx` 在 PATH；完整 Xcode（`xcodebuild`）与 XcodeGen 为当前门禁必需项。图标单测还依赖 `bash`、`swift`、`sips`、`iconutil`（见 `AppIconTests`）。
+环境前置检查：模板工具链可收集；`md_kx` 在 PATH；完整 Xcode（`xcodebuild`）与 XcodeGen 为当前门禁必需项。签名身份 `Zmole Local Signing` 为构建/发布必需，缺失时先跑 `./scripts/setup_signing_identity.sh` 一次性创建。图标单测还依赖 `bash`、`swift`、`sips`、`iconutil`（见 `AppIconTests`）。
 
 ```bash
 pytest .repo_template/tests -q --collect-only -m contract
 command -v md_kx
 xcodebuild -version
 xcodegen --version
+security find-identity -v -p codesigning | /usr/bin/grep -qF "Zmole Local Signing"
 xcodegen generate
 ```
 
@@ -65,7 +66,7 @@ xcodebuild test -scheme Zmole -destination 'platform=macOS' \
 ./scripts/build_release_zip.sh
 ```
 
-脚本只构建 Release、验证 ad-hoc 签名并输出 `artifacts/releases/Zmole-<version>.zip`。发布验收还需解压后检查主程序与 `mole/bin/analyze-go`、`status-go` 的 Universal 架构，并对解压 App 运行 status、history、analyze 只读流程。
+脚本只构建 Release、校验 `Zmole Local Signing` 签名并输出 `artifacts/releases/Zmole-<version>.zip`。发布验收还需解压后检查主程序与 `mole/bin/analyze-go`、`status-go` 的 Universal 架构，并对解压 App 运行 status、history、analyze 只读流程。
 
 ## Schema / codegen 验证
 

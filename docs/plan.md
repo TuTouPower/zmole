@@ -12,7 +12,7 @@
 |---|---|
 |形态|标准窗口 App（侧栏 + 内容），SwiftUI，macOS 13+，Universal（主程序与 mole helper 都要 arm64+x86_64）|
 |分发|GitHub Release `.zip`（内含 `Zmole.app`）；不办公证、不上架 App Store|
-|Gatekeeper|README 写「仍要打开 / 右键打开 / `xattr -cr`」；本地 ad-hoc `codesign`|
+|Gatekeeper|README 写「仍要打开 / 右键打开 / `xattr -cr`」；本地自签证书 `Zmole Local Signing` `codesign`|
 |命名|zmole；不用 Mole 商标与 logo；关于页写基于开源 CLI mole|
 |语言|简体 / 繁体 / 英文；跟随系统，设置可覆盖|
 |许可|整仓 GPL-3.0|
