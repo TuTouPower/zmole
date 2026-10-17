@@ -1,0 +1,39 @@
+{
+  "tid": "t053",
+  "attempt": 1,
+  "execution_id": "1b1bd5acfa2f4b7088f5933a2f194a44",
+  "status": "done",
+  "branch": "t053_uninstall_stream_close_fds",
+  "base_sha": "3feb79aa22deda85da4f48b72359d427be248412",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (330 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope bb6ecca12e96cffd, 0 finding",
+  "ac_evidence": {
+    "AC-003": [
+      "src/zmole/MoleBridge/MoleBridge.swift finishIfReady",
+      "tests/unit/MoleBridgeTests.swift testBridgeWaitsForPipesToCloseEvenIfProcessHasExited"
+    ],
+    "AC-004": [
+      "src/zmole/Resources/mole/bin/uninstall.sh process_app_metadata",
+      "tests/integration/uninstall_stream_test.sh"
+    ],
+    "AC-005": [
+      "src/zmole/Resources/mole/bin/uninstall.sh _scan_discover_apps / _scan_resolve_uncached",
+      "tests/integration/uninstall_stream_test.sh AC-005"
+    ],
+    "AC-006": [
+      "src/zmole/Resources/mole/bin/uninstall.sh _stream_trap_cleanup / trap_scan_cleanup",
+      "tests/integration/uninstall_stream_test.sh AC-006"
+    ],
+    "AC-007": [
+      "src/zmole/Resources/mole/bin/uninstall.sh 3>&- / start_uninstall_metadata_refresh",
+      "tests/integration/uninstall_stream_test.sh AC-007"
+    ],
+    "AC-008": [
+      "src/zmole/Resources/mole/bin/uninstall.sh process_app_metadata / uninstall_normalize_size_display",
+      "tests/integration/uninstall_stream_test.sh AC-008"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

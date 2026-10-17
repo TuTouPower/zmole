@@ -1,13 +1,13 @@
 # 捆绑 mole 桥接（mole_bridge）
 
-- 来源 task：t002、t025、t027；（2026-10-17 审阅采纳加固随附）
+- 来源 task：t002、t025、t027、t053；（2026-10-17 审阅采纳加固随附）
 - 生效范围：进程 spawn、参数拼装、输出解析、并发通道、忙碌语义
-- 最后更新：2026-10-17
+- 最后更新：2026-10-18
 
 ## 行为契约
 
 - 唯一 spawn 层是 `MoleBridge`；只执行 `.app` 内 `Contents/Resources/mole/mole`（绝对路径），不搜 PATH、不调用系统 `mo`、不把命令装进 PATH；生产环境不调用 `update`/`remove`。
-- `run(argv)` 以参数数组传参（无 shell 拼接）；捕获 stdout/stderr 与退出码；非零退出返回可展示错误（含输出摘要）。
+- `run(argv)` 以参数数组传参（无 shell 拼接）；捕获 stdout/stderr 与退出码；满足进程终止且管道全部 EOF 双条件后返回并保留退出码，非零退出返回可展示错误（含输出摘要）。
 - 每个 Bridge 实例同时只允许一个 active runner；in-flight 时第二次 `run` 返回 `busy`（不创建第二个进程）；`cancel` 结束整个进程组（TERM，0.25s 后 KILL，发送前复核进程组身份）。
 - 非流式输出有每通道 16MB 上限；流式 stdout 逐行解析、按块加锁；EOF 时排出未成行的尾段。
 - 子进程环境继承父环境但剥离全部 `MOLE_*` 变量；stdin 写端忽略 SIGPIPE（`F_SETNOSIGPIPE`），写失败不影响进程存活。
