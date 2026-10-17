@@ -99,6 +99,50 @@ final class CommandConcurrencyTests: XCTestCase {
         _ = try? await longRunning
     }
 
+    func testWriteViewModelsShareThePreviewLeaseCoordinator() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let files = [
+            "src/zmole/Features/Clean/CleanViewModel.swift",
+            "src/zmole/Features/Uninstall/UninstallViewModel.swift",
+            "src/zmole/Features/Operations/MaintenanceOperation.swift"
+        ]
+        for file in files {
+            let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
+            XCTAssertTrue(
+                source.contains("PreviewLeaseCoordinator("),
+                "\(file) must use the shared preview lease coordinator"
+            )
+            XCTAssertFalse(
+                source.contains("private func releaseLease(clearPreviewGeneration"),
+                "\(file) must not keep its own lease boilerplate"
+            )
+            XCTAssertFalse(
+                source.contains("previewCoordinatorGeneration"),
+                "\(file) must not track the preview generation itself"
+            )
+            XCTAssertFalse(
+                source.contains("coordinator.$invalidationGeneration.sink"),
+                "\(file) must not subscribe to the invalidation signal itself"
+            )
+            XCTAssertFalse(
+                source.contains("private var isCurrentPreview"),
+                "\(file) must not keep its own isCurrentPreview"
+            )
+            XCTAssertFalse(
+                source.contains("private func operationID(for"),
+                "\(file) must not keep its own operation-id extraction"
+            )
+        }
+        let shared = try String(
+            contentsOf: root.appendingPathComponent("src/zmole/Features/Operations/PreviewLeaseCoordinator.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(shared.contains("class PreviewLeaseCoordinator"), "the shared coordinator must exist")
+    }
+
     private func makeSleepLanes() throws -> MoleCommandLanes {
         func bridge() throws -> any MoleProcessControlling {
             try MoleBridge(executableURL: sleepURL)

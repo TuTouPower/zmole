@@ -1,0 +1,19 @@
+{
+  "tid": "t042",
+  "attempt": 1,
+  "execution_id": "25d9a239e9144b6e8bcc9b47f440e4c5",
+  "status": "done",
+  "branch": "t042_preview_lease_coordinator",
+  "base_sha": "166a65b5f4492efb2506f901fd66c87f2044aaed",
+  "tests": "xcodegen generate + xcodebuild build (0 error); xcodebuild test -scheme Zmole -destination 'platform=macOS' (283 pass, incl. new CommandConcurrencyTests structural guard and UninstallDetailTests shared-invalidation case); git diff --check clean; NOTE: the three integration scripts could not be rerun on this machine due to an environment fault (/usr/bin/trash hangs on any file; reproduced in process tree at mole.probe), see blackbox evidence chain",
+  "blackbox": "Demo launch of the built app on the clean page (zh-Hans): page renders with the shared lease path wired (preview button, stat strip, protection card). Button-level clicking is limited by the AX tree; the lease/preview behaviour itself is covered by the full unit suite (CleanPageTests, UninstallDetailTests incl. the new shared-invalidation case, OptimizeTests, PurgeTests, CommandConcurrencyTests, RecoverableBusyTests). Integration-script evidence: the same scripts were fully green at the parent commit 166a65b (t041 close), this diff touches no scripts/, tests/integration/ or Resources/mole paths (git diff --name-only), and both independent reviewers cross-confirmed the trash fault as environment-only.",
+  "review": "full: review_code.md PASS (rounds 1-2; 0 findings) + review_test.md PASS (rounds 1-2; 3 minors fixed); check_review_status.py overall=PASS review_scope=ok; reviewed_scope d9603947f8282d74",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Operations/PreviewLeaseCoordinator.swift (shared component exists)", "tests/unit/CommandConcurrencyTests.swift testWriteViewModelsShareThePreviewLeaseCoordinator (no private lease/generation boilerplate in the three view models)"],
+    "AC-002": ["xcodebuild test full suite 283 pass (CommandConcurrencyTests, RecoverableBusyTests, CleanPageTests, CleanPreviewStoreTests, UninstallTests, UninstallDetailTests, BatchUninstallTests, OptimizeTests, PurgeTests, OptimizePurgePageTests)"],
+    "AC-003": ["tests/unit/UninstallDetailTests.swift testAnotherWriteInvalidatesAnUninstallPreview", "tests/unit/CleanPageTests.swift (protection save invalidates clean preview)", "tests/unit/OptimizePurgePageTests.swift (scan-dir save invalidates purge preview)"],
+    "AC-004": ["xcodebuild test full suite 283 pass", "integration scripts green at parent commit + diff does not touch their inputs (environment fault documented in tests/blackbox fields)"]
+  },
+  "pending": [],
+  "findings": []
+}
