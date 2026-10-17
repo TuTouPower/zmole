@@ -430,40 +430,6 @@ final class OverviewCacheTests: XCTestCase {
         )
     }
 
-    func testInvalidationDuringScanKeepsEstimateStale() async throws {
-        let directory = try tempDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let cache = makeCache(directory)
-        let now = Date(timeIntervalSince1970: 5_000_000)
-        let coordinator = OperationCoordinator()
-        let gate = ScanGate()
-        let loader = StorageEstimateLoader(
-            directorySize: { _ in
-                await gate.pauseOnce()
-                return 10
-            },
-            systemChildren: { ["Library"] }
-        )
-        let viewModel = OverviewViewModel(
-            storageLoader: loader,
-            historyLoader: nil,
-            storageCache: cache,
-            coordinator: coordinator,
-            now: { now }
-        )
-
-        viewModel.startEstimate(usedBytes: 100)
-        await gate.waitUntilPaused()
-        coordinator.invalidatePreviews()
-        await gate.release()
-        await viewModel.waitForEstimate()
-
-        XCTAssertTrue(
-            viewModel.estimateInvalidated,
-            "an invalidation that lands mid-scan must not be cleared by the scan"
-        )
-    }
-
     func testInvalidationRescansResolvedSegmentsInsteadOfOnlyFilling() async throws {
         let directory = try tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -615,6 +581,71 @@ final class OverviewCacheTests: XCTestCase {
         XCTAssertEqual(
             probeCount, 5,
             "fill-only first pass probes one segment; the escalated follow-up probes all four"
+        )
+    }
+
+    func testInvalidationDuringCompleteScanKeepsEstimateStaleUntilCompensationRescan() async throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 5_000_000)
+        let coordinator = OperationCoordinator()
+        let firstScanGate = ScanGate()
+        let compensationGate = ScanGate()
+        let recorder = ProbePathRecorder()
+        let loader = StorageEstimateLoader(
+            directorySize: { path in
+                await recorder.record(path)
+                // The first probe blocks the initial scan; the fifth probe is
+                // the compensation rescan's first probe.
+                let probe = await recorder.paths.count
+                if probe == 1 { await firstScanGate.pauseOnce() }
+                if probe == 5 { await compensationGate.pauseOnce() }
+                switch path {
+                case "/Applications": return 40
+                case "~/Library/Developer": return 30
+                case "/Users": return 90
+                case "/System/Library": return 25
+                default: return nil
+                }
+            },
+            systemChildren: { ["Library"] }
+        )
+        let viewModel = OverviewViewModel(
+            storageLoader: loader,
+            historyLoader: nil,
+            storageCache: makeCache(directory),
+            coordinator: coordinator,
+            incompleteRetryDelay: 0.05,
+            now: { now }
+        )
+
+        viewModel.startEstimate(usedBytes: 300)
+        await firstScanGate.waitUntilPaused()
+        coordinator.invalidatePreviews()
+        await firstScanGate.release()
+
+        // The invalidated first scan completes all four segments on its own;
+        // the flag must survive it and only clear after the compensation.
+        await compensationGate.waitUntilPaused()
+        XCTAssertTrue(
+            viewModel.estimateInvalidated,
+            "an invalidation that lands mid-scan must not be cleared by that scan"
+        )
+        await compensationGate.release()
+        await viewModel.waitForEstimate()
+
+        let paths = await recorder.paths
+        XCTAssertEqual(
+            paths.filter { $0 == "/Applications" }.count, 2,
+            "a mid-scan invalidation must trigger a full rescan even when the first scan completes"
+        )
+        XCTAssertEqual(
+            paths.count, 8,
+            "the complete first pass probes four segments; the compensation rescan probes all four again"
+        )
+        XCTAssertFalse(
+            viewModel.estimateInvalidated,
+            "the compensation rescan must clear the invalidation"
         )
     }
 

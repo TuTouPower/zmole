@@ -5,4 +5,4 @@
 - 根因：`OverviewViewModel.runEstimate` 完成路径的条件是 `!merged.isComplete, !isFollowUp, !incompleteRetryScheduled`，不消费「扫描期间发生了新的失效」（`invalidationCount != invalidationsAtStart`）这一状态；`estimateInvalidated` 只被保留，不被补偿逻辑消费。
 - 测试缺口：现有用例覆盖「扫描期间失效 + 部分结果 → 补扫升级全量」（`testInvalidationDuringScanEscalatesFollowUpToFullRescan`）与「扫描期间失效保持 stale」（`testInvalidationDuringScanKeepsEstimateStale`），缺「扫描期间失效 + 完整结束 → 自动再全量一次（或以失效后时间为界）」的用例；应补一条：挂起探测期间 invalidate → release → 断言完整结果后仍发生一次全量重扫（探测计数）。
 - 线索：t040 review Round 3 的 `t040_gen_f006`（`docs/archive/tasks/t040_overview_estimate_and_head_polish/review_general.md` 归档后）；`OverviewViewModel.swift` 的 `runEstimate` 完成路径。
-- 处理：未开
+- 处理：main-20261017
