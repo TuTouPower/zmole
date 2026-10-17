@@ -43,28 +43,30 @@ struct InstallersView: View {
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                head
-                if !accessMonitor.isGranted {
-                    FullDiskAccessNotice(monitor: accessMonitor)
-                } else {
-                    statStrip
-                    UtilityNotice(title: "installers.trash_note", symbol: "trash")
-                    listCard
+        VStack(alignment: .leading, spacing: 14) {
+            head
+            if !accessMonitor.isGranted {
+                FullDiskAccessNotice(monitor: accessMonitor)
+                Spacer()
+            } else {
+                statStrip
+                UtilityNotice(title: "installers.trash_note", symbol: "trash")
+                listCard
+                if !viewModel.failures.isEmpty {
                     failuresCard
-                    if viewModel.showBusyNotice {
-                        RecoverableBusyNotice()
-                    }
-                    if let errorKey = viewModel.errorMessageKey {
-                        UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
-                    } else if let errorMessage = viewModel.errorMessage {
-                        UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
-                    }
+                }
+                if viewModel.showBusyNotice {
+                    RecoverableBusyNotice()
+                }
+                if let errorKey = viewModel.errorMessageKey {
+                    UtilityNotice(title: LocalizedStringKey(errorKey), isError: true)
+                } else if let errorMessage = viewModel.errorMessage {
+                    UtilityNotice(title: "installers.error_title", detail: errorMessage, isError: true)
                 }
             }
-            .padding(24)
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(MoleTheme.background)
     }
 
@@ -130,10 +132,15 @@ struct InstallersView: View {
                 UtilityEmptyState(symbol: "shippingbox", title: "installers.empty", message: "installers.empty_detail")
                     .frame(minHeight: 200)
             } else {
-                ForEach(visibleCandidates) { candidate in
-                    row(candidate)
-                    Divider().padding(.leading, 16)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(visibleCandidates) { candidate in
+                            row(candidate)
+                            Divider().padding(.leading, 16)
+                        }
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             if !viewModel.candidates.isEmpty {
@@ -152,6 +159,8 @@ struct InstallersView: View {
                 .padding(14)
             }
         }
+        .frame(maxWidth: .infinity)
+        .frame(maxHeight: viewModel.candidates.isEmpty ? nil : .infinity)
         .background(MoleTheme.surface, in: RoundedRectangle(cornerRadius: MoleTheme.radiusLG))
         .overlay(RoundedRectangle(cornerRadius: MoleTheme.radiusLG).strokeBorder(MoleTheme.line))
     }

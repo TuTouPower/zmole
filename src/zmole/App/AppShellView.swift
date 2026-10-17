@@ -10,11 +10,7 @@ struct AppShellView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(
-                navigation: navigation,
-                statusViewModel: dependencies.statusViewModel,
-                cleanViewModel: dependencies.cleanViewModel
-            )
+            SidebarView(navigation: navigation)
             NavigationStack {
                 destinationView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
