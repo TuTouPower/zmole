@@ -81,7 +81,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用 `analyze` 目录求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。各探测经 3 条独立估算通道并发执行（单通道内串行，平均分摊）。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
 
-估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入时先用缓存即时渲染（“其他”用实时 status 已用现算），后台仅在缓存缺失、超过 TTL（6 小时）或收到写入失效信号时，经独立只读通道重算并回写；不提供手动计算按钮。缓存超过最大年龄（7 天）或 schema 不符即作废。只有完整扫描（四个路径全部可读）才落盘并接替当前估算；扫描被取消或缺少任一路径时不写缓存、不替换已展示结果，下一次进入概览重试。
+估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入即先用缓存即时渲染并启动目录扫描（“其他”用实时 status 已用现算；status 迟到只更新“其他”，不影响扫描与已有分段）。触发点为：概览出现、写入失效信号、已用空间由无到有（仅重派生展示，不重扫）。完成的扫描（含部分）即展示并落盘；缺失段保持占位并保留「估算不完整」标记，随后自动补扫一次且只探测缺失段；扫描任务由 ViewModel 持有，不随视图消失取消。缓存超过 TTL（6 小时）或收到写入失效信号时全量重算并回写；超过最大年龄（7 天）或 schema 不符即作废。扫描被取消（应用退出）时不落盘。估算通道单条命令超时 600 秒。不提供手动计算按钮。
 
 最近操作复用 `history --json`。概览不再绘制趋势条；状态页的系统负载图在采样点不足时显示等待说明，不伪造趋势。
 

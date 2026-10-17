@@ -244,6 +244,31 @@ final class PageHeadAdoptionTests: XCTestCase {
         XCTAssertTrue(purge[purgeRange.lowerBound...].prefix(160).contains("isError: true"))
     }
 
+    func testNoEyebrowCopyRemainsAnywhere() throws {
+        let catalogURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("src/zmole/Resources/Localizable.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let eyebrowKeys = strings.keys.filter { $0.hasSuffix(".eyebrow") || $0.contains(".eyebrow.") }
+        XCTAssertEqual(eyebrowKeys.sorted(), [], "no eyebrow copy may remain in the catalog")
+
+        let uiSource = try Self.source("Features/UtilityUI.swift")
+        XCTAssertFalse(uiSource.contains("eyebrow"), "MolePageHead must not render an eyebrow")
+        let overviewSource = try Self.source("Features/Overview/OverviewView.swift")
+        XCTAssertFalse(overviewSource.contains("eyebrow"), "the health card eyebrow line is removed too")
+    }
+
+    func testOverviewCardsShareOneFixedHeight() throws {
+        let source = try Self.source("Features/Overview/OverviewView.swift")
+        let uses = source.components(separatedBy: "minHeight: OverviewCardLayout.cardHeight").count - 1
+        XCTAssertEqual(uses, 4, "all four overview cards must use the shared fixed height")
+        XCTAssertTrue(source.contains("enum OverviewCardLayout"), "the shared height constant must exist")
+    }
+
     private static func source(_ relative: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
