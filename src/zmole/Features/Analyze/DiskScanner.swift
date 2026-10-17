@@ -42,19 +42,27 @@ struct DiskEntry: Identifiable, Equatable, Sendable {
     var value: DiskEntryValue
     /// Present when the node has more than one hard link.
     var linkKey: HardLinkKey?
+    /// Deterministic deduplicated size of this subtree in its own scope.
+    var selfDeduplicatedSize: Int64?
+    /// Contribution of this entry to its parent directory's deduplicated total.
+    var parentContribution: Int64?
 
     init(
         name: String,
         path: String,
         isDirectory: Bool,
         value: DiskEntryValue,
-        linkKey: HardLinkKey? = nil
+        linkKey: HardLinkKey? = nil,
+        selfDeduplicatedSize: Int64? = nil,
+        parentContribution: Int64? = nil
     ) {
         self.name = name
         self.path = path
         self.isDirectory = isDirectory
         self.value = value
         self.linkKey = linkKey
+        self.selfDeduplicatedSize = selfDeduplicatedSize
+        self.parentContribution = parentContribution
     }
 
     var id: String { path }
@@ -241,7 +249,14 @@ struct LiveDiskScanner: DiskScanning {
                 let outcome = walk(child, deduplicator: deduplicator, levels: &levels)
                 let value: DiskEntryValue = outcome.isReadable ? .size(outcome.totalSize) : .unreadable
                 entries.append(
-                    DiskEntry(name: name, path: child, isDirectory: true, value: value)
+                    DiskEntry(
+                        name: name,
+                        path: child,
+                        isDirectory: true,
+                        value: value,
+                        selfDeduplicatedSize: outcome.isReadable ? outcome.totalSize : nil,
+                        parentContribution: outcome.isReadable ? outcome.totalSize : nil
+                    )
                 )
                 total += outcome.totalSize
             } else {
@@ -258,7 +273,9 @@ struct LiveDiskScanner: DiskScanning {
                         path: child,
                         isDirectory: false,
                         value: .size(bytes),
-                        linkKey: linkKey
+                        linkKey: linkKey,
+                        selfDeduplicatedSize: bytes,
+                        parentContribution: counted
                     )
                 )
                 total += counted

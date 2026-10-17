@@ -29,19 +29,29 @@ struct ZmoleApp: App {
     @StateObject private var dependencies: AppDependencies
     @StateObject private var navigation: NavigationModel
 
+    static var isTesting: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+            || ProcessInfo.processInfo.environment["XCInjectBundleInto"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
     init() {
         let dependencies = AppDependencies(configuration: DemoConfiguration())
         _dependencies = StateObject(wrappedValue: dependencies)
         _navigation = StateObject(
             wrappedValue: NavigationModel(
-                initial: dependencies.demo.isEnabled ? dependencies.demo.page : .overview
+                initial: dependencies.demo.isEnabled ? dependencies.demo.page : .overview,
+                policy: dependencies.statusPolicy
             )
         )
     }
 
     var body: some Scene {
         WindowGroup("app.name") {
-            AppShellView(dependencies: dependencies, navigation: navigation)
+            if !Self.isTesting {
+                AppShellView(dependencies: dependencies, navigation: navigation)
+            }
         }
         .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
         .windowResizability(.contentMinSize)

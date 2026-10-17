@@ -1,0 +1,27 @@
+{
+  "tid": "t047",
+  "attempt": 1,
+  "execution_id": "860e94b8cf984db487cefafa8af42b20",
+  "status": "done",
+  "branch": "t047_scoped_scan_invalidation",
+  "base_sha": "747e556bfa1f01dea91bac9b6ff39e92f60c4957",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (314 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope e81483d8cea9ebdb, 0 finding",
+  "ac_evidence": {
+    "AC-007": ["src/zmole/Features/Operations/OperationCoordinator.swift", "tests/unit/ScopedInvalidationTests.swift testFailedConfigSaveReleasesLeaseWithoutInvalidatingBackgroundData"],
+    "AC-008": ["src/zmole/Features/Operations/OperationCoordinator.swift", "tests/unit/WhitelistOperationTests.swift testSuccessfulSaveReleasesLeaseAndInvalidatesPreviews"],
+    "AC-009": ["src/zmole/Features/Clean/CleanViewModel.swift", "tests/unit/BackgroundScanTests.swift testUserTakeoverWaitsForBackgroundCleanToTerminate"],
+    "AC-010": ["src/zmole/Features/Operations/OperationCoordinator.swift DataImpact.forOperation", "tests/unit/ScopedInvalidationTests.swift testScopedInvalidationMatrixMatchesContract"],
+    "AC-011": ["src/zmole/Features/Operations/OperationCoordinator.swift release", "tests/unit/ScopedInvalidationTests.swift testSuccessfulWriteSettlesImpactOnceAndBumpsVersions"],
+    "AC-012": ["src/zmole/Features/Clean/CleanViewModel.swift markDataModified", "src/zmole/Features/Uninstall/UninstallViewModel.swift markDataModified"],
+    "AC-013": ["src/zmole/Features/Operations/BackgroundScanService.swift BackgroundScanResult.markingStale", "tests/unit/ScopedInvalidationTests.swift testBackgroundScanResultStalenessAndVersionTracking"],
+    "AC-014": ["src/zmole/Features/Operations/BackgroundScanService.swift run startedVersion comparison", "tests/unit/ScopedInvalidationTests.swift testBackgroundScanResultStalenessAndVersionTracking"],
+    "AC-015": ["src/zmole/Features/Overview/OverviewViewModel.swift settledOperations", "tests/unit/OverviewCacheTests.swift testCoordinatorInvalidationForcesRefresh"],
+    "AC-016": ["src/zmole/Features/Operations/BackgroundScanCache.swift schemaVersion 2", "tests/unit/ScopedInvalidationTests.swift testCacheSchemaVersion2PersistsAndDiscardsOlderSchema"],
+    "AC-018": ["src/zmole/Features/Operations/OperationCoordinator.swift DataImpact conservative unions", "tests/unit/ScopedInvalidationTests.swift testScopedInvalidationMatrixMatchesContract"],
+    "AC-019": ["src/zmole/Features/Operations/BackgroundScanCache.swift save error handling", "tests/unit/ScopedInvalidationTests.swift testCacheSchemaVersion2PersistsAndDiscardsOlderSchema"]
+  },
+  "pending": [],
+  "findings": []
+}

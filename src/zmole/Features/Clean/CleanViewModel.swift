@@ -137,6 +137,7 @@ final class CleanViewModel: ObservableObject {
 
         do {
             let result = try await process.run(["clean"], stdin: nil, timeout: 600)
+            leaseCoordinator.markDataModified()
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             showBusyNotice = false
             let summary = MaintenanceOutput.summary(stdout: result.stdout, stderr: result.stderr)
@@ -154,6 +155,7 @@ final class CleanViewModel: ObservableObject {
             leaseCoordinator.invalidatePreviews()
             leaseCoordinator.release()
         } catch let error as MoleBridgeError where error == .cancelled {
+            leaseCoordinator.markDataModified()
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
                 id: execution.id

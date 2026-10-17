@@ -1,0 +1,59 @@
+{
+  "tid": "t048",
+  "attempt": 1,
+  "execution_id": "d295ad0fe186408896e513149b80bcb9",
+  "status": "done",
+  "branch": "t048_heavy_walk_budget",
+  "base_sha": "5f8f52ba93283a7467e85b5112d9ee0b64bf6f95",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (361 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope bc01c6df580dbe4a, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift acquire / activeCount",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC001_MaxConcurrencyEnforcedForBudgetsOneTwoThreeFour"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift releasePermit / dispatchNext",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC002_NextItemStartsWhenTaskFinishes"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift elevate / demote / starvationLimit",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC003_UserVisiblePriorityPreemptsQueueAndAntiStarvationKicksIn"
+    ],
+    "AC-004": [
+      "src/zmole/Features/Status/StatusWatchService.swift",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC004_StatusWatchRunsWithoutTakingPermit"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Operations/BackgroundScanService.swift request deduplication",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC005_DuplicateBackgroundRequestsSharePermit"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift HeavyScanPermit.release",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC007_PermitReleasedAccuratelyAfterExecutionOrCancellation"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift actor isolation",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC009_MainThreadRemainsResponsiveWhileHeavyScanQueued"
+    ],
+    "AC-010": [
+      "docs/blueprint/decisions.md ADR 012",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC010_Deploy_BenchmarkConcurrencyBudgets"
+    ],
+    "AC-011": [
+      "src/zmole/Features/Analyze/DiskMeasurementSession.swift inFlightTasks sharing",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC011_SharedDiskMeasurementsShareSinglePermit"
+    ],
+    "AC-012": [
+      "src/zmole/Features/Operations/BackgroundScanService.swift refreshIfDue allCases order",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC012_DeadlockFreedomWithConcurrencyOne"
+    ],
+    "AC-013": [
+      "src/zmole/Features/Operations/HeavyScanScheduler.swift cancelRequest",
+      "tests/unit/HeavyScanSchedulerTests.swift testAC013_QueuedTaskCancelledDoesNotAcquireSlot"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

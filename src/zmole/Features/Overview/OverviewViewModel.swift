@@ -51,6 +51,7 @@ enum OverviewHealth {
         case fair
         case poor
         case unknown
+        case disabled
 
         var titleKey: String {
             switch self {
@@ -58,6 +59,7 @@ enum OverviewHealth {
             case .fair: "overview.health.fair"
             case .poor: "overview.health.poor"
             case .unknown: "overview.health.unknown"
+            case .disabled: "overview.status.disabled"
             }
         }
     }
@@ -85,7 +87,33 @@ struct OverviewHealthCard: Equatable, Sendable {
     let status: OverviewHealth.Status
     let tiles: [OverviewTile]
 
-    static func make(snapshot: StatusSnapshot?, reclaimBytes: Int64?) -> OverviewHealthCard {
+    static func make(snapshot: StatusSnapshot?, reclaimBytes: Int64?, isStatusEnabled: Bool = true) -> OverviewHealthCard {
+        guard isStatusEnabled else {
+            return OverviewHealthCard(
+                scoreText: "—",
+                status: .disabled,
+                tiles: [
+                    OverviewTile(
+                        id: "free_space",
+                        titleKey: "overview.free_disk",
+                        value: "—",
+                        note: "overview.status.disabled"
+                    ),
+                    OverviewTile(
+                        id: "reclaimable",
+                        titleKey: "overview.reclaimable",
+                        value: reclaimBytes.map(OverviewMetrics.bytes) ?? "—",
+                        note: reclaimBytes == nil ? "overview.reclaim_no_scan" : nil
+                    ),
+                    OverviewTile(
+                        id: "cpu",
+                        titleKey: "overview.cpu",
+                        value: "—",
+                        note: "overview.status.disabled"
+                    )
+                ]
+            )
+        }
         let metrics = snapshot.map(OverviewMetrics.init)
         let score = (snapshot?.healthScoreAvailable == true) ? snapshot?.healthScore : nil
         return OverviewHealthCard(
@@ -129,7 +157,15 @@ struct OverviewHealthCard: Equatable, Sendable {
 struct OverviewStatusGrid: Equatable, Sendable {
     let tiles: [OverviewTile]
 
-    static func make(snapshot: StatusSnapshot?) -> OverviewStatusGrid {
+    static func make(snapshot: StatusSnapshot?, isStatusEnabled: Bool = true) -> OverviewStatusGrid {
+        guard isStatusEnabled else {
+            return OverviewStatusGrid(tiles: [
+                OverviewTile(id: "cpu", titleKey: "status.stat.cpu", value: "—", note: "overview.status.disabled"),
+                OverviewTile(id: "memory", titleKey: "status.stat.memory", value: "—", note: "overview.status.disabled"),
+                OverviewTile(id: "temperature", titleKey: "status.stat.temperature", value: "—", note: "overview.status.disabled"),
+                OverviewTile(id: "network", titleKey: "status.network", value: "—", note: "overview.status.disabled")
+            ])
+        }
         guard let snapshot else {
             return OverviewStatusGrid(tiles: [
                 OverviewTile(id: "cpu", titleKey: "status.stat.cpu", value: "—"),
@@ -271,6 +307,7 @@ struct OverviewStorageCard: Equatable, Sendable {
 final class OverviewViewModel: ObservableObject {
     @Published private(set) var breakdown = StorageBreakdown.placeholder
     @Published private(set) var recentOperations: [HistorySession] = []
+    @Published private(set) var diskCapacity: VolumeCapacity?
     @Published private(set) var errorMessage: String?
     @Published private(set) var errorMessageKey: String?
     /// Set when a write operation invalidated the cached estimate.
@@ -281,12 +318,14 @@ final class OverviewViewModel: ObservableObject {
     private let historyLoader: HistorySnapshotLoader?
     private let storageCache: StorageEstimateCache?
     private let accessMonitor: FullDiskAccessMonitor?
+    private let volumeCapacityProvider: any VolumeCapacityProviding
     private let now: @Sendable () -> Date
     private let incompleteRetryDelay: TimeInterval
     private var cacheEntry: StorageEstimateCacheEntry?
     private var sums: StorageSums?
     private var lastUsedBytes: Int64?
     private var isEstimating = false
+    private var estimateGeneration = 0
     private var estimateTask: Task<Void, Never>?
     private var incompleteRetryTask: Task<Void, Never>?
     private var incompleteRetryScheduled = false
@@ -303,6 +342,7 @@ final class OverviewViewModel: ObservableObject {
         storageCache: StorageEstimateCache? = nil,
         coordinator: OperationCoordinator? = nil,
         accessMonitor: FullDiskAccessMonitor? = nil,
+        volumeCapacityProvider: (any VolumeCapacityProviding)? = nil,
         incompleteRetryDelay: TimeInterval = OverviewViewModel.defaultIncompleteRetryDelay,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
@@ -310,12 +350,13 @@ final class OverviewViewModel: ObservableObject {
         self.historyLoader = historyLoader
         self.storageCache = storageCache
         self.accessMonitor = accessMonitor
+        self.volumeCapacityProvider = volumeCapacityProvider ?? LiveVolumeCapacityProvider()
         self.incompleteRetryDelay = incompleteRetryDelay
         self.now = now
         if let coordinator {
-            coordinatorSubscription = coordinator.$invalidationGeneration
-                .dropFirst()
-                .sink { [weak self] _ in
+            coordinatorSubscription = coordinator.settledOperations
+                .sink { [weak self] _, impact in
+                    guard !impact.overviewInputs.isEmpty else { return }
                     self?.invalidationCount += 1
                     self?.estimateInvalidated = true
                 }
@@ -327,6 +368,7 @@ final class OverviewViewModel: ObservableObject {
         historyLoader = nil
         storageCache = nil
         accessMonitor = nil
+        volumeCapacityProvider = LiveVolumeCapacityProvider()
         incompleteRetryDelay = Self.defaultIncompleteRetryDelay
         now = Date.init
     }
@@ -409,6 +451,10 @@ final class OverviewViewModel: ObservableObject {
         return storageCache?.isStale(cacheEntry, now: now()) ?? false
     }
 
+    func refreshDiskCapacity() async {
+        diskCapacity = await volumeCapacityProvider.primaryVolumeCapacity()
+    }
+
     /// Loads the recent history once per overview appearance.
     func refreshHistory() async {
         guard let historyLoader else { return }
@@ -440,6 +486,8 @@ final class OverviewViewModel: ObservableObject {
         guard let storageLoader, !isEstimating else { return }
         isEstimating = true
         let invalidationsAtStart = invalidationCount
+        estimateGeneration += 1
+        let generation = estimateGeneration
         defer { isEstimating = false }
         do {
             // A write invalidation always forces a full rescan, even for the
@@ -449,8 +497,16 @@ final class OverviewViewModel: ObservableObject {
             let includeUsers = diskAccessGranted
             let merged = try await storageLoader.loadSums(
                 filling: partial,
-                includingUsers: includeUsers
+                includingUsers: includeUsers,
+                onProgress: { [weak self] progressiveSums in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.estimateGeneration == generation else { return }
+                        self.sums = progressiveSums
+                        self.breakdown = progressiveSums.breakdown(usedBytes: self.lastUsedBytes)
+                    }
+                }
             )
+            guard estimateGeneration == generation else { return }
             sums = merged
             breakdown = merged.breakdown(usedBytes: lastUsedBytes)
             // A fill-only scan reuses resolved segments, so it must not
@@ -481,6 +537,13 @@ final class OverviewViewModel: ObservableObject {
         } catch is CancellationError {
             // A cancelled scan must not write a cache later launches would
             // trust, and must not replace the current estimate.
+            if let cacheEntry {
+                sums = cacheEntry.sums
+                breakdown = cacheEntry.sums.breakdown(usedBytes: lastUsedBytes)
+            } else {
+                sums = nil
+                breakdown = .placeholder
+            }
         } catch {
             overviewLog.error("storage estimate failed: \(String(describing: type(of: error)), privacy: .public)")
         }

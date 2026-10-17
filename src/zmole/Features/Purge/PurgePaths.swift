@@ -100,7 +100,7 @@ final class PurgePathsViewModel: ObservableObject {
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
-        guard let lease = coordinator.acquire(.purge) else {
+        guard let lease = coordinator.acquire(.purgePaths) else {
             errorKey = "operation.error.busy"
             didSave = false
             return false
@@ -111,6 +111,7 @@ final class PurgePathsViewModel: ObservableObject {
         }
         do {
             try store.save(paths)
+            lease.markDataModified()
             errorKey = nil
             didSave = true
             return true

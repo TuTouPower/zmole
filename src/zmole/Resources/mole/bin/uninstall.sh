@@ -39,7 +39,7 @@ total_items=0
 files_cleaned=0
 total_size_cleaned=0
 
-readonly MOLE_UNINSTALL_META_CACHE_DIR="$HOME/.cache/mole"
+readonly MOLE_UNINSTALL_META_CACHE_DIR="${MOLE_UNINSTALL_META_CACHE_DIR:-$HOME/.cache/mole}"
 readonly MOLE_UNINSTALL_META_CACHE_FILE="$MOLE_UNINSTALL_META_CACHE_DIR/uninstall_app_metadata_v3"
 readonly MOLE_UNINSTALL_META_CACHE_LOCK="${MOLE_UNINSTALL_META_CACHE_FILE}.lock"
 readonly MOLE_UNINSTALL_META_REFRESH_TTL=604800 # 7 days
@@ -63,7 +63,7 @@ uninstall_normalize_size_display() {
         return 0
     fi
 
-    if [[ -z "$size" || "$size" == "0" || "$size" == "Unknown" ]]; then
+    if [[ -z "$size" || "$size" == "0" || "$size" == "Unknown" || "$size" == "--" ]]; then
         echo "N/A"
         return 0
     fi
@@ -374,6 +374,12 @@ uninstall_persist_cache_file() {
 
 start_uninstall_metadata_refresh() {
     local refresh_file="$1"
+    # zmole local patch (t053): under streaming mode, do not spawn a detached
+    # disowned background task. The stream's entire work is managed by the parent.
+    if [[ -n "${MOLE_UNINSTALL_LIST_STREAM_FD:-}" ]]; then
+        rm -f "$refresh_file" 2> /dev/null || true
+        return 0
+    fi
     [[ ! -s "$refresh_file" ]] && {
         rm -f "$refresh_file" 2> /dev/null || true
         return 0
@@ -875,26 +881,33 @@ _scan_resolve_uncached() {
         local app_data_tuple="$1"
         local output_file="$2"
 
+        if [[ -n "${MOLE_TEST_METADATA_BLOCK_FILE:-}" ]]; then
+            while [[ -f "$MOLE_TEST_METADATA_BLOCK_FILE" ]]; do
+                sleep 0.05 2> /dev/null || sleep 1
+            done
+        fi
+
         IFS='|' read -r app_path app_name app_mtime cached_bundle_id cached_display_name <<< "$app_data_tuple"
 
         local bundle_id
-        bundle_id=$(uninstall_resolve_eligible_bundle_id "$app_path" "${cached_bundle_id:-}") || return 0
+        bundle_id=$(uninstall_resolve_eligible_bundle_id "$app_path" "${cached_bundle_id:-}" 2> /dev/null) || bundle_id=""
 
         local display_name="${cached_display_name:-}"
         if [[ -z "$display_name" ]]; then
-            display_name=$(uninstall_resolve_display_name "$app_path" "$app_name")
+            display_name=$(uninstall_resolve_display_name "$app_path" "$app_name" 2> /dev/null) || display_name=""
         fi
+        [[ -z "$display_name" ]] && display_name="$app_name"
 
         display_name="${display_name%.[aA][pP][pP]}"
         display_name="${display_name//|/-}"
         display_name="${display_name//[$'\t\r\n']/}"
 
-        local quick_size_kb
-        quick_size_kb=$(uninstall_quick_app_size_kb "$app_path")
+        local quick_size_kb=0
+        quick_size_kb=$(uninstall_quick_app_size_kb "$app_path" 2> /dev/null || echo "0")
         [[ "$quick_size_kb" =~ ^[0-9]+$ ]] || quick_size_kb=0
 
         if [[ "$quick_size_kb" -eq 0 && "${inline_du_fallback:-0}" == "1" ]]; then
-            quick_size_kb=$(uninstall_inline_du_size_kb "$app_path")
+            quick_size_kb=$(uninstall_inline_du_size_kb "$app_path" 2> /dev/null || echo "0")
             [[ "$quick_size_kb" =~ ^[0-9]+$ ]] || quick_size_kb=0
         fi
 
@@ -912,19 +925,26 @@ _scan_resolve_uncached() {
             # Redirect stdin from /dev/null so the perl timeout fallback used by
             # process_app_metadata does not hand the controlling terminal to its
             # timed mdls/du child from this background worker (issue #1222).
-            process_app_metadata "$app_data_tuple" "$scan_raw_file" < /dev/null &
-            pids+=($!)
+            # Close fd 3 so metadata workers do not hold the list-stream pipe (AC-004, AC-007).
+            process_app_metadata "$app_data_tuple" "$scan_raw_file" 3>&- < /dev/null &
+            local worker_pid=$!
+            pids+=("$worker_pid")
+            MOLE_UNINSTALL_MANAGED_WORKER_PIDS+=("$worker_pid")
+            if [[ -n "${MOLE_TEST_METADATA_PID_FILE:-}" ]]; then
+                printf '%s\n' "$worker_pid" >> "$MOLE_TEST_METADATA_PID_FILE"
+            fi
             update_scan_status "Scanning applications..." "$app_count" "$total_apps"
 
             if ((${#pids[@]} >= max_parallel)); then
-                wait "${pids[0]}" 2> /dev/null
+                wait "${pids[0]}" 2> /dev/null || true
                 pids=("${pids[@]:1}")
             fi
         done
 
         for pid in "${pids[@]}"; do
-            wait "$pid" 2> /dev/null
+            wait "$pid" 2> /dev/null || true
         done
+        MOLE_UNINSTALL_MANAGED_WORKER_PIDS=()
     fi
 }
 
@@ -1242,11 +1262,17 @@ scan_applications() {
         cache_source_is_temp=true
     fi
 
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
+
     # Local spinner_pid for cleanup
     local spinner_pid=""
     local spinner_shown_file="${temp_file}.spinner_shown"
     local previous_int_trap=""
     previous_int_trap=$(trap -p INT || true)
+    local previous_term_trap=""
+    previous_term_trap=$(trap -p TERM || true)
 
     restore_scan_int_trap() {
         if [[ -n "$previous_int_trap" ]]; then
@@ -1255,14 +1281,25 @@ scan_applications() {
         else
             trap - INT
         fi
+        if [[ -n "$previous_term_trap" ]]; then
+            eval "$previous_term_trap"
+        else
+            trap - TERM
+        fi
     }
 
-    # Trap to handle Ctrl+C during scan
+    # Trap to handle Ctrl+C or termination during scan
     # shellcheck disable=SC2329  # Function invoked indirectly via trap
     trap_scan_cleanup() {
         if [[ -n "$spinner_pid" ]]; then
             kill -TERM "$spinner_pid" 2> /dev/null || true
             wait "$spinner_pid" 2> /dev/null || true
+            spinner_pid=""
+        fi
+        if ((${#MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]} > 0)); then
+            kill -TERM "${MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]}" 2> /dev/null || true
+            wait "${MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]}" 2> /dev/null || true
+            MOLE_UNINSTALL_MANAGED_WORKER_PIDS=()
         fi
         if [[ -f "$spinner_shown_file" ]]; then
             printf "\r\033[K" >&2
@@ -1270,7 +1307,7 @@ scan_applications() {
         rm -f "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "$scan_status_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true
         exit 130
     }
-    trap trap_scan_cleanup INT
+    trap trap_scan_cleanup INT TERM
 
     update_scan_status() {
         local message="$1"
@@ -1304,7 +1341,7 @@ scan_applications() {
                 ((i++))
                 sleep 0.1 2> /dev/null || sleep 1
             done
-        ) &
+        ) 3>&- < /dev/null &
         spinner_pid=$!
     }
 
@@ -1621,6 +1658,10 @@ uninstall_list_apps() {
         format="json"
     fi
 
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
+
     if [[ "$format" == "json" ]]; then
         printf '['
         local first=1
@@ -1654,12 +1695,14 @@ uninstall_list_apps() {
             printf '\n'
         fi
         printf ']\n'
+        _cleanup_brew_cask_scan_index
         return 0
     fi
 
     local total=${#apps_data[@]}
     if [[ $total -eq 0 ]]; then
         echo "No applications found."
+        _cleanup_brew_cask_scan_index
         return 0
     fi
 
@@ -1707,6 +1750,7 @@ uninstall_list_apps() {
     done
 
     printf '\n%d application(s)  |  Remove with: mo uninstall <UNINSTALL NAME>\n\n' "$total"
+    _cleanup_brew_cask_scan_index
     return 0
 }
 
@@ -1724,19 +1768,57 @@ uninstall_stream_apps() {
     exec 3>&1
     MOLE_UNINSTALL_LIST_STREAM_FD=3
     export MOLE_UNINSTALL_LIST_STREAM_FD
+    MOLE_UNINSTALL_MANAGED_WORKER_PIDS=()
 
-    local apps_file=""
-    if ! apps_file=$(scan_applications); then
-        uninstall_abort "could not complete the application scan"
+    local _scan_subshell_pid=""
+    _stream_trap_cleanup() {
+        trap - INT TERM HUP
+        if [[ -n "$_scan_subshell_pid" ]]; then
+            kill -TERM "$_scan_subshell_pid" 2> /dev/null || true
+            wait "$_scan_subshell_pid" 2> /dev/null || true
+            _scan_subshell_pid=""
+        fi
+        if ((${#MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]} > 0)); then
+            kill -TERM "${MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]}" 2> /dev/null || true
+            wait "${MOLE_UNINSTALL_MANAGED_WORKER_PIDS[@]}" 2> /dev/null || true
+            MOLE_UNINSTALL_MANAGED_WORKER_PIDS=()
+        fi
+        _cleanup_brew_cask_scan_index
+        exec 3>&- 2> /dev/null || true
+        exit 130
+    }
+    trap _stream_trap_cleanup INT TERM HUP
+
+    if is_homebrew_available; then
+        _init_brew_cask_scan_index
+    fi
+
+    local scan_out_file
+    scan_out_file=$(mktemp 2> /dev/null || echo "/tmp/mole_scan_out_$$")
+    scan_applications > "$scan_out_file" &
+    _scan_subshell_pid=$!
+    wait "$_scan_subshell_pid"
+    local scan_rc=$?
+    _scan_subshell_pid=""
+
+    if [[ $scan_rc -ne 0 || ! -s "$scan_out_file" ]]; then
+        rm -f "$scan_out_file"
+        _stream_trap_cleanup
         return 1
     fi
+    local apps_file
+    apps_file=$(cat "$scan_out_file")
+    rm -f "$scan_out_file"
+
     if [[ ! -f "$apps_file" ]]; then
         uninstall_abort "application scan produced no list"
+        exec 3>&- 2> /dev/null || true
         return 1
     fi
     if ! load_applications "$apps_file"; then
         rm -f "$apps_file"
         uninstall_abort "no applications available for uninstallation"
+        exec 3>&- 2> /dev/null || true
         return 1
     fi
     rm -f "$apps_file"
@@ -1766,10 +1848,14 @@ uninstall_stream_apps() {
             "$source_label" \
             "$(uninstall_list_json_escape "$size_display")" \
             "$(uninstall_list_json_escape "$version")" \
-            "$last_used_epoch"
+            "$last_used_epoch" \
+            >&3
     done
 
-    printf '{"event":"done"}\n'
+    printf '{"event":"done"}\n' >&3
+    exec 3>&- 2> /dev/null || true
+    trap - INT TERM HUP
+    _cleanup_brew_cask_scan_index
     return 0
 }
 

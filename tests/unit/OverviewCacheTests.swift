@@ -137,7 +137,9 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         XCTAssertFalse(viewModel.estimateNeedsRefresh)
 
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         XCTAssertTrue(viewModel.estimateInvalidated)
         XCTAssertTrue(viewModel.estimateNeedsRefresh)
         viewModel.startEstimate(usedBytes: 300)
@@ -469,7 +471,9 @@ final class OverviewCacheTests: XCTestCase {
 
         // A write invalidation must re-probe every segment, not only the
         // missing ones: the resolved segments predate the write.
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         viewModel.startEstimate(usedBytes: 300)
         for _ in 0..<400 {
             let hits = await recorder.paths.filter { $0 == "/Applications" }.count
@@ -483,20 +487,11 @@ final class OverviewCacheTests: XCTestCase {
         )
     }
 
-    func testEstimateLaneTimeoutIsTenMinutes() throws {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("src/zmole/App/AppDependencies.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-        let range = try XCTUnwrap(source.range(of: "let estimateLoaders"))
-        let segment = source[range.lowerBound...].prefix(420)
-        XCTAssertTrue(
-            segment.contains("timeout: 600"),
-            "the estimate lane must allow ten minutes per command"
-        )
-    }
+    // Removed testEstimateLaneTimeoutIsTenMinutes:
+    // With t058, Overview is migrated to unified DiskMeasurementSession and
+    // the old CLI estimateLoaders lane is eliminated from AppDependencies.
+    // Unified session lifecycle and shared measurement are covered in
+    // OverviewUnifiedMeasureTests (AC-008).
 
     func testFillOnlyScanDoesNotRefreshTheCacheTimestamp() async throws {
         let directory = try tempDirectory()
@@ -566,7 +561,9 @@ final class OverviewCacheTests: XCTestCase {
         viewModel.primeEstimate(usedBytes: 300)
         viewModel.startEstimate(usedBytes: 300)
         await gate.waitUntilPaused()
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         await gate.release()
         await viewModel.waitForEstimate()
 
@@ -621,7 +618,9 @@ final class OverviewCacheTests: XCTestCase {
 
         viewModel.startEstimate(usedBytes: 300)
         await firstScanGate.waitUntilPaused()
-        coordinator.invalidatePreviews()
+        let lease = coordinator.acquire(.clean)!
+        lease.markDataModified()
+        lease.release()
         await firstScanGate.release()
 
         // The invalidated first scan completes all four segments on its own;

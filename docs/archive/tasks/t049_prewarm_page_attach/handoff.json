@@ -1,0 +1,24 @@
+{
+  "tid": "t049",
+  "attempt": 1,
+  "execution_id": "45b01528fea44d78be61c60970316c67",
+  "status": "done",
+  "branch": "t049_prewarm_page_attach",
+  "base_sha": "1fdc10306d2325f9a30fdf951fb78f9520758ec6",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (318 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope b119a5f6d81e05af, 0 finding",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Uninstall/UninstallViewModel.swift loadListIfNeeded", "tests/unit/PrewarmPageAttachTests.swift testUninstallPageReusesOngoingBackgroundScanWithoutRestarting"],
+    "AC-002": ["src/zmole/Features/Operations/BackgroundScanService.swift run 100ms throttle", "tests/unit/PrewarmPageAttachTests.swift testProgressivePublishingFlushesWithin100ms"],
+    "AC-003": ["src/zmole/Features/Installers/InstallersViewModel.swift loadListIfNeeded", "tests/unit/PrewarmPageAttachTests.swift testInstallerPageReusesOngoingBackgroundScan"],
+    "AC-004": ["src/zmole/Features/Operations/BackgroundScanService.swift request deduplication", "tests/unit/PrewarmPageAttachTests.swift testInstallerPageReusesOngoingBackgroundScan"],
+    "AC-005": ["src/zmole/Features/Uninstall/UninstallViewModel.swift loadListIfNeeded", "src/zmole/Features/Installers/InstallersViewModel.swift loadListIfNeeded"],
+    "AC-006": ["src/zmole/Features/Operations/BackgroundScanService.swift save results on complete scan", "tests/unit/BackgroundScanTests.swift"],
+    "AC-007": ["src/zmole/Features/Operations/BackgroundScanService.swift run", "tests/unit/PrewarmPageAttachTests.swift testPartialScanFailureDoesNotCorruptCacheAndPreventsUninstallExecution"],
+    "AC-008": ["src/zmole/Features/Operations/BackgroundScanService.swift decoupled task cancellation"],
+    "AC-009": ["src/zmole/Features/Operations/BackgroundScanService.swift run version comparison", "src/zmole/Features/Uninstall/UninstallViewModel.swift requestConfirmation"]
+  },
+  "pending": [],
+  "findings": []
+}

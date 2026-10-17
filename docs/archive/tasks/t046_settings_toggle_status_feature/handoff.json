@@ -1,0 +1,24 @@
+{
+  "tid": "t046",
+  "attempt": 1,
+  "execution_id": "9941135a398d4ed797461972158b41df",
+  "status": "done",
+  "branch": "t046_settings_toggle_status_feature",
+  "base_sha": "ef087c3f87c740b1cdd748062adf376f9d68e780",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (309 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 915e5a92799d1cc9, 0 finding",
+  "ac_evidence": {
+    "AC-001": ["src/zmole/Features/Status/StatusFeaturePolicy.swift", "src/zmole/Features/Settings/SettingsView.swift", "tests/unit/StatusFeatureToggleTests.swift testStatusFeatureDefaultsToEnabledAndPersistsAcrossRestarts"],
+    "AC-002": ["src/zmole/App/NavigationModel.swift", "tests/unit/StatusFeatureToggleTests.swift testNavigationHidesStatusWhenDisabledAndRedirectsActiveStatusPage"],
+    "AC-003": ["src/zmole/App/NavigationModel.swift", "tests/unit/StatusFeatureToggleTests.swift testNavigationHidesStatusWhenDisabledAndRedirectsActiveStatusPage"],
+    "AC-004": ["src/zmole/Features/Status/StatusViewModel.swift", "tests/unit/StatusFeatureToggleTests.swift testClosingFeatureTerminatesWatchProcessAndBlocksStartRetryResample"],
+    "AC-005": ["src/zmole/Features/Status/StatusViewModel.swift", "tests/unit/StatusFeatureToggleTests.swift testReenablingWhenOverviewIsVisibleStartsSamplingOnce"],
+    "AC-006": ["src/zmole/Features/Overview/OverviewViewModel.swift OverviewHealthCard and OverviewStatusGrid", "tests/unit/StatusFeatureToggleTests.swift testOverviewMetricsShowDisabledWhenStatusIsDisabled"],
+    "AC-007": ["src/zmole/Features/Status/StatusViewModel.swift", "tests/unit/StatusFeatureToggleTests.swift testInFlightStartCancelledByDisablingDoesNotReviveSampling"],
+    "AC-008": ["src/zmole/Features/Overview/VolumeCapacity.swift", "tests/unit/StatusFeatureToggleTests.swift testOverviewDiskCapacityWorksIndependentlyOfStatusWhenDisabled"],
+    "AC-009": ["src/zmole/App/AppShellView.swift", "tests/unit/StatusFeatureToggleTests.swift testReenablingWhenOverviewIsVisibleStartsSamplingOnce"]
+  },
+  "pending": [],
+  "findings": []
+}

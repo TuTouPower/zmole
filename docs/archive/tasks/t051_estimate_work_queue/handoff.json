@@ -1,0 +1,47 @@
+{
+  "tid": "t051",
+  "attempt": 1,
+  "execution_id": "b48ca623a2904696b55c72341b812546",
+  "status": "done",
+  "branch": "t051_estimate_work_queue",
+  "base_sha": "fb734c72b2768a7dde1e99b5eb45a54920a30020",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (367 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 2defa958bdaf4668, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Overview/StorageEstimate.swift ProbeWorkQueue",
+      "tests/unit/EstimateWorkQueueTests.swift testAC001_and_AC003_WorkQueueAssignsToIdleChannelsAndSystemCompletesWhileUsersBlocked"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Overview/StorageEstimate.swift loadSums queue ordering",
+      "tests/unit/EstimateWorkQueueTests.swift testAC002_InitialBigDirectoriesStartBeforeSystemChildren"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Overview/StorageEstimate.swift ProbeWorkQueue",
+      "tests/unit/EstimateWorkQueueTests.swift testAC001_and_AC003_WorkQueueAssignsToIdleChannelsAndSystemCompletesWhileUsersBlocked"
+    ],
+    "AC-004": [
+      "src/zmole/Features/Overview/StorageEstimate.swift systemChildren Volumes filter",
+      "tests/unit/EstimateWorkQueueTests.swift testAC004_SystemVolumesExcludedAndFailureMakesSystemUnavailable"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Overview/StorageEstimate.swift directorySize AnalyzeSnapshotLoader",
+      "src/zmole/App/AppDependencies.swift estimatePool loaders"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Overview/OverviewViewModel.swift onProgress breakdown update",
+      "tests/unit/EstimateWorkQueueTests.swift testAC006_ApplicationsSegmentDisplaysWhileOtherSegmentsAreBlocked"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Overview/OverviewViewModel.swift estimateGeneration check",
+      "tests/unit/EstimateWorkQueueTests.swift testAC007_FillMissingOnlyDoesNotRefreshCapturedAtAndOldGenerationIgnored"
+    ],
+    "AC-008": [
+      "src/zmole/Features/Overview/StorageEstimate.swift workQueue loop",
+      "tests/unit/EstimateWorkQueueTests.swift testAC008_DeadlockFreedomWithConcurrencyOneAndCancellation"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

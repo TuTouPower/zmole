@@ -1,0 +1,47 @@
+{
+  "tid": "t054",
+  "attempt": 1,
+  "execution_id": "a7df2dc0dc7d45eaa3f98a1c9a8bbdd6",
+  "status": "done",
+  "branch": "t054_brew_cask_index",
+  "base_sha": "39fa7f479616e613be59786fbb84860f97c5dae8",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (330 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope 98fe9fc23e5830a8, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _init_brew_cask_scan_index / _ensure_caskroom_index",
+      "tests/integration/brew_cask_index_test.sh AC-001"
+    ],
+    "AC-002": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _detect_cask_from_scan_index",
+      "tests/integration/brew_cask_index_test.sh AC-002"
+    ],
+    "AC-003": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _detect_cask_from_scan_index directional probe",
+      "tests/integration/brew_cask_index_test.sh AC-003"
+    ],
+    "AC-005": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh is_homebrew_available guard",
+      "tests/integration/brew_cask_index_test.sh AC-005"
+    ],
+    "AC-006": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _detect_cask_from_scan_index installed verification",
+      "tests/integration/brew_cask_index_test.sh AC-006"
+    ],
+    "AC-007": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh probe exit code preservation",
+      "tests/integration/brew_cask_index_test.sh AC-007"
+    ],
+    "AC-008": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _cleanup_brew_cask_scan_index",
+      "tests/integration/brew_cask_index_test.sh AC-008"
+    ],
+    "AC-009": [
+      "src/zmole/Resources/mole/lib/uninstall/brew.sh _detect_cask_via_resolved_path",
+      "tests/integration/brew_cask_index_test.sh AC-009"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}
