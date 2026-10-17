@@ -33,9 +33,9 @@ struct AnalyzeView: View {
     }
 
     private var entries: [DiskEntry] { viewModel.level?.entries ?? [] }
-    private var selected: DiskEntry? { entries.first { $0.path == selectedPath } }
-    private var visibleEntries: [DiskEntry] {
-        viewModel.visibleEntries(search: search, sort: sort)
+    private var selected: DiskEntry? { selectedPath.flatMap { viewModel.entry(for: $0) } }
+    private var visibleRows: [AnalyzeRow] {
+        viewModel.visibleRows(search: search, sort: sort)
     }
 
     var body: some View {
@@ -228,8 +228,8 @@ struct AnalyzeView: View {
             .padding(.bottom, 6)
             columnHeader
             List(selection: $selectedPath) {
-                ForEach(visibleEntries) { entry in
-                    entryRow(entry, total: level.totalSize)
+                ForEach(visibleRows) { row in
+                    entryRow(row)
                 }
             }
             .listStyle(.sidebar)
@@ -259,25 +259,47 @@ struct AnalyzeView: View {
         .padding(.bottom, 4)
     }
 
-    private func entryRow(_ entry: DiskEntry, total: Int64) -> some View {
+    private func entryRow(_ row: AnalyzeRow) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
+            disclosureButton(row)
+            Image(systemName: row.entry.isDirectory ? "folder.fill" : "doc.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(entry.isDirectory ? Color.blue.opacity(0.75) : .secondary)
+                .foregroundStyle(row.entry.isDirectory ? Color.blue.opacity(0.75) : .secondary)
                 .accessibilityHidden(true)
-            Text(verbatim: entry.name).fontWeight(.medium).lineLimit(1)
-            sizeText(for: entry)
+            Text(verbatim: row.entry.name).fontWeight(.medium).lineLimit(1)
+            sizeText(for: row.entry)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .layoutPriority(1)
             Spacer(minLength: 8)
-            percentCell(entry, total: total)
+            percentCell(row.entry, total: row.parentTotal)
                 .frame(width: 108, alignment: .trailing)
         }
+        .padding(.leading, CGFloat(row.depth) * 14)
         .padding(.vertical, 5)
-        .tag(entry.path)
+        .tag(row.entry.path)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { openDirectory(entry) }
+        .onTapGesture(count: 2) { openDirectory(row.entry) }
+    }
+
+    /// Inline fold control: expands the directory's children in place without
+    /// navigating. Files get an invisible spacer so names stay aligned.
+    private func disclosureButton(_ row: AnalyzeRow) -> some View {
+        Button {
+            Task { await viewModel.toggleExpanded(row.entry) }
+        } label: {
+            Image(systemName: viewModel.isExpanded(row.entry) ? "chevron.down" : "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 12, height: 18)
+        }
+        .buttonStyle(.borderless)
+        .opacity(row.entry.isDirectory ? 1 : 0)
+        .disabled(!row.entry.isDirectory)
+        .help(LocalizedStringKey(viewModel.isExpanded(row.entry) ? "analyze.collapse" : "analyze.expand"))
+        .accessibilityLabel(
+            Text(LocalizedStringKey(viewModel.isExpanded(row.entry) ? "analyze.collapse" : "analyze.expand"))
+        )
     }
 
     private func sizeText(for entry: DiskEntry) -> Text {
@@ -294,8 +316,8 @@ struct AnalyzeView: View {
     }
 
     @ViewBuilder
-    private func percentCell(_ entry: DiskEntry, total: Int64) -> some View {
-        if let share = AnalyzeArea.share(of: entry.knownSize, total: total) {
+    private func percentCell(_ entry: DiskEntry, total: Int64?) -> some View {
+        if let total, let share = AnalyzeArea.share(of: entry.knownSize, total: total) {
             let fraction = AnalyzeArea.barFraction(share)
             HStack(spacing: 6) {
                 Capsule()

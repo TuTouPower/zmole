@@ -140,6 +140,108 @@ final class DiskExplorerTests: XCTestCase {
         scanner.releaseMeasures()
     }
 
+    func testExpandingDirectoryShowsChildrenInlineWithoutChangingLevel() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "Applications", path: "/root/Applications", isDirectory: true, value: .computing),
+            DiskEntry(name: "notes.txt", path: "/root/notes.txt", isDirectory: false, value: .size(50))
+        ]
+        scanner.listings["/root/Applications"] = [
+            DiskEntry(name: "Safari.app", path: "/root/Applications/Safari.app", isDirectory: true, value: .computing)
+        ]
+        scanner.results["/root/Applications"] = Self.result(
+            path: "/root/Applications", total: 300, files: [("Safari.app", 300)]
+        )
+        scanner.blockedMeasures.insert("/root/Applications")
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        let applications = try XCTUnwrap(viewModel.level?.entries.first { $0.name == "Applications" })
+        await viewModel.toggleExpanded(applications)
+
+        XCTAssertEqual(viewModel.level?.path, "/root", "expansion must not navigate")
+        XCTAssertTrue(viewModel.isExpanded(applications))
+        let rows = viewModel.visibleRows(search: "", sort: .size)
+        let child = try XCTUnwrap(rows.first { $0.entry.name == "Safari.app" })
+        XCTAssertEqual(child.depth, 1)
+        XCTAssertNil(child.parentTotal, "an unmeasured parent shows no share yet")
+        XCTAssertEqual(scanner.listRequests, ["/root", "/root/Applications"])
+
+        scanner.releaseMeasures()
+        try await waitUntil {
+            let refreshed = viewModel.visibleRows(search: "", sort: .size)
+            let freshChild = refreshed.first { $0.entry.name == "Safari.app" }
+            return freshChild?.entry.knownSize == 300 && freshChild?.parentTotal == 300
+        }
+    }
+
+    func testCollapsingDirectoryHidesInlineChildren() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "Applications", path: "/root/Applications", isDirectory: true, value: .size(300)),
+            DiskEntry(name: "notes.txt", path: "/root/notes.txt", isDirectory: false, value: .size(50))
+        ]
+        scanner.listings["/root/Applications"] = [
+            DiskEntry(name: "Safari.app", path: "/root/Applications/Safari.app", isDirectory: true, value: .size(300))
+        ]
+        scanner.blockedMeasures.insert("/root/Applications")
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        let applications = try XCTUnwrap(viewModel.level?.entries.first { $0.name == "Applications" })
+        await viewModel.toggleExpanded(applications)
+        XCTAssertEqual(viewModel.visibleRows(search: "", sort: .size).count, 3)
+
+        await viewModel.toggleExpanded(applications)
+
+        XCTAssertFalse(viewModel.isExpanded(applications))
+        XCTAssertEqual(
+            viewModel.visibleRows(search: "", sort: .size).map(\.entry.name),
+            ["Applications", "notes.txt"]
+        )
+        scanner.releaseMeasures()
+    }
+
+    func testTogglingAFileDoesNotExpandIt() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "notes.txt", path: "/root/notes.txt", isDirectory: false, value: .size(50))
+        ]
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        let file = try XCTUnwrap(viewModel.level?.entries.first)
+        await viewModel.toggleExpanded(file)
+
+        XCTAssertFalse(viewModel.isExpanded(file))
+        XCTAssertEqual(viewModel.visibleRows(search: "", sort: .size).map(\.entry.name), ["notes.txt"])
+        XCTAssertEqual(scanner.listRequests, ["/root"], "expanding a file must not list anything")
+    }
+
+    func testRefreshCurrentCollapsesExpandedSubtree() async throws {
+        let scanner = FakeDiskScanner()
+        scanner.listings["/root"] = [
+            DiskEntry(name: "sub", path: "/root/sub", isDirectory: true, value: .size(500))
+        ]
+        scanner.listings["/root/sub"] = [
+            DiskEntry(name: "inside.txt", path: "/root/sub/inside.txt", isDirectory: false, value: .size(500))
+        ]
+        scanner.blockedMeasures.insert("/root/sub")
+        let viewModel = AnalyzeViewModel(scanner: scanner, root: "/root")
+        await viewModel.loadOverview()
+
+        let sub = try XCTUnwrap(viewModel.level?.entries.first)
+        await viewModel.toggleExpanded(sub)
+        XCTAssertEqual(viewModel.visibleRows(search: "", sort: .size).count, 2)
+
+        await viewModel.refreshCurrent()
+
+        XCTAssertFalse(viewModel.isExpanded(sub), "re-analyzing clears the inline expansion")
+        XCTAssertEqual(viewModel.visibleRows(search: "", sort: .size).map(\.entry.name), ["sub"])
+        XCTAssertEqual(scanner.listRequests, ["/root", "/root/sub", "/root"])
+        scanner.releaseMeasures()
+    }
+
     func testBackIsIgnoredWhileListing() async throws {
         let scanner = FakeDiskScanner()
         scanner.listings["/root"] = [
@@ -411,6 +513,23 @@ final class DiskExplorerTests: XCTestCase {
         XCTAssertTrue(
             source.contains(".onTapGesture(count: 2) { openDirectory(tile.entry) }"),
             "double-clicking a map tile enters directories"
+        )
+    }
+
+    func testDiskListRowHasInlineDisclosureControl() throws {
+        let source = try Self.analyzeSource("AnalyzeView.swift")
+        let rowStart = try XCTUnwrap(source.range(of: "private func entryRow"))
+        let rowEnd = try XCTUnwrap(source.range(of: "private func sizeText"))
+        let rowSource = String(source[rowStart.lowerBound..<rowEnd.lowerBound])
+        XCTAssertTrue(rowSource.contains("disclosureButton"), "rows must render the inline fold control")
+        XCTAssertTrue(
+            rowSource.contains("chevron.down") || source.contains("chevron.down"),
+            "the fold control must show the expanded chevron"
+        )
+        XCTAssertTrue(source.contains("viewModel.toggleExpanded"), "the chevron toggles inline expansion")
+        XCTAssertFalse(
+            rowSource.contains("viewModel.openDirectory"),
+            "the chevron must not navigate away from the current level"
         )
     }
 
