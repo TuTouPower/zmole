@@ -72,9 +72,12 @@ protocol BackgroundScanProviding: AnyObject {
     /// Emits whenever results, running state or failure state changes.
     var statePublisher: AnyPublisher<Void, Never> { get }
     func result(for item: BackgroundScanItem) -> BackgroundScanResult?
+    func inProgressUninstallList() -> [UninstallAppListing]
     /// Starts (or reuses) the scan for one item. Used by refresh buttons and by
     /// a page that has no data yet.
     func request(_ item: BackgroundScanItem)
+    /// Waits for an in-flight scan of this item to complete, if any.
+    func waitForScan(_ item: BackgroundScanItem) async
     /// Cancels the item's scan and resolves after its process has terminated.
     func cancelAndWait(_ item: BackgroundScanItem) async
     /// The user started their own scan of this item: cancel the background run
@@ -114,6 +117,11 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     @Published private(set) var results: [BackgroundScanItem: BackgroundScanResult]
     @Published private(set) var runningItems: Set<BackgroundScanItem> = []
     @Published private(set) var failedItems: Set<BackgroundScanItem> = []
+    @Published private(set) var inProgressUninstallRows: [UninstallAppListing] = []
+
+    func inProgressUninstallList() -> [UninstallAppListing] {
+        inProgressUninstallRows
+    }
 
     /// Reports whether a user-visible clean preview/execution owns the shared
     /// clean-list.txt right now; a deferred clean scan starts once it clears.
@@ -164,10 +172,11 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     // MARK: - BackgroundScanProviding
 
     var statePublisher: AnyPublisher<Void, Never> {
-        Publishers.Merge3(
+        Publishers.Merge4(
             $results.map { _ in () },
             $runningItems.map { _ in () },
-            $failedItems.map { _ in () }
+            $failedItems.map { _ in () },
+            $inProgressUninstallRows.map { _ in () }
         )
         .eraseToAnyPublisher()
     }
@@ -228,6 +237,10 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         tasks[item] = Task { @MainActor [weak self] in
             await self?.run(item)
         }
+    }
+
+    func waitForScan(_ item: BackgroundScanItem) async {
+        await tasks[item]?.value
     }
 
     func cancelAndWait(_ item: BackgroundScanItem) async {
@@ -326,6 +339,58 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
             runningItems.remove(item)
             tasks[item] = nil
         }
+
+        if item == .uninstallList {
+            var rows: [UninstallAppListing] = []
+            var indexByPath: [String: Int] = [:]
+            var lastFlush = Date.distantPast
+            var flushTask: Task<Void, Never>?
+            defer {
+                flushTask?.cancel()
+                inProgressUninstallRows = []
+            }
+            do {
+                let streamRows = await uninstallStream.rows()
+                for try await row in streamRows {
+                    guard !Task.isCancelled else { return }
+                    UninstallListMerge.merge(row, into: &rows, indexByPath: &indexByPath)
+                    let now = Date()
+                    if now.timeIntervalSince(lastFlush) >= 0.1 {
+                        inProgressUninstallRows = rows
+                        lastFlush = now
+                        flushTask?.cancel()
+                    } else {
+                        flushTask?.cancel()
+                        flushTask = Task { @MainActor [weak self] in
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                            guard !Task.isCancelled else { return }
+                            self?.inProgressUninstallRows = rows
+                        }
+                    }
+                }
+                flushTask?.cancel()
+                inProgressUninstallRows = []
+                let currentVersion = coordinator.version(for: item)
+                let isStale = (startedVersion < currentVersion)
+                results[item] = BackgroundScanResult(
+                    capturedAt: nowProvider(),
+                    payload: .uninstallRows(rows),
+                    targetVersion: currentVersion,
+                    capturedVersion: startedVersion,
+                    isStale: isStale
+                )
+                failedItems.remove(item)
+                lastFailureAt.removeValue(forKey: item)
+                cache.save(results)
+                return
+            } catch {
+                guard !Task.isCancelled, !Self.isCancellation(error) else { return }
+                failedItems.insert(item)
+                lastFailureAt[item] = nowProvider()
+                return
+            }
+        }
+
         do {
             let payload = try await payload(for: item)
             guard !Task.isCancelled else { return }
