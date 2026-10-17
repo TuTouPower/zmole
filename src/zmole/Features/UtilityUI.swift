@@ -14,22 +14,19 @@ enum UtilityStyle {
     }
 }
 
-/// Shared page head from the visual demo: eyebrow + title + subtitle on the
-/// left, page actions on the right. Pages put their primary actions here;
-/// in-progress cancel buttons may stay next to the content they cancel.
+/// Shared page head from the visual demo: title + subtitle on the left, page
+/// actions on the right. Pages put their primary actions here; in-progress
+/// cancel buttons may stay next to the content they cancel.
 struct MolePageHead<Actions: View>: View {
-    let eyebrow: LocalizedStringKey
     let title: LocalizedStringKey
     var subtitle: LocalizedStringKey? = nil
     @ViewBuilder let actions: () -> Actions
 
     init(
-        eyebrow: LocalizedStringKey,
         title: LocalizedStringKey,
         subtitle: LocalizedStringKey? = nil,
         @ViewBuilder actions: @escaping () -> Actions
     ) {
-        self.eyebrow = eyebrow
         self.title = title
         self.subtitle = subtitle
         self.actions = actions
@@ -38,11 +35,6 @@ struct MolePageHead<Actions: View>: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: 20) {
             VStack(alignment: .leading, spacing: 7) {
-                Text(eyebrow)
-                    .font(.system(size: 11, weight: .semibold))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(MoleTheme.accentStrong)
                 Text(title)
                     .font(.system(size: 30, weight: .bold))
                 if let subtitle {
@@ -60,8 +52,8 @@ struct MolePageHead<Actions: View>: View {
 }
 
 extension MolePageHead where Actions == EmptyView {
-    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey, subtitle: LocalizedStringKey? = nil) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle) { EmptyView() }
+    init(title: LocalizedStringKey, subtitle: LocalizedStringKey? = nil) {
+        self.init(title: title, subtitle: subtitle) { EmptyView() }
     }
 }
 

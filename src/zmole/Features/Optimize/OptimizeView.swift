@@ -31,7 +31,6 @@ struct OptimizeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 MolePageHead(
-                    eyebrow: "optimize.eyebrow",
                     title: "optimize.title",
                     subtitle: "optimize.subtitle"
                 ) {

@@ -28,7 +28,6 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             MolePageHead(
-                eyebrow: "settings.eyebrow",
                 title: "settings.title",
                 subtitle: "settings.subtitle"
             )

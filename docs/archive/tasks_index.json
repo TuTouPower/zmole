@@ -626,6 +626,54 @@
             "conflicts_with": "",
             "note": "optimize/purge/history 说明条改蓝色 info-banner。来源：2026-10-17 用户批准 UI 级别2 修复。; dropped: 合并进 t035（UI 对齐批次）",
             "dir": "docs/archive/tasks/t039_ui_info_banner"
+        },
+        {
+            "tid": "t040",
+            "slug": "overview_estimate_and_head_polish",
+            "title": "概览存储估算修复与页头卡片清理",
+            "status": "done",
+            "branch": "t040_overview_estimate_and_head_polish",
+            "worktree": "",
+            "review_level": "single",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "c4a338897084ae66378113b0e88061f9c4f3e397",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "用户 2026-10-17 批准（来源 p013；含去页头 eyebrow 小字与概览四卡等高）",
+            "dir": "docs/archive/tasks/t040_overview_estimate_and_head_polish"
+        },
+        {
+            "tid": "t041",
+            "slug": "demo_support_extraction",
+            "title": "demo 假件与装配拆分（review A57）",
+            "status": "done",
+            "branch": "t041_demo_support_extraction",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "965d2b20c345bb1dd809fdc3d8e556cd42bf9527",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "review_20261017_054534 A57（用户 2026-10-17 批准执行）；纯搬迁零行为变化，来源 adoption_decision.md",
+            "dir": "docs/archive/tasks/t041_demo_support_extraction"
+        },
+        {
+            "tid": "t042",
+            "slug": "preview_lease_coordinator",
+            "title": "租约与预览世代样板收敛（review A85）",
+            "status": "done",
+            "branch": "t042_preview_lease_coordinator",
+            "worktree": "",
+            "review_level": "full",
+            "review_limit": "5",
+            "verify_limit": "5",
+            "diff_anchor": "166a65b5f4492efb2506f901fd66c87f2044aaed",
+            "depends_on": "",
+            "conflicts_with": "",
+            "note": "review_20261017_054534 A85（用户 2026-10-17 批准执行）；三个写路径 ViewModel 租约样板收敛，来源 adoption_decision.md",
+            "dir": "docs/archive/tasks/t042_preview_lease_coordinator"
         }
     ]
 }

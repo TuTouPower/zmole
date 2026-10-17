@@ -23,7 +23,7 @@ macOS 原生窗口 App（zmole）：把开源 CLI [mole](https://github.com/tw93
 
 `AppDependencies` 是 App 生命周期所有者，统一创建共享 `MoleBridge`、`OperationCoordinator`、四类写入 ViewModel、白名单编辑器与只读查询/状态 ViewModel。页面只接收已装配依赖，不在 View 内创建生产 Bridge。
 
-`OperationCoordinator` 为 clean、uninstall、optimize、purge、protectionRules 提供跨页面/窗口的单写入 lease；保存保护规则成功后递增 preview generation，使受影响 clean 预览失效。ViewModel 释放 lease 后才允许下一项写入。
+`OperationCoordinator` 为 clean、uninstall、optimize、purge、protectionRules 提供跨页面/窗口的单写入 lease；保存保护规则成功后递增 preview generation，使受影响 clean 预览失效。ViewModel 释放 lease 后才允许下一项写入。三个写入 ViewModel（clean、uninstall、optimize/purge）共享 `PreviewLeaseCoordinator`：由它持有 lease、跟踪当前预览所属的 generation、并经失效信号回调让页面过期预览；各页面不再各自维护租约与世代样板。
 
 ## 数据流
 
@@ -81,7 +81,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用 `analyze` 目录求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。各探测经 3 条独立估算通道并发执行（单通道内串行，平均分摊）。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
 
-估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入时先用缓存即时渲染（“其他”用实时 status 已用现算），后台仅在缓存缺失、超过 TTL（6 小时）或收到写入失效信号时，经独立只读通道重算并回写；不提供手动计算按钮。缓存超过最大年龄（7 天）或 schema 不符即作废。只有完整扫描（四个路径全部可读）才落盘并接替当前估算；扫描被取消或缺少任一路径时不写缓存、不替换已展示结果，下一次进入概览重试。
+估算结果缓存四个目录字节和于 App 容器 `~/Library/Application Support/zmole/storage_estimate.json`（含 `schemaVersion`/`capturedAt`）。概览进入即先用缓存即时渲染并启动目录扫描（“其他”用实时 status 已用现算；status 迟到只更新“其他”，不影响扫描与已有分段）。触发点为：概览出现、写入失效信号、已用空间由无到有（仅重派生展示，不重扫）。完成的扫描（含部分）即展示并落盘；缺失段保持占位并保留「估算不完整」标记，随后自动补扫一次且只探测缺失段；扫描任务由 ViewModel 持有，不随视图消失取消。缓存超过 TTL（6 小时）或收到写入失效信号时全量重算并回写；超过最大年龄（7 天）或 schema 不符即作废。扫描被取消（应用退出）时不落盘。估算通道单条命令超时 600 秒。不提供手动计算按钮。
 
 最近操作复用 `history --json`。概览不再绘制趋势条；状态页的系统负载图在采样点不足时显示等待说明，不伪造趋势。
 
@@ -91,7 +91,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ## Demo 装配边界
 
-`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态且仅在 `--demo` 下生效；`--demo-data-root` 只接受用户临时目录内的路径（越界值忽略并回退随机 scratch 目录），将 clean-list 与 whitelist 写入该目录，不触碰 `~/.config/mole/`。
+`--demo` 使用相同生产 Views/ViewModels，但注入内存 fake process/streaming，禁止解析或 spawn 捆绑 mole。`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance` 固定验收状态且仅在 `--demo` 下生效；`--demo-data-root` 只接受用户临时目录内的路径（越界值忽略并回退随机 scratch 目录），将 clean-list 与 whitelist 写入该目录，不触碰 `~/.config/mole/`。demo 假件、fixture 与 `DemoConfiguration` 集中在 `App/DemoSupport.swift`；`AppDependencies.swift` 只保留生产装配与装配辅助（`MoleProcessBox`、unavailable 通道）。
 
 ## 与上游关系
 

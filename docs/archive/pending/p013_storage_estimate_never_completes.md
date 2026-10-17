@@ -8,4 +8,4 @@
     - 环境佐证：旧缓存（schema1，00:33）users=734GB 曾算成，说明该段并非恒不可算，当前 I/O 负载与超时组合使其常态失败。
 - 测试缺口：现有 Overview 测试全部注入即时返回的假 loader（或立即 nil），从未覆盖「status 迟到导致的触发窗口错过」「视图消失取消扫描」「真实超时路径」「部分段可用时应先展示并可落盘」；`testIncompleteScanIsNeitherPersistedNorRendered` 反而固化了 B 的全有全无策略。应补：可控时钟/loader 的「usedBytes 迟到 → 仍发起并完成」用例、估算任务不随视图取消的用例、部分段展示+落盘且持续重试的用例、超时→该段占位但其余段展示的用例。
 - 线索：`.scratch/bug_storage_estimate/repro_notes.md`（含进程采样、命令耗时、缓存实况与代码定位）。
-- 处理：未开
+- 处理：t040

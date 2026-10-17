@@ -26,11 +26,9 @@ final class UninstallViewModel: ObservableObject {
 
     private var relatedLoadedIDs: Set<String> = []
     private let session = OperationSession<UninstallPreviewSnapshot>()
-    private var lease: OperationLease?
-    private var previewCoordinatorGeneration: UInt64?
+    private let leaseCoordinator: PreviewLeaseCoordinator
     private var transientErrorKey: String?
     private var iconTask: Task<Void, Never>?
-    private var coordinatorSubscription: AnyCancellable?
 
     init(
         process: any MoleProcessControlling,
@@ -48,9 +46,12 @@ final class UninstallViewModel: ObservableObject {
         self.iconProvider = iconProvider
         self.revealer = revealer
         self.prewarm = prewarm
+        leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
-        coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
-            self?.expirePreviewIfNeeded(generation: generation)
+        leaseCoordinator.onInvalidation = { [weak self] in
+            guard let self, self.session.preview != nil else { return false }
+            self.session.expirePreview(errorKey: "operation.error.stale_preview")
+            return true
         }
     }
 
@@ -73,7 +74,7 @@ final class UninstallViewModel: ObservableObject {
         let resolvedPaths = Set(listings.lazy.filter(\.isResolved).map(\.path))
         return selectedPaths.isSubset(of: resolvedPaths)
     }
-    var canConfirm: Bool { session.canConfirm && isCurrentPreview }
+    var canConfirm: Bool { session.canConfirm && leaseCoordinator.isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
     var errorMessageKey: String? { transientErrorKey ?? session.result?.errorKey }
     var errorMessage: String? {
@@ -105,7 +106,7 @@ final class UninstallViewModel: ObservableObject {
     func loadList() async {
         guard !isListing, !session.isBusy else { return }
         prewarm?.userDidRescan(.uninstallList)
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         selectedPaths.removeAll()
         clearTransientError()
@@ -224,7 +225,7 @@ final class UninstallViewModel: ObservableObject {
             OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
             id: operationID
         )
-        releaseLease()
+        leaseCoordinator.release()
     }
 
     // MARK: - Selection
@@ -240,7 +241,7 @@ final class UninstallViewModel: ObservableObject {
         } else {
             selectedPaths.insert(path)
         }
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         clearTransientError()
     }
@@ -248,7 +249,7 @@ final class UninstallViewModel: ObservableObject {
     func clearSelection() {
         guard !isListing, !session.isBusy else { return }
         selectedPaths.removeAll()
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         clearTransientError()
     }
@@ -348,7 +349,7 @@ final class UninstallViewModel: ObservableObject {
 
     func previewUninstall() async {
         guard !isListing, !session.isBusy else { return }
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         clearTransientError()
         let batch: [UninstallApp]
@@ -358,17 +359,16 @@ final class UninstallViewModel: ObservableObject {
             setTransientError(error)
             return
         }
-        guard let newLease = coordinator.acquire(.uninstall) else {
+        guard leaseCoordinator.acquire(.uninstall) else {
             showBusyNotice = true
             return
         }
-        lease = newLease
         guard let operationID = session.beginPreview() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
         showBusyNotice = false
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.captureGeneration()
 
         do {
             let result = try await process.run(
@@ -377,12 +377,12 @@ final class UninstallViewModel: ObservableObject {
                 timeout: 120
             )
             guard session.accepts(operationID), !session.isCancelling(operationID) else { return }
-            guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
+            guard leaseCoordinator.isCurrentPreview else {
                 session.fail(
                     OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
                     id: operationID
                 )
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             guard result.exitCode == 0 else {
@@ -397,19 +397,19 @@ final class UninstallViewModel: ObservableObject {
                 ),
                 id: operationID
             )
-            releaseLease(clearPreviewGeneration: false)
+            leaseCoordinator.release(clearPreviewGeneration: false)
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
                 id: operationID
             )
-            releaseLease()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 session.invalidate()
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             let summary = (error as? MoleBridgeError).flatMap { commandError -> String? in
@@ -422,7 +422,7 @@ final class UninstallViewModel: ObservableObject {
                 OperationResult(status: .failed, summary: summary, errorKey: "uninstall.error.failed"),
                 id: operationID
             )
-            releaseLease()
+            leaseCoordinator.release()
         }
     }
 
@@ -434,26 +434,24 @@ final class UninstallViewModel: ObservableObject {
     func cancelConfirmation() {
         guard session.isConfirmationPresented else { return }
         session.cancelConfirmation()
-        releaseLease()
+        leaseCoordinator.release()
     }
 
     func confirmExecution() async {
         guard session.isConfirmationPresented, canConfirm,
               let currentPreview = session.preview,
-              let previewID = operationID(for: session.state) else { return }
-        guard let newLease = coordinator.acquire(.uninstall) else {
+              let previewID = PreviewOperationID.from(session.state) else { return }
+        guard leaseCoordinator.acquire(.uninstall) else {
             showBusyNotice = true
             session.cancelConfirmation()
             return
         }
-        lease = newLease
         showBusyNotice = false
         guard let execution = session.beginExecution() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
-        coordinator.invalidatePreviews()
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.invalidateAndRecapture()
 
         do {
             // Confirm-time check stays cheap: path + bundle identity. The
@@ -473,8 +471,8 @@ final class UninstallViewModel: ObservableObject {
                 expectedCount: currentPreview.apps.count
             )
             session.finish(operationResult, id: execution.id)
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
             if operationResult.status == .succeeded {
                 pruneRemoved(paths: Set(currentPreview.apps.map(\.path)))
             } else if operationResult.status == .partial {
@@ -488,15 +486,15 @@ final class UninstallViewModel: ObservableObject {
                 OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
                 id: execution.id
             )
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 session.invalidate()
-                coordinator.invalidatePreviews()
-                releaseLease()
+                leaseCoordinator.invalidatePreviews()
+                leaseCoordinator.release()
                 return
             }
             let result: OperationResult
@@ -512,7 +510,7 @@ final class UninstallViewModel: ObservableObject {
                 result = OperationResult(status: .failed, summary: error.localizedDescription, errorKey: "uninstall.error.failed")
             }
             session.fail(result, id: execution.id)
-            releaseLease()
+            leaseCoordinator.release()
             if (error as? UninstallViewModelError) == .changedTarget {
                 // Identity changed since preview: refuse and re-scan the list
                 // while the refusal stays visible.
@@ -528,36 +526,8 @@ final class UninstallViewModel: ObservableObject {
             OperationResult(status: .cancelled, errorKey: "uninstall.cancelled"),
             id: operationID
         )
-        coordinator.invalidatePreviews()
-        releaseLease()
-    }
-
-    private func operationID(for state: OperationState<UninstallPreviewSnapshot>) -> UUID? {
-        switch state {
-        case let .ready(id, _), let .confirming(id, _), let .executing(id, _): return id
-        default: return nil
-        }
-    }
-
-    private var isCurrentPreview: Bool {
-        guard let generation = previewCoordinatorGeneration else { return false }
-        return coordinator.isCurrent(generation)
-    }
-
-    private func expirePreviewIfNeeded(generation: UInt64) {
-        guard let previewGeneration = previewCoordinatorGeneration,
-              previewGeneration != generation,
-              session.preview != nil else { return }
-        session.expirePreview(errorKey: "operation.error.stale_preview")
-        previewCoordinatorGeneration = nil
-    }
-
-    private func releaseLease(clearPreviewGeneration: Bool = true) {
-        lease?.release()
-        lease = nil
-        if clearPreviewGeneration {
-            previewCoordinatorGeneration = nil
-        }
+        leaseCoordinator.invalidatePreviews()
+        leaseCoordinator.release()
     }
 
     private func clearTransientError() {

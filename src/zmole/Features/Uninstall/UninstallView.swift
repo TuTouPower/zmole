@@ -66,7 +66,6 @@ struct UninstallView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             MolePageHead(
-                eyebrow: "uninstall.eyebrow",
                 title: "uninstall.title",
                 subtitle: "uninstall.subtitle"
             ) {

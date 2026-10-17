@@ -8,9 +8,7 @@ final class CleanViewModel: ObservableObject {
     private let coordinator: OperationCoordinator
     private let streaming: (any MoleStreaming)?
     private let session = OperationSession<CleanPreviewSnapshot>()
-    private var lease: OperationLease?
-    private var previewCoordinatorGeneration: UInt64?
-    private var coordinatorSubscription: AnyCancellable?
+    private let leaseCoordinator: PreviewLeaseCoordinator
 
     @Published private(set) var currentStage: CleanScanStage?
     @Published private(set) var lastReclaimBytes: Int64?
@@ -31,15 +29,13 @@ final class CleanViewModel: ObservableObject {
         self.coordinator = coordinator
         self.streaming = streaming
         self.prewarm = prewarm
+        leaseCoordinator = PreviewLeaseCoordinator(coordinator: coordinator)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
-        coordinatorSubscription = coordinator.$invalidationGeneration.sink { [weak self] generation in
-            guard let self,
-                  let previewGeneration = self.previewCoordinatorGeneration,
-                  previewGeneration != generation,
-                  self.session.preview != nil else { return }
+        leaseCoordinator.onInvalidation = { [weak self] in
+            guard let self, self.session.preview != nil else { return false }
             self.session.expirePreview(errorKey: "operation.error.stale_preview")
-            self.previewCoordinatorGeneration = nil
             self.lastReclaimBytes = nil
+            return true
         }
     }
 
@@ -61,7 +57,7 @@ final class CleanViewModel: ObservableObject {
     var isPreviewing: Bool { session.isPreviewing }
     var isExecuting: Bool { session.isExecuting }
     var isConfirmationPresented: Bool { session.isConfirmationPresented }
-    var canConfirm: Bool { session.canConfirm && isCurrentPreview }
+    var canConfirm: Bool { session.canConfirm && leaseCoordinator.isCurrentPreview }
     var executionSummary: String? { session.result?.summary }
     var errorMessageKey: String? { session.result?.errorKey }
     var errorMessage: String? {
@@ -83,7 +79,7 @@ final class CleanViewModel: ObservableObject {
         guard session.preview == nil, !session.isBusy else { return }
         guard let result = prewarm?.takeResult(.cleanDryRun),
               case let .cleanPreview(snapshot) = result.payload else { return }
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.captureGeneration()
         session.adoptPreview(snapshot)
         lastReclaimBytes = snapshot.reclaimBytes
         previewCapturedAt = result.capturedAt
@@ -93,55 +89,54 @@ final class CleanViewModel: ObservableObject {
         guard !session.isBusy else { return }
         await prewarm?.userDidRescanAndWaitForTermination(.cleanDryRun)
         previewCapturedAt = nil
-        releaseLease()
+        leaseCoordinator.release()
         session.invalidate()
         currentStage = nil
         showBusyNotice = false
-        guard let newLease = coordinator.acquire(.clean) else {
+        guard leaseCoordinator.acquire(.clean) else {
             showBusyNotice = true
             return
         }
-        lease = newLease
         guard let operationID = session.beginPreview() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.captureGeneration()
 
         do {
             let generation = try previewStore.begin()
             try await runDryRun(operationID: operationID)
             guard session.accepts(operationID), !session.isCancelling(operationID) else {
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
-            guard coordinator.isCurrent(previewCoordinatorGeneration ?? 0) else {
+            guard leaseCoordinator.isCurrentPreview else {
                 session.fail(
                     OperationResult(status: .failed, errorKey: "operation.error.stale_preview"),
                     id: operationID
                 )
                 lastReclaimBytes = nil
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             let store = previewStore
             let snapshot = try await Task.detached { try store.read(generation) }.value
             session.acceptPreview(snapshot, id: operationID)
             lastReclaimBytes = snapshot.reclaimBytes
-            releaseLease(clearPreviewGeneration: false)
+            leaseCoordinator.release(clearPreviewGeneration: false)
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
                 id: operationID
             )
             lastReclaimBytes = nil
-            releaseLease()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(operationID) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 session.invalidate()
-                releaseLease()
+                leaseCoordinator.release()
                 return
             }
             let summary: String?
@@ -161,7 +156,7 @@ final class CleanViewModel: ObservableObject {
                 id: operationID
             )
             lastReclaimBytes = nil
-            releaseLease()
+            leaseCoordinator.release()
         }
     }
 
@@ -206,7 +201,7 @@ final class CleanViewModel: ObservableObject {
         )
         lastReclaimBytes = nil
         previewCapturedAt = nil
-        releaseLease()
+        leaseCoordinator.release()
     }
 
     func requestConfirmation() {
@@ -219,13 +214,13 @@ final class CleanViewModel: ObservableObject {
         session.cancelConfirmation()
         lastReclaimBytes = nil
         previewCapturedAt = nil
-        releaseLease()
+        leaseCoordinator.release()
     }
 
     func confirmExecution() async {
         guard session.isConfirmationPresented, canConfirm,
               let snapshot = session.preview,
-              let previewID = operationID(for: session.state) else { return }
+              let previewID = PreviewOperationID.from(session.state) else { return }
         do {
             try previewStore.verifyUnchanged(snapshot)
         } catch {
@@ -236,21 +231,19 @@ final class CleanViewModel: ObservableObject {
                 ),
                 id: previewID
             )
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
-        guard let newLease = coordinator.acquire(.clean) else {
+        guard leaseCoordinator.acquire(.clean) else {
             showBusyNotice = true
             session.cancelConfirmation()
             return
         }
-        lease = newLease
         guard let execution = session.beginExecution() else {
-            releaseLease()
+            leaseCoordinator.release()
             return
         }
-        coordinator.invalidatePreviews()
-        previewCoordinatorGeneration = coordinator.invalidationGeneration
+        leaseCoordinator.invalidateAndRecapture()
         lastReclaimBytes = nil
         previewCapturedAt = nil
 
@@ -271,22 +264,22 @@ final class CleanViewModel: ObservableObject {
                 )
                 session.fail(operationResult, id: execution.id)
             }
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         } catch let error as MoleBridgeError where error == .cancelled {
             session.finishCancelled(
                 OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
                 id: execution.id
             )
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         } catch {
             guard session.accepts(execution.id) else { return }
             if CommandBusy.isBusy(error) {
                 showBusyNotice = true
                 session.invalidate()
-                coordinator.invalidatePreviews()
-                releaseLease()
+                leaseCoordinator.invalidatePreviews()
+                leaseCoordinator.release()
                 return
             }
             let summary = (error as? CleanPreviewStoreError)?.errorDescription
@@ -295,8 +288,8 @@ final class CleanViewModel: ObservableObject {
                 OperationResult(status: .failed, summary: summary, errorKey: nil),
                 id: execution.id
             )
-            coordinator.invalidatePreviews()
-            releaseLease()
+            leaseCoordinator.invalidatePreviews()
+            leaseCoordinator.release()
         }
     }
 
@@ -307,27 +300,7 @@ final class CleanViewModel: ObservableObject {
             OperationResult(status: .cancelled, errorKey: "clean.cancelled"),
             id: operationID
         )
-        coordinator.invalidatePreviews()
-        releaseLease()
-    }
-
-    private var isCurrentPreview: Bool {
-        guard let generation = previewCoordinatorGeneration else { return false }
-        return coordinator.isCurrent(generation)
-    }
-
-    private func operationID(for state: OperationState<CleanPreviewSnapshot>) -> UUID? {
-        switch state {
-        case let .ready(id, _), let .confirming(id, _), let .executing(id, _): return id
-        default: return nil
-        }
-    }
-
-    private func releaseLease(clearPreviewGeneration: Bool = true) {
-        lease?.release()
-        lease = nil
-        if clearPreviewGeneration {
-            previewCoordinatorGeneration = nil
-        }
+        leaseCoordinator.invalidatePreviews()
+        leaseCoordinator.release()
     }
 }
