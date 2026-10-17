@@ -48,6 +48,7 @@ final class AppDependencies: ObservableObject {
     let optimizeWhitelistViewModel: WhitelistViewModel
     let loginItemViewModel: LoginItemViewModel
     let analyzeViewModel: AnalyzeViewModel
+    let statusPolicy: StatusFeaturePolicy
     let statusViewModel: StatusViewModel
     let historyViewModel: HistoryViewModel
     let installersViewModel: InstallersViewModel
@@ -207,7 +208,9 @@ final class AppDependencies: ObservableObject {
             analyzeViewModel = AnalyzeViewModel(scanner: LiveDiskScanner(), root: "/")
         }
 
-        statusViewModel = StatusViewModel(streaming: lanes.statusStream)
+        let policy = StatusFeaturePolicy()
+        statusPolicy = policy
+        statusViewModel = StatusViewModel(streaming: lanes.statusStream, policy: policy)
 
         let historyBox = MoleProcessBox(lanes.history)
         let historyLoader = HistorySnapshotLoader { arguments in

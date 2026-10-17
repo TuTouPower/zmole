@@ -34,7 +34,8 @@ struct ZmoleApp: App {
         _dependencies = StateObject(wrappedValue: dependencies)
         _navigation = StateObject(
             wrappedValue: NavigationModel(
-                initial: dependencies.demo.isEnabled ? dependencies.demo.page : .overview
+                initial: dependencies.demo.isEnabled ? dependencies.demo.page : .overview,
+                policy: dependencies.statusPolicy
             )
         )
     }

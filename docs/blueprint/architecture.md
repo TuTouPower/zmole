@@ -74,11 +74,11 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ## 状态流
 
-`StatusWatchService` 以单个 `mole status --watch --interval 1s` 流为源，按订阅者 fan-out `StatusWatchUpdate`，维护有界趋势序列。StatusViewModel 负责 start/pause/stop/retry 与页面生命周期；离页或无订阅者时停止流。首帧慢字段缺失、磁盘 I/O 首次基线和陈旧进程数据均以显式状态展示，不把初始化零值伪装成真实速率。
+`StatusWatchService` 以单个 `mole status --watch --interval 1s` 流为源，按订阅者 fan-out `StatusWatchUpdate`，维护有界趋势序列。全局 `StatusFeaturePolicy` 控制监控功能启用状态：停用时拒绝所有 start/retry/resample 请求，立即终止底层 watch 进程并清除数据快照；侧边栏与命令面板隐藏状态页入口，当前状态页转到概览。重新开启时按当前可见页面按需单次启动。StatusViewModel 负责页面生命周期；离页或无订阅者时停止流。首帧慢字段缺失、磁盘 I/O 首次基线和陈旧进程数据均以显式状态展示，不把初始化零值伪装成真实速率。
 
 ## 概览与磁盘估算
 
-概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
+概览复用共享 `StatusViewModel` 的采样：健康分、CPU、内存、可用磁盘、进程趋势都来自同一 `status --watch` 流。状态功能停用时，采样指标显示明确「已停用」，不继续显示旧值。概览磁盘容量使用独立的轻量卷容量查询（`VolumeCapacityProviding`），不依赖 `status-go`；状态停用时磁盘容量与目录估算仍可正常刷新。概览与状态页可见时 watch 运行，导航到其它目的地时停止（由窗口壳按目的地统一 start/stop）。
 
 磁盘五段为估算，`mole status` 只给总量/已用/可用，没有分类。`StorageEstimateLoader` 用 `analyze` 目录求和：应用程序 `/Applications`、开发者 `~/Library/Developer`、用户数据 `/Users` 减去开发者；系统段按 `/System` 顶层目录子项逐个 `analyze` 并求和，跳过 `/System/Volumes`（数据卷与快照 1.4 TB 不参与扫描，也不计入系统段），任一子项读取失败该段即视为不可用；其他 = status 已用减去前四段且不小于 0。各探测经 3 条独立估算通道并发执行（单通道内串行，平均分摊）。任一输入缺失该段为空占位，不填演示常量。界面标明“估算”。
 
