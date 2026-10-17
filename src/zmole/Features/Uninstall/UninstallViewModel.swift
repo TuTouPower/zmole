@@ -394,6 +394,7 @@ final class UninstallViewModel: ObservableObject {
                 stdin: Self.confirmationInput,
                 timeout: 600
             )
+            leaseCoordinator.markDataModified()
             guard session.accepts(execution.id), !session.isCancelling(execution.id) else { return }
             let operationResult = UninstallBatchResultParser.result(
                 result,

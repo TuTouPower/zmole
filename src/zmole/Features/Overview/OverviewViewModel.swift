@@ -353,9 +353,9 @@ final class OverviewViewModel: ObservableObject {
         self.incompleteRetryDelay = incompleteRetryDelay
         self.now = now
         if let coordinator {
-            coordinatorSubscription = coordinator.$invalidationGeneration
-                .dropFirst()
-                .sink { [weak self] _ in
+            coordinatorSubscription = coordinator.settledOperations
+                .sink { [weak self] _, impact in
+                    guard !impact.overviewInputs.isEmpty else { return }
                     self?.invalidationCount += 1
                     self?.estimateInvalidated = true
                 }

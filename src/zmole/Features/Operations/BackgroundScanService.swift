@@ -21,6 +21,33 @@ enum BackgroundScanPayload: Equatable, Sendable {
 struct BackgroundScanResult: Equatable, Sendable {
     let capturedAt: Date
     let payload: BackgroundScanPayload
+    let targetVersion: UInt64
+    let capturedVersion: UInt64
+    let isStale: Bool
+
+    init(
+        capturedAt: Date,
+        payload: BackgroundScanPayload,
+        targetVersion: UInt64 = 0,
+        capturedVersion: UInt64 = 0,
+        isStale: Bool = false
+    ) {
+        self.capturedAt = capturedAt
+        self.payload = payload
+        self.targetVersion = targetVersion
+        self.capturedVersion = capturedVersion
+        self.isStale = isStale || (capturedVersion < targetVersion)
+    }
+
+    func markingStale(targetVersion: UInt64) -> BackgroundScanResult {
+        BackgroundScanResult(
+            capturedAt: capturedAt,
+            payload: payload,
+            targetVersion: max(self.targetVersion, targetVersion),
+            capturedVersion: capturedVersion,
+            isStale: true
+        )
+    }
 }
 
 /// Read-only scan lanes for the background scanner. Every item gets its own
@@ -126,10 +153,8 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         self.periodicTick = periodicTick
         nowProvider = now
         results = cache.load()
-        // Published properties fire before the mutation lands; hop one main
-        // actor turn so the idle check reads the new value.
-        coordinator.$invalidationGeneration.dropFirst().sink { [weak self] _ in
-            Task { @MainActor in await self?.invalidateAll() }
+        coordinator.settledOperations.sink { [weak self] _, impact in
+            Task { @MainActor in await self?.applyImpact(impact) }
         }
         .store(in: &subscriptions)
         refreshIfDue()
@@ -296,6 +321,7 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
 
     private func run(_ item: BackgroundScanItem) async {
         runningItems.insert(item)
+        let startedVersion = coordinator.version(for: item)
         defer {
             runningItems.remove(item)
             tasks[item] = nil
@@ -303,7 +329,15 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         do {
             let payload = try await payload(for: item)
             guard !Task.isCancelled else { return }
-            results[item] = BackgroundScanResult(capturedAt: nowProvider(), payload: payload)
+            let currentVersion = coordinator.version(for: item)
+            let isStale = (startedVersion < currentVersion)
+            results[item] = BackgroundScanResult(
+                capturedAt: nowProvider(),
+                payload: payload,
+                targetVersion: currentVersion,
+                capturedVersion: startedVersion,
+                isStale: isStale
+            )
             failedItems.remove(item)
             lastFailureAt.removeValue(forKey: item)
             cache.save(results)
@@ -316,15 +350,18 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
         }
     }
 
-    private func invalidateAll() async {
-        for item in BackgroundScanItem.allCases {
+    private func applyImpact(_ impact: DataImpact) async {
+        for item in impact.scanItems {
             await cancelAndWait(item)
+            let currentVersion = coordinator.version(for: item)
+            if let existing = results[item] {
+                results[item] = existing.markingStale(targetVersion: currentVersion)
+            }
         }
-        results.removeAll()
-        failedItems.removeAll()
-        lastFailureAt.removeAll()
         cache.save(results)
-        refreshIfDue()
+        for item in impact.scanItems {
+            request(item)
+        }
     }
 
     private func payload(for item: BackgroundScanItem) async throws -> BackgroundScanPayload {
