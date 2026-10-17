@@ -58,7 +58,7 @@ MoleBridge 对每个功能页最多一个 in-flight mole 进程。第二次提�
 
 ### 后台扫描
 
-`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出；写入租约持有期间 clean 不启动，租约释放后补跑。启动时先加载上次结果（带 `capturedAt`），缺失或超过 24 小时的项自动重扫；应用运行期间每 24 小时按需重扫，未到期不重复扫描。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`（Schema 2）；schema 不匹配或损坏时整文件忽略。写入成功后按数据影响集合精准使受影响结果失效并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
+`BackgroundScanService` 在应用运行期间并行执行五个只读扫描：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`；每项一条独立命令通道，互不阻塞，不获取写入租约。唯一互斥是 clean：用户 clean 执行会取消并等待后台 clean 进程完全退出且 clean-list.txt 读取解析任务完全退出释放所有权；写入租约持有期间 clean 不启动，租约释放后补跑。服务拥有显式 hydration 状态，由串行存储所有者 `BackgroundScanStorage`（actor，完全离开 MainActor 进行文件 I/O 与 JSON 编解码）在后台异步加载缓存；加载与新扫描结果基于版本号合并，迟到加载不能覆盖较新结果，不发布成功空缓存造成页面闪空。普通扫描结果采用 100 ms 尾沿合并（持续更新时每 500 ms 强制推进一次水位落盘），失效版本作为高优先级立即串行写入；原子写失败保留上一完整文件与待写快照并标记错误可重试。结果持久化到 `~/Library/Application Support/zmole/background_scan_cache.json`（Schema 2）；schema 不匹配或损坏时整文件忽略并按无缓存安全恢复。写入成功后按数据影响集合精准使受影响结果失效并重扫。单项失败保留上次成功结果并标记失败状态，其他项继续；无结果的失败最多每小时重试一次。页面打开时若有结果直接显示并标出扫描时间；手动刷新复用进行中的同类扫描。无 FDA 时安装包名单项不跑（会遍历 Desktop/Documents/Downloads），授权后补跑。demo 模式不启动后台扫描。
 
 ## 捆绑与进程边界
 

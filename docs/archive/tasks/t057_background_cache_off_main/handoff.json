@@ -1,0 +1,55 @@
+{
+  "tid": "t057",
+  "attempt": 1,
+  "execution_id": "d9134aa0c32949d896a8fd50d9b4b294",
+  "status": "done",
+  "branch": "t057_background_cache_off_main",
+  "base_sha": "a3da9732aba95f1c2283992406d5edbafa28ec39",
+  "tests": "xcodebuild test -scheme Zmole -destination 'platform=macOS' (350 passed); pytest .repo_template/tests -q -m contract (147 passed); clean_trash_test.sh, installer_interface_test.sh, uninstall_stream_test.sh, brew_cask_index_test.sh passed; git diff --check clean",
+  "blackbox": "xcodebuild build passed",
+  "review": "full: review_code.md & review_test.md PASS round 1, reviewed_scope d05f94d65c78abce, 0 finding",
+  "ac_evidence": {
+    "AC-001": [
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift load / submit / writePendingToDisk",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC001_ReadWriteAndJSONEncodingNotOnMainActor"
+    ],
+    "AC-002": [
+      "src/zmole/Features/Clean/CleanPreview.swift readAsync",
+      "src/zmole/Features/Operations/BackgroundScanService.swift payload(.clean)",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC002_CleanReadAndParseNotOnMainActor"
+    ],
+    "AC-003": [
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift submit trailing edge debounce",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC003_NormalResultsMergeWithin100msTrailingEdge"
+    ],
+    "AC-005": [
+      "src/zmole/Features/Operations/BackgroundScanService.swift isHydrated / hydrate",
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift load",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC005_BlockedOldLoadDoesNotOverwriteNewerResultsOrFlashEmpty"
+    ],
+    "AC-006": [
+      "src/zmole/Features/Operations/BackgroundScanService.swift applyImpact isPriority",
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift submit priority write",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC006_StaleInvalidationPriorityWriteOvercomesOldSnapshot"
+    ],
+    "AC-007": [
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift submit 500ms max delay / flush",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC007_WatermarkAdvancesWithin500msAndFlushSavesTail"
+    ],
+    "AC-008": [
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift submit isPriority / lastWriteError / pendingSnapshot retention",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC008_WriteFailureDoesNotCorruptFileAndKeepsPending"
+    ],
+    "AC-009": [
+      "src/zmole/Features/Operations/BackgroundScanCache.swift load schemaVersion=2 check",
+      "src/zmole/Features/Operations/BackgroundScanStorage.swift load",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC009_CorruptOrUnsupportedSchemaRecoversAsEmptyWithoutError"
+    ],
+    "AC-010": [
+      "src/zmole/Features/Operations/BackgroundScanService.swift cancelAndWait cleanReadTask wait",
+      "tests/unit/BackgroundCacheOffMainTests.swift testAC010_CleanTakeoverWaitsForReadingOwnershipBeforeProceeding"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

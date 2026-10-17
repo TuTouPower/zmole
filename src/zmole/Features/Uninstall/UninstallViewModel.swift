@@ -147,8 +147,11 @@ final class UninstallViewModel: ObservableObject {
     func loadListIfNeeded() async {
         guard !hasLoaded else { return }
         if let scan {
+            if !scan.isHydrated {
+                await scan.waitForHydration()
+            }
             if let result = scan.result(for: .uninstallList),
-               case let .uninstallRows(rows) = result.payload {
+                case let .uninstallRows(rows) = result.payload {
                 listings = rows
                 listCapturedAt = result.capturedAt
                 hasLoaded = true
