@@ -24,7 +24,10 @@ struct OptimizeView: View {
             }
         }
         .navigationTitle("sidebar.optimize")
-        .task { viewModel.adoptPrewarmPreviewIfAvailable() }
+        .task {
+            viewModel.adoptBackgroundResultIfAvailable()
+            viewModel.refreshIfNeeded()
+        }
     }
 
     private var content: some View {
@@ -34,7 +37,7 @@ struct OptimizeView: View {
                     title: "optimize.title",
                     subtitle: "optimize.subtitle"
                 ) {
-                    previewOrCancelButton
+                    refreshOrCancelButton
                     if let capturedAt = viewModel.previewCapturedAt {
                         Text("prewarm.scan_time \(capturedAt.formatted(date: .omitted, time: .shortened))")
                             .font(.system(size: 11))
@@ -43,7 +46,7 @@ struct OptimizeView: View {
                 }
 
                 UtilityNotice(title: "optimize.permanent_note", symbol: "exclamationmark.triangle", isError: true)
-                UtilityNotice(title: "optimize.preview_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
+                UtilityNotice(title: "optimize.scan_note", symbol: "arrow.triangle.2.circlepath", isInfo: true)
 
                 HStack {
                     Button("optimize.whitelist") { onOpenSettings() }
@@ -51,19 +54,29 @@ struct OptimizeView: View {
                     Spacer()
                 }
 
-                if viewModel.isPreviewing {
-                    UtilityBusyState(title: "optimize.previewing")
+                if viewModel.isRefreshing {
+                    UtilityBusyState(title: "optimize.refreshing")
                 } else if viewModel.isExecuting {
                     UtilityBusyState(title: "optimize.executing")
                 } else if viewModel.preview != nil {
                     planCard
+                } else if viewModel.scanFailed {
+                    VStack(spacing: 12) {
+                        UtilityNotice(title: "optimize.scan_failed", symbol: "exclamationmark.triangle", isError: true)
+                        Button("optimize.refresh") { viewModel.refreshMaintenance() }
+                            .buttonStyle(.bordered)
+                    }
+                    .frame(minHeight: 200)
                 } else {
-                    UtilityEmptyState(symbol: "wrench.and.screwdriver", title: "optimize.empty", message: "optimize.preview_hint")
+                    UtilityEmptyState(symbol: "wrench.and.screwdriver", title: "optimize.empty", message: "optimize.empty_hint")
                         .frame(minHeight: 200)
                 }
 
                 if viewModel.showBusyNotice {
                     RecoverableBusyNotice()
+                }
+                if viewModel.scanFailed, viewModel.preview != nil {
+                    UtilityNotice(title: "optimize.scan_failed", symbol: "exclamationmark.triangle", isError: true)
                 }
                 if let errorMessageKey = viewModel.errorMessageKey {
                     UtilityNotice(title: LocalizedStringKey(errorMessageKey), isError: true)
@@ -81,18 +94,18 @@ struct OptimizeView: View {
         .background(MoleTheme.background)
     }
 
-    /// Page action: preview, or cancel whatever the page is currently doing.
+    /// Page action: refresh, or cancel whatever the page is currently doing.
     @ViewBuilder
-    private var previewOrCancelButton: some View {
-        if viewModel.isPreviewing {
-            Button("optimize.cancel") { Task { await viewModel.cancelPreview() } }
+    private var refreshOrCancelButton: some View {
+        if viewModel.isRefreshing {
+            Button("optimize.cancel") { Task { await viewModel.cancelRefresh() } }
         } else if viewModel.isExecuting {
             Button("optimize.cancel") { Task { await viewModel.cancelExecution() } }
         } else {
             Button {
-                Task { await viewModel.previewOptimize() }
+                viewModel.refreshMaintenance()
             } label: {
-                Label("optimize.preview", systemImage: "eye")
+                Label("optimize.refresh", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.borderedProminent)
             .tint(MoleTheme.accent)
@@ -104,7 +117,7 @@ struct OptimizeView: View {
             HStack {
                 Text("optimize.tasks_title").font(.system(size: 13, weight: .semibold))
                 Spacer()
-                UtilityBadge(title: "optimize.preview_ready", symbol: "checkmark")
+                UtilityBadge(title: "optimize.scan_ready", symbol: "checkmark")
             }
             .padding(16)
             Divider()

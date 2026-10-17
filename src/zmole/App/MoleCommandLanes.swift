@@ -20,7 +20,6 @@ final class MoleCommandLanes {
     /// Dedicated lanes for the background scanner; nil in demo/unavailable.
     let scan: BackgroundScanLanes?
     let statusStream: any MoleStreaming
-    let cleanStream: (any MoleStreaming)?
 
     init(
         history: any MoleProcessControlling,
@@ -33,8 +32,7 @@ final class MoleCommandLanes {
         estimate: any MoleProcessControlling,
         estimatePool: [any MoleProcessControlling]? = nil,
         scan: BackgroundScanLanes?,
-        statusStream: any MoleStreaming,
-        cleanStream: (any MoleStreaming)?
+        statusStream: any MoleStreaming
     ) {
         self.history = history
         self.uninstall = uninstall
@@ -47,7 +45,6 @@ final class MoleCommandLanes {
         self.estimatePool = estimatePool ?? [estimate]
         self.scan = scan
         self.statusStream = statusStream
-        self.cleanStream = cleanStream
     }
 
     /// Every command lane, for shutdown cancellation.
@@ -62,7 +59,6 @@ final class MoleCommandLanes {
 
     var allStreams: [any MoleStreaming] {
         var streams: [any MoleStreaming] = [uninstallStream, statusStream]
-        if let cleanStream { streams.append(cleanStream) }
         if let scan { streams.append(scan.uninstallStreaming) }
         return streams
     }
@@ -125,13 +121,20 @@ final class MoleCommandLanes {
         streaming: any MoleStreaming,
         uninstallStream: any MoleStreaming
     ) -> MoleCommandLanes {
-        MoleCommandLanes(
+        let scan = BackgroundScanLanes(
+            uninstallStreaming: uninstallStream,
+            installer: InstallerInterface(process: process),
+            installerProcess: process,
+            clean: process,
+            optimize: process,
+            purge: process
+        )
+        return MoleCommandLanes(
             history: process, uninstall: process, uninstallStream: uninstallStream,
             installer: process, cleanCommand: process,
             optimize: process, purge: process, estimate: process,
-            scan: nil,
-            statusStream: streaming,
-            cleanStream: nil
+            scan: scan,
+            statusStream: streaming
         )
     }
 
@@ -142,8 +145,7 @@ final class MoleCommandLanes {
             installer: process, cleanCommand: process,
             optimize: process, purge: process, estimate: process,
             scan: nil,
-            statusStream: UnavailableMoleStreaming(),
-            cleanStream: nil
+            statusStream: UnavailableMoleStreaming()
         )
     }
 }

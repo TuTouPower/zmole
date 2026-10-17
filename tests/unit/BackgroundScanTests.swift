@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Zmole
 
@@ -13,7 +14,7 @@ final class BackgroundScanTests: XCTestCase {
         try await waitUntil { await spies.blockedProcessCallCount == 4 }
         let maxConcurrent = await probe.max
         XCTAssertGreaterThanOrEqual(maxConcurrent, 2, "independent scans must overlap")
-        XCTAssertEqual(service.runningItems.count, 4, "the four process items run together")
+        XCTAssertGreaterThanOrEqual(service.runningItems.count, 4, "all independent process items run together")
 
         await spies.releaseAll()
         try await waitUntil {
@@ -255,7 +256,7 @@ final class BackgroundScanTests: XCTestCase {
         try await waitUntil { await spies.installerList.processCallCount >= 1 }
     }
 
-    func testDemoConfigurationDisablesBackgroundScan() throws {
+    func testDemoConfigurationUsesDemoBackgroundScan() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zmole-scan-demo-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -264,8 +265,23 @@ final class BackgroundScanTests: XCTestCase {
         let dependencies = AppDependencies(configuration: DemoConfiguration(arguments: [
             "zmole", "--demo", "--demo-data-root", root.path
         ]))
+        let service = try XCTUnwrap(dependencies.scanService, "demo pages need a data source")
 
-        XCTAssertNil(dependencies.scanService)
+        for _ in 0..<500 {
+            if service.result(for: .clean) != nil, service.result(for: .optimize) != nil {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertNotNil(service.result(for: .clean), "demo clean data must reach the page")
+        XCTAssertNotNil(service.result(for: .optimize), "demo optimize data must reach the page")
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("background_scan_cache.json").path
+            ),
+            "demo scan results must stay inside the demo data root"
+        )
     }
 
     // MARK: - View model adoption
@@ -275,7 +291,7 @@ final class BackgroundScanTests: XCTestCase {
         [{"name":"Alpha","bundle_id":"com.example.alpha","uninstall_name":"Alpha","path":"/Applications/Alpha.app","size":"1 MB","version":"9.9","last_used_epoch":1700000000}]
         """)
         let counter = CountingListStream(rows: rows)
-        let scan = ScanStub(results: [
+        let scan = ScanProvidingStub(results: [
             .uninstallList: BackgroundScanResult(
                 capturedAt: Date(timeIntervalSince1970: 100),
                 payload: .uninstallRows(rows)
@@ -303,7 +319,7 @@ final class BackgroundScanTests: XCTestCase {
             InstallerCandidate(path: "/Users/demo/Downloads/A.dmg", sizeBytes: 100, source: "Downloads", identity: "1:2:3")
         ]
         let spy = InstallerInterfaceSpy(listResults: [candidates])
-        let scan = ScanStub(results: [
+        let scan = ScanProvidingStub(results: [
             .installerList: BackgroundScanResult(
                 capturedAt: Date(timeIntervalSince1970: 50),
                 payload: .installerCandidates(candidates)
@@ -331,7 +347,7 @@ final class BackgroundScanTests: XCTestCase {
         let store = CleanPreviewStore(fileURL: temporaryFileURL())
         let snapshot = try makeCleanSnapshot(at: store.fileURL)
         let process = MaintenanceProcessSpy()
-        let scan = ScanStub(results: [
+        let scan = ScanProvidingStub(results: [
             .clean: BackgroundScanResult(
                 capturedAt: Date(timeIntervalSince1970: 70),
                 payload: .cleanPreview(snapshot)
@@ -339,12 +355,11 @@ final class BackgroundScanTests: XCTestCase {
         ])
         let viewModel = CleanViewModel(
             process: process,
-            previewStore: store,
             coordinator: OperationCoordinator(),
             scan: scan
         )
 
-        viewModel.adoptPrewarmPreviewIfAvailable()
+        viewModel.adoptBackgroundResultIfAvailable()
 
         XCTAssertNotNil(viewModel.preview)
         XCTAssertEqual(viewModel.previewCapturedAt, Date(timeIntervalSince1970: 70))
@@ -358,12 +373,12 @@ final class BackgroundScanTests: XCTestCase {
             capturedAt: Date(timeIntervalSince1970: 90),
             payload: .cleanPreview(replacement)
         )
-        viewModel.adoptPrewarmPreviewIfAvailable()
+        viewModel.adoptBackgroundResultIfAvailable()
         XCTAssertEqual(viewModel.preview, snapshot, "the confirming preview stays")
     }
 
     func testOptimizeAndPurgeAdoptBackgroundResults() async throws {
-        let optimizeScan = ScanStub(results: [
+        let optimizeScan = ScanProvidingStub(results: [
             .optimize: BackgroundScanResult(
                 capturedAt: Date(timeIntervalSince1970: 80),
                 payload: .maintenance("Optimize preview output")
@@ -374,11 +389,11 @@ final class BackgroundScanTests: XCTestCase {
             coordinator: OperationCoordinator(),
             scan: optimizeScan
         )
-        optimize.adoptPrewarmPreviewIfAvailable()
+        optimize.adoptBackgroundResultIfAvailable()
         XCTAssertEqual(optimize.preview?.output, "Optimize preview output")
         XCTAssertEqual(optimize.previewCapturedAt, Date(timeIntervalSince1970: 80))
 
-        let purgeScan = ScanStub(results: [
+        let purgeScan = ScanProvidingStub(results: [
             .purge: BackgroundScanResult(
                 capturedAt: Date(timeIntervalSince1970: 81),
                 payload: .maintenance("Purge preview output")
@@ -389,7 +404,7 @@ final class BackgroundScanTests: XCTestCase {
             coordinator: OperationCoordinator(),
             scan: purgeScan
         )
-        purge.adoptPrewarmPreviewIfAvailable()
+        purge.adoptBackgroundResultIfAvailable()
         XCTAssertEqual(purge.preview?.output, "Purge preview output")
         XCTAssertEqual(purge.previewCapturedAt, Date(timeIntervalSince1970: 81))
     }
@@ -749,22 +764,6 @@ private final class MutableClock: @unchecked Sendable {
     }
 }
 
-@MainActor
-private final class ScanStub: BackgroundScanProviding {
-    var results: [BackgroundScanItem: BackgroundScanResult]
-
-    init(results: [BackgroundScanItem: BackgroundScanResult]) {
-        self.results = results
-    }
-
-    func result(for item: BackgroundScanItem) -> BackgroundScanResult? {
-        results[item]
-    }
-
-    func userDidRescan(_ item: BackgroundScanItem) {
-        results.removeValue(forKey: item)
-    }
-}
 
 private actor InstallerInterfaceSpy {
     private(set) var listCalls = 0

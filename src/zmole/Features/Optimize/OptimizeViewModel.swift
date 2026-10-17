@@ -24,6 +24,5 @@ final class OptimizeViewModel: MaintenanceViewModel {
         return rows
     }
 
-    func previewOptimize() async { await previewMaintenance() }
     func confirmExecution() async { await confirmMaintenance() }
 }

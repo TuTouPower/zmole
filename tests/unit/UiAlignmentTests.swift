@@ -218,10 +218,36 @@ final class PageHeadAdoptionTests: XCTestCase {
         }
     }
 
+    func testUserFacingCopyDropsPreviewConcept() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("src/zmole/Resources/Localizable.xcstrings")
+        let data = try Data(contentsOf: sourceURL)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        for (key, rawEntry) in strings {
+            let entry = try XCTUnwrap(rawEntry as? [String: Any])
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+            for (locale, rawLocalization) in localizations {
+                let localization = try XCTUnwrap(rawLocalization as? [String: Any])
+                let value = try XCTUnwrap(
+                    (localization["stringUnit"] as? [String: Any])?["value"] as? String
+                )
+                XCTAssertFalse(value.contains("预览"), "\(key) [\(locale)] still says 预览")
+                XCTAssertFalse(
+                    value.lowercased().contains("preview"),
+                    "\(key) [\(locale)] still says preview"
+                )
+            }
+        }
+    }
+
     func testExplanatoryBannersUseTheInfoStyle() throws {
         let expectations = [
-            "Features/Optimize/OptimizeView.swift": "optimize.preview_note",
-            "Features/Purge/PurgeView.swift": "purge.preview_note",
+            "Features/Optimize/OptimizeView.swift": "optimize.scan_note",
+            "Features/Purge/PurgeView.swift": "purge.scan_note",
             "Features/History/HistoryView.swift": "history.info_note"
         ]
         for (page, key) in expectations {

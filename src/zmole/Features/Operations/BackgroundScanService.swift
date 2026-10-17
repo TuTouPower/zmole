@@ -36,10 +36,20 @@ struct BackgroundScanLanes {
 }
 
 /// What write-capable view models need from the background scanner: the latest
-/// result and a way to yield an item to a user-visible scan.
+/// result, the live state for the page, and a way to yield an item to a
+/// user-visible refresh.
 @MainActor
 protocol BackgroundScanProviding: AnyObject {
+    var runningItems: Set<BackgroundScanItem> { get }
+    var failedItems: Set<BackgroundScanItem> { get }
+    /// Emits whenever results, running state or failure state changes.
+    var statePublisher: AnyPublisher<Void, Never> { get }
     func result(for item: BackgroundScanItem) -> BackgroundScanResult?
+    /// Starts (or reuses) the scan for one item. Used by refresh buttons and by
+    /// a page that has no data yet.
+    func request(_ item: BackgroundScanItem)
+    /// Cancels the item's scan and resolves after its process has terminated.
+    func cancelAndWait(_ item: BackgroundScanItem) async
     /// The user started their own scan of this item: cancel the background run
     /// and drop its result so the user's scan becomes authoritative.
     func userDidRescan(_ item: BackgroundScanItem)
@@ -52,6 +62,14 @@ protocol BackgroundScanProviding: AnyObject {
 extension BackgroundScanProviding {
     func userDidRescanAndWaitForTermination(_ item: BackgroundScanItem) async {
         userDidRescan(item)
+    }
+
+    /// Subscribes to scan state changes and hops onto the main actor, so pages
+    /// can republish and adopt without duplicating Combine plumbing.
+    func observeStateChanges(_ handler: @escaping @MainActor () -> Void) -> AnyCancellable {
+        statePublisher.sink { _ in
+            Task { @MainActor in handler() }
+        }
     }
 }
 
@@ -119,6 +137,15 @@ final class BackgroundScanService: ObservableObject, BackgroundScanProviding {
     }
 
     // MARK: - BackgroundScanProviding
+
+    var statePublisher: AnyPublisher<Void, Never> {
+        Publishers.Merge3(
+            $results.map { _ in () },
+            $runningItems.map { _ in () },
+            $failedItems.map { _ in () }
+        )
+        .eraseToAnyPublisher()
+    }
 
     func result(for item: BackgroundScanItem) -> BackgroundScanResult? {
         results[item]
