@@ -75,7 +75,7 @@
 
 <!-- /规范 -->
 
-- 会话临时存储后端及稳定分页 API：UNVERIFIED-SPIKE。执行期先用系统现有能力验证有界读写、排序/搜索、精确 inode 去重和取消清理，再确定后端；实验不阻止创建，不得在未核实前扩展新依赖。
+- 会话临时存储后端及稳定分页 API：已验证通过系统内置 SQLite 与 LRU 驻留预算管理。经 DiskSessionStore 与 DiskWalkMemoryBudgetTests 验证，支持有界读写、按需分页与搜索排序、精确 inode 去重及会话关闭清理，无外部第三方依赖。
 
 ### 风险与回退
 

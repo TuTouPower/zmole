@@ -5,6 +5,22 @@ import Foundation
 /// walks, scan generation, and deterministic statistical contexts.
 @MainActor
 final class DiskMeasurementSession: ObservableObject {
+    struct Config: Sendable {
+        var maxResidentEntries: Int = 4000
+        var maxStorageBytes: Int64 = 100 * 1024 * 1024
+        var batchLimit: Int = 100
+
+        init(
+            maxResidentEntries: Int = 4000,
+            maxStorageBytes: Int64 = 100 * 1024 * 1024,
+            batchLimit: Int = 100
+        ) {
+            self.maxResidentEntries = maxResidentEntries
+            self.maxStorageBytes = maxStorageBytes
+            self.batchLimit = batchLimit
+        }
+    }
+
     struct LevelRecord: Equatable, Sendable {
         let path: String
         var entries: [DiskEntry]
@@ -15,23 +31,23 @@ final class DiskMeasurementSession: ObservableObject {
         let isReadable: Bool
     }
 
-    struct LevelSummary: Equatable, Sendable {
-        let path: String
-        let totalSize: Int64
-        let selfDeduplicatedSize: Int64
-        let isReadable: Bool
-        let directFilesCount: Int
-        let directDirectoriesCount: Int
-    }
+    typealias LevelSummary = DiskLevelSummary
 
     @Published private(set) var isScanning: Bool = false
 
     let scanner: DiskScanning
     let rootPath: String
+    let config: Config
+    let store: DiskSessionStore
 
     private(set) var sessionGeneration: Int = 0
     private var records: [String: LevelRecord] = [:]
     private var childCache: [String: [DiskEntry]] = [:]
+    private var residentPaths: [String] = []
+
+    var residentEntriesCount: Int {
+        childCache.values.reduce(0) { $0 + $1.count }
+    }
 
     /// Retained facts per directory subtree across walks in this session.
     private struct SubtreeFacts: Sendable {
@@ -63,40 +79,152 @@ final class DiskMeasurementSession: ObservableObject {
     private var workerToken: Int = 0
     private var isListing: Bool = false
 
-    init(scanner: DiskScanning, root: String = "/") {
+    init(
+        scanner: DiskScanning,
+        root: String = "/",
+        config: Config = Config(),
+        store: DiskSessionStore? = nil
+    ) {
         self.scanner = scanner
         self.rootPath = root
+        self.config = config
+        self.store = store ?? (try? DiskSessionStore(maxStorageBytes: config.maxStorageBytes)) ?? (try! DiskSessionStore(maxStorageBytes: 100 * 1024 * 1024))
+    }
+
+    func close() {
+        cancel()
+        store.close()
     }
 
     // MARK: - Query APIs
 
     func levelRecord(for path: String) -> LevelRecord? {
-        records[path]
+        if let rec = records[path] { return rec }
+        if let summary = store.loadSummary(for: path) {
+            return LevelRecord(
+                path: path,
+                entries: (try? store.loadEntries(parentPath: path, limit: 100)) ?? [],
+                totalSize: summary.totalSize,
+                selfDeduplicatedSize: summary.selfDeduplicatedSize,
+                filesTotal: 0,
+                generation: sessionGeneration,
+                isReadable: summary.isReadable
+            )
+        }
+        return nil
     }
 
     func cachedEntries(for path: String) -> [DiskEntry]? {
-        childCache[path]
+        if let cached = childCache[path] {
+            touchResident(path)
+            return cached
+        }
+        if let entries = try? store.loadEntries(parentPath: path, limit: config.maxResidentEntries), !entries.isEmpty {
+            storeResident(path: path, entries: entries)
+            return entries
+        }
+        return nil
     }
 
     func levelSummary(for path: String) -> LevelSummary? {
-        guard let record = records[path] else { return nil }
-        let directFiles = record.entries.filter { !$0.isDirectory }.count
-        let directDirs = record.entries.filter { $0.isDirectory }.count
-        return LevelSummary(
-            path: path,
-            totalSize: record.totalSize,
-            selfDeduplicatedSize: record.selfDeduplicatedSize,
-            isReadable: record.isReadable,
-            directFilesCount: directFiles,
-            directDirectoriesCount: directDirs
-        )
+        if let record = records[path] {
+            let directFiles = record.entries.filter { !$0.isDirectory }.count
+            let directDirs = record.entries.filter { $0.isDirectory }.count
+            return LevelSummary(
+                path: path,
+                totalSize: record.totalSize,
+                selfDeduplicatedSize: record.selfDeduplicatedSize,
+                isReadable: record.isReadable,
+                directFilesCount: directFiles,
+                directDirectoriesCount: directDirs
+            )
+        }
+        if let summary = store.loadSummary(for: path) {
+            return LevelSummary(
+                path: path,
+                totalSize: summary.totalSize,
+                selfDeduplicatedSize: summary.selfDeduplicatedSize,
+                isReadable: summary.isReadable,
+                directFilesCount: summary.directFilesCount,
+                directDirectoriesCount: summary.directDirectoriesCount
+            )
+        }
+        return nil
     }
 
     func directChildren(for path: String) async throws -> [DiskEntry] {
-        if let cached = childCache[path] {
+        if let cached = cachedEntries(for: path) {
             return cached
         }
         return try await listDirectory(path)
+    }
+
+    func pagedEntries(
+        path: String,
+        offset: Int = 0,
+        limit: Int = 100,
+        search: String = "",
+        sort: AnalyzeSort = .name
+    ) throws -> [DiskEntry] {
+        try store.loadEntries(
+            parentPath: path,
+            offset: offset,
+            limit: limit,
+            search: search,
+            sort: sort
+        )
+    }
+
+    func streamDirectoryEntries(
+        path: String,
+        batchLimit: Int? = nil
+    ) -> AsyncThrowingStream<[DiskEntry], Error> {
+        let limit = batchLimit ?? config.batchLimit
+        let store = self.store
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let total = store.countEntries(parentPath: path)
+                    var offset = 0
+                    while offset < total {
+                        if Task.isCancelled { break }
+                        let batch = try store.loadEntries(
+                            parentPath: path,
+                            offset: offset,
+                            limit: limit,
+                            search: "",
+                            sort: .name
+                        )
+                        continuation.yield(batch)
+                        offset += batch.count
+                        if batch.isEmpty { break }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func touchResident(_ path: String) {
+        if let idx = residentPaths.firstIndex(of: path) {
+            residentPaths.remove(at: idx)
+        }
+        residentPaths.append(path)
+    }
+
+    private func storeResident(path: String, entries: [DiskEntry]) {
+        childCache[path] = entries
+        touchResident(path)
+        enforceResidentBudget()
+    }
+
+    private func enforceResidentBudget() {
+        while residentEntriesCount > config.maxResidentEntries && residentPaths.count > 1 {
+            let oldest = residentPaths.removeFirst()
+            childCache.removeValue(forKey: oldest)
+        }
     }
 
     func subtreeTotal(for path: String) -> Int64? {
@@ -175,7 +303,16 @@ final class DiskMeasurementSession: ObservableObject {
             isReadable: true
         )
         records[path] = record
-        childCache[path] = resolvedEntries
+        let summary = DiskLevelSummary(
+            path: path,
+            totalSize: initialTotal,
+            selfDeduplicatedSize: initialTotal,
+            isReadable: true,
+            directFilesCount: filesTotal > 0 ? 1 : 0,
+            directDirectoriesCount: resolvedEntries.filter { $0.isDirectory }.count
+        )
+        try? store.saveLevel(summary: summary, entries: resolvedEntries, inodes: [:])
+        storeResident(path: path, entries: resolvedEntries)
         objectWillChange.send()
 
         // Enqueue measurements for computing subdirectories
@@ -539,7 +676,16 @@ final class DiskMeasurementSession: ObservableObject {
                 generation: generation,
                 isReadable: isReadable
             )
-            childCache[dirPath] = resolvedEntries
+            let summary = DiskLevelSummary(
+                path: dirPath,
+                totalSize: isReadable ? total : 0,
+                selfDeduplicatedSize: isReadable ? selfSize : 0,
+                isReadable: isReadable,
+                directFilesCount: directFilesTotal > 0 ? 1 : 0,
+                directDirectoriesCount: childDirs.count
+            )
+            try? store.saveLevel(summary: summary, entries: resolvedEntries, inodes: subtreeFactsMap[dirPath]?.inodes ?? [:])
+            storeResident(path: dirPath, entries: resolvedEntries)
         }
     }
 
@@ -561,6 +707,8 @@ final class DiskMeasurementSession: ObservableObject {
         records = records.filter { key, _ in key != path && !key.hasPrefix(prefix) }
         childCache = childCache.filter { key, _ in key != path && !key.hasPrefix(prefix) }
         subtreeFactsMap = subtreeFactsMap.filter { key, _ in key != path && !key.hasPrefix(prefix) }
+        residentPaths.removeAll { $0 == path || $0.hasPrefix(prefix) }
+        store.clearSubtree(path: path)
 
         updateScanningState()
         objectWillChange.send()
@@ -577,6 +725,8 @@ final class DiskMeasurementSession: ObservableObject {
         }
         inFlightTasks.removeAll()
         pendingQueue.removeAll()
+        residentPaths.removeAll()
+        store.clearSubtree(path: rootPath)
 
         updateScanningState()
         objectWillChange.send()
