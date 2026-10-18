@@ -65,6 +65,7 @@ final class ZmoleTests: XCTestCase {
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
         XCTAssertFalse(dependencies.whitelistViewModel.filePath.contains("/.config/mole/"))
+        XCTAssertFalse(dependencies.overviewUsesLiveAccumulator, "demo overview must not walk the real filesystem")
 
         await dependencies.analyzeViewModel.loadOverview()
         XCTAssertEqual(dependencies.analyzeViewModel.currentPath, DemoDiskScanner.root)

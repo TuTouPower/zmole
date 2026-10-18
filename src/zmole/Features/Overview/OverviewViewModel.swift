@@ -508,6 +508,21 @@ final class OverviewViewModel: ObservableObject {
                 }
             )
             guard estimateGeneration == generation else { return }
+            let invalidatedDuringScan = invalidationCount != invalidationsAtStart
+            if !merged.hasAnyMeasuredInput && !invalidatedDuringScan {
+                // A total miss is deterministic for this pass. Keep the last
+                // usable cache and do not schedule the 60-second follow-up.
+                // Drop progressive publishes still queued from this pass.
+                estimateGeneration += 1
+                if let cacheEntry {
+                    sums = cacheEntry.sums
+                    breakdown = cacheEntry.sums.breakdown(usedBytes: lastUsedBytes)
+                } else {
+                    sums = nil
+                    breakdown = .placeholder
+                }
+                return
+            }
             sums = merged
             breakdown = merged.breakdown(usedBytes: lastUsedBytes)
             // A fill-only scan reuses resolved segments, so it must not
@@ -523,7 +538,6 @@ final class OverviewViewModel: ObservableObject {
             // A write that landed mid-scan makes this merged result — even a
             // complete one — potentially predate the write. Keep the estimate
             // stale and schedule a full rescan instead of trusting it.
-            let invalidatedDuringScan = invalidationCount != invalidationsAtStart
             if !invalidatedDuringScan {
                 estimateInvalidated = false
             }

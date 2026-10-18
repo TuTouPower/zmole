@@ -54,6 +54,9 @@ final class AppDependencies: ObservableObject {
     let historyViewModel: HistoryViewModel
     let installersViewModel: InstallersViewModel
     let overviewViewModel: OverviewViewModel
+    /// Production overview sums allocated blocks in one pass. Demo keeps the
+    /// in-memory measurement session and must not read the real filesystem.
+    let overviewUsesLiveAccumulator: Bool
     let demoDataRoot: URL?
     let demoCleanPreviewURL: URL?
     let lanes: MoleCommandLanes
@@ -228,9 +231,11 @@ final class AppDependencies: ObservableObject {
             accessMonitor: accessMonitor
         )
 
+        overviewUsesLiveAccumulator = !configuration.isEnabled
         let storageLoader = StorageEstimateLoader(
             session: analyzeViewModel.session,
-            scheduler: heavyScanScheduler
+            scheduler: heavyScanScheduler,
+            measurer: overviewUsesLiveAccumulator ? LiveDiskScanner() : nil
         )
         overviewViewModel = OverviewViewModel(
             storageLoader: storageLoader,

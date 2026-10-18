@@ -122,3 +122,12 @@
     2. 保持 POSIX `lstat` 逐项状态读取。
 - 结论：选 2。在 spike s002 的 10 轮 AB/BA 交错基准实验中，Foundation URL 预取因为堆上为每个文件创建 `NSURL` 实例及字典属性桥接，耗时较逐项 `lstat` 增加 338%（avg 0.0505s vs 0.0115s），且因 APFS 块分配大小 `st_blocks` 与 inode 无法直接预取而仍需系统调用补取。因此坚决不采用 URL 预取，生产环境维持逐项 `lstat` 读取（见 d002、s002）。
 - 替代：无
+
+## 015 概览存储估算与磁盘页索引分离（2026-10-18）
+
+- 背景：ADR 013 让概览经 `DiskMeasurementSession` 把 `/Applications`、`/Users`、`/System` 子项逐文件写入 `DiskSessionStore`。ADR 011 把主库、暂存库和回滚日志限制在 100MB。真实 `/Applications` 约 2.3 万条 entries 即超过上限，测量回滚，五段全部为未知，并在 60 秒后重试（p021）。概览只需要分段合计与 Developer 归属，不需要分页、搜索和空间图。
+- 选项：
+    1. 提高 100MB 上限，概览继续写全量索引
+    2. 生产概览改为流式合计：一遍 `lstat` 只累加分配块，硬链接只保留 `nlink > 1` 的 inode；磁盘页继续用有界 SQLite 索引。已有新鲜完整摘要时概览直接读取。Demo 仍走内存会话
+- 结论：选 2。调度继续共用 `HeavyScanScheduler`。Developer 不存在按 0；Developer 目录本身列不出时开发者段与用户段都不可用；其它不可读后代只跳过该支。整次扫描没有任何分段时不覆盖已有缓存，也不做 60 秒补扫。缓存 schema 仍为 3。
+- 替代：无

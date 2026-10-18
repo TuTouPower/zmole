@@ -69,6 +69,12 @@ struct StorageSums: Equatable, Codable, Sendable {
         applications != nil && system != nil && developer != nil && users != nil
     }
 
+    /// True when this pass learned at least one segment. An all-nil result is a
+    /// failed probe, not a partial estimate worth caching or retrying.
+    var hasAnyMeasuredInput: Bool {
+        applications != nil || system != nil || developer != nil || users != nil
+    }
+
     func breakdown(usedBytes: Int64?) -> StorageBreakdown {
         StorageBreakdown.make(
             applications: applications,
@@ -85,6 +91,7 @@ struct StorageEstimateLoader: Sendable {
     typealias SystemChildren = @Sendable () throws -> [String]
 
     private let session: DiskMeasurementSession?
+    private let measurer: (any OverviewSubtreeMeasuring)?
     private let channels: [DirectorySize]
     private let systemChildren: SystemChildren
     private let scheduler: HeavyScanScheduler?
@@ -100,9 +107,11 @@ struct StorageEstimateLoader: Sendable {
         systemChildren: @escaping SystemChildren = {
             try StorageEstimateLoader.directoryChildren(of: "/System")
         },
-        scheduler: HeavyScanScheduler? = nil
+        scheduler: HeavyScanScheduler? = nil,
+        measurer: (any OverviewSubtreeMeasuring)? = nil
     ) {
         self.session = session
+        self.measurer = measurer
         self.channels = []
         self.homeDirectory = home
         self.applicationsPath = applicationsPath
@@ -121,6 +130,7 @@ struct StorageEstimateLoader: Sendable {
         scheduler: HeavyScanScheduler? = nil
     ) {
         self.session = nil
+        self.measurer = nil
         self.channels = [directorySize]
         self.homeDirectory = NSHomeDirectory()
         self.applicationsPath = applicationsPath
@@ -137,6 +147,7 @@ struct StorageEstimateLoader: Sendable {
         scheduler: HeavyScanScheduler? = nil
     ) {
         self.session = nil
+        self.measurer = nil
         self.channels = [Self.directorySize(for: loader, home: home)]
         self.homeDirectory = home
         self.applicationsPath = applicationsPath
@@ -161,6 +172,7 @@ struct StorageEstimateLoader: Sendable {
         home: String = NSHomeDirectory()
     ) {
         self.session = nil
+        self.measurer = nil
         if !channels.isEmpty {
             self.channels = channels
         } else if !loaders.isEmpty {
@@ -273,7 +285,30 @@ struct StorageEstimateLoader: Sendable {
                             guard let path = await workQueue.dequeue() else { break }
                             try Task.checkCancellation()
 
-                            if path == usersPath {
+                            if self.measurer != nil {
+                                let developerPrefix = path == usersPath ? developerPath : nil
+                                let missingRootCountsAsZero = developerPrefix == nil && path == developerPath
+                                let outcome = try await self.measureAccumulated(
+                                    path,
+                                    developerPrefix: developerPrefix,
+                                    missingRootCountsAsZero: missingRootCountsAsZero
+                                )
+                                if path == usersPath {
+                                    if outcome.developerUnlisted {
+                                        await aggregator.record(path: usersPath, size: nil)
+                                        await aggregator.record(path: developerPath, size: nil)
+                                    } else if outcome.rootReadable {
+                                        await aggregator.recordUsersAndDeveloper(
+                                            usersTotal: outcome.totalSize,
+                                            developerSize: outcome.developerSize ?? 0
+                                        )
+                                    } else {
+                                        await aggregator.record(path: usersPath, size: nil)
+                                    }
+                                } else {
+                                    await aggregator.record(path: path, size: outcome.rootReadable ? outcome.totalSize : nil)
+                                }
+                            } else if path == usersPath {
                                 let outcome = await session.measureSubtreeOutcome(usersPath)
                                 if outcome.isReadable {
                                     let usersTotal = outcome.size ?? 0
@@ -350,6 +385,44 @@ struct StorageEstimateLoader: Sendable {
 
     func load(usedBytes: Int64?) async throws -> StorageBreakdown {
         try await loadSums().breakdown(usedBytes: usedBytes)
+    }
+
+    @MainActor
+    private func measureAccumulated(
+        _ path: String,
+        developerPrefix: String?,
+        missingRootCountsAsZero: Bool
+    ) async throws -> SubtreeAccumulation {
+        if let cached = cachedAccumulation(path, developerPrefix: developerPrefix) {
+            return cached
+        }
+        guard let measurer else {
+            return SubtreeAccumulation(totalSize: 0, developerSize: nil, rootReadable: false, developerUnlisted: false)
+        }
+        if let scheduler {
+            let permit = try await scheduler.acquire(taskID: "estimate:\(path)", priority: .background)
+            defer { Task { await permit.release() } }
+            return try await measurer.accumulateSubtree(
+                path,
+                developerPrefix: developerPrefix,
+                missingRootCountsAsZero: missingRootCountsAsZero
+            )
+        }
+        return try await measurer.accumulateSubtree(
+            path,
+            developerPrefix: developerPrefix,
+            missingRootCountsAsZero: missingRootCountsAsZero
+        )
+    }
+
+    @MainActor
+    private func cachedAccumulation(_ path: String, developerPrefix: String?) -> SubtreeAccumulation? {
+        guard let session, let total = session.completedSize(for: path) else { return nil }
+        if let developerPrefix {
+            guard let developer = session.completedSelfSize(for: developerPrefix) else { return nil }
+            return SubtreeAccumulation(totalSize: total, developerSize: developer, rootReadable: true, developerUnlisted: false)
+        }
+        return SubtreeAccumulation(totalSize: total, developerSize: nil, rootReadable: true, developerUnlisted: false)
     }
 }
 

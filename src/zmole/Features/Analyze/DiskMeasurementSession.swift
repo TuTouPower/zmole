@@ -125,6 +125,18 @@ final class DiskMeasurementSession: ObservableObject {
     func selfDeduplicatedSize(for path: String) -> Int64? { store.loadSummary(for: path)?.selfDeduplicatedSize }
     func isSubtreeReadable(for path: String) -> Bool { store.loadSummary(for: path)?.isReadable ?? false }
 
+    /// A finished, still-fresh readable total. Overview reads this instead of
+    /// starting another walk when the disk page already measured the path.
+    func completedSize(for path: String) -> Int64? {
+        guard isFresh(path), store.isComplete(path), let summary = store.loadSummary(for: path), summary.isReadable else { return nil }
+        return summary.totalSize
+    }
+
+    func completedSelfSize(for path: String) -> Int64? {
+        guard isFresh(path), store.isComplete(path), let summary = store.loadSummary(for: path), summary.isReadable else { return nil }
+        return summary.selfDeduplicatedSize
+    }
+
     func measureSubtreeOutcome(_ path: String) async -> (size: Int64?, isReadable: Bool) {
         var subscription: SessionSubscription?
         if store.loadSummary(for: path) == nil || !isFresh(path) { subscription = subscribe(path: path) }

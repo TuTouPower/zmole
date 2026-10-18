@@ -233,13 +233,17 @@ final class OverviewUnifiedMeasureTests: XCTestCase {
             for budget in budgets.shuffled() {
                 let scheduler = HeavyScanScheduler(maxConcurrency: budget)
                 let session = DiskMeasurementSession(scanner: LiveDiskScanner(), root: fixtureRoot.path, scheduler: scheduler)
+                // Production overview sums through the live accumulator. The
+                // session is only the fresh-summary cache, so the benchmark
+                // has to follow that path.
                 let loader = StorageEstimateLoader(
                     session: session,
                     home: usersDir.path,
                     applicationsPath: appsDir.path,
                     usersPath: usersDir.path,
                     systemChildren: { [] },
-                    scheduler: scheduler
+                    scheduler: scheduler,
+                    measurer: LiveDiskScanner()
                 )
 
                 let start = Date()

@@ -144,6 +144,7 @@ final class ReviewRegressionTests: XCTestCase {
         let dependencies = AppDependencies(backgroundScanEnabled: false)
         XCTAssertTrue(dependencies.analyzeViewModel.session.scanner is LiveDiskScanner)
         XCTAssertTrue(dependencies.analyzeViewModel.session.scheduler === dependencies.heavyScanScheduler)
+        XCTAssertTrue(dependencies.overviewUsesLiveAccumulator)
         dependencies.analyzeViewModel.session.close()
     }
 
