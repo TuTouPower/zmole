@@ -35,6 +35,13 @@ final class DiskSessionStore: @unchecked Sendable {
     private let budget: DiskStorageBudget
     private var db: OpaquePointer?
     private var openingError: DiskSessionStoreError?
+    private var executedSteps: Int64 = 0
+
+    var sqlWorkCount: Int64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return executedSteps
+    }
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     init(fileURL: URL? = nil, maxStorageBytes: Int64 = 100 * 1024 * 1024, budget: DiskStorageBudget? = nil) throws {
@@ -62,14 +69,19 @@ final class DiskSessionStore: @unchecked Sendable {
             let search = String(cString: rhs)
             sqlite3_result_int(context, search.isEmpty || String(cString: lhs).localizedCaseInsensitiveContains(search) ? 1 : 0)
         }, nil, nil, nil)
+        sqlite3_progress_handler(handle, 1000, { _ in Task.isCancelled ? 1 : 0 }, nil)
         self.budget.register(self.fileURL.path)
         do {
             try exec("PRAGMA journal_mode = DELETE;")
             try exec("PRAGMA cache_size = -256;")
-            try exec("CREATE TABLE levels (path TEXT PRIMARY KEY, total_size INTEGER, self_size INTEGER, readable INTEGER, files_count INTEGER, dirs_count INTEGER, complete INTEGER, base_size INTEGER, local_readable INTEGER);")
+            try exec("CREATE TABLE levels (path TEXT PRIMARY KEY, total_size INTEGER, self_size INTEGER, readable INTEGER, files_count INTEGER, dirs_count INTEGER, complete INTEGER, base_size INTEGER, local_readable INTEGER, unlinked_size INTEGER);")
+            try exec("CREATE INDEX level_postorder ON levels(length(path) DESC,path ASC);")
+            try exec("CREATE TABLE scan_queue (path TEXT PRIMARY KEY);")
             try exec("CREATE TABLE entries (parent_path TEXT, name TEXT, path TEXT, is_dir INTEGER, value_type INTEGER, size INTEGER, link_dev INTEGER, link_ino INTEGER, self_size INTEGER, parent_contrib INTEGER, PRIMARY KEY(parent_path, path));")
             try exec("CREATE INDEX entry_scope ON entries(parent_path, link_dev, link_ino);")
+            try exec("CREATE INDEX direct_directories ON entries(parent_path,path) WHERE is_dir=1;")
             try exec("CREATE TABLE browser_queue (path TEXT PRIMARY KEY, generation INTEGER);")
+            try exec("CREATE INDEX browser_generation ON browser_queue(generation,path);")
             try exec("CREATE TABLE inodes (root_path TEXT, dev INTEGER, ino INTEGER, size INTEGER, PRIMARY KEY(root_path, dev, ino));")
         } catch {
             close()
@@ -106,11 +118,18 @@ final class DiskSessionStore: @unchecked Sendable {
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
             throw DiskSessionStoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
-        defer { sqlite3_finalize(stmt) }
+        defer {
+            executedSteps += Int64(sqlite3_stmt_status(stmt, SQLITE_STMTSTATUS_VM_STEP, 0))
+            sqlite3_finalize(stmt)
+        }
         for (index, string) in strings.enumerated() {
             sqlite3_bind_text(stmt, Int32(index + 1), string, -1, Self.transient)
         }
-        return try body(stmt)
+        do { return try body(stmt) }
+        catch {
+            try Task.checkCancellation()
+            throw error
+        }
     }
 
     private func exec(_ sql: String, _ strings: [String] = []) throws {
@@ -160,7 +179,7 @@ final class DiskSessionStore: @unchecked Sendable {
         defer { lock.unlock() }
         try transaction {
             try deleteLevel(summary.path)
-            try putSummary(summary, complete: !entries.contains { $0.value == .computing }, base: entries.isEmpty ? summary.totalSize : 0)
+            try putSummary(summary, complete: !entries.contains { $0.value == .computing }, base: entries.isEmpty ? summary.totalSize : 0, unlinkedSize: max(0, summary.selfDeduplicatedSize - inodes.values.reduce(0, +)))
             try appendEntriesUnlocked(parent: summary.path, entries: entries)
             for (key, size) in inodes {
                 try exec("INSERT INTO inodes VALUES (?, \(Int64(bitPattern: key.device)), \(Int64(bitPattern: key.inode)), \(size));", [summary.path])
@@ -169,13 +188,15 @@ final class DiskSessionStore: @unchecked Sendable {
     }
 
     private func deleteLevel(_ path: String) throws {
+        try exec("DELETE FROM scan_queue WHERE path IN (SELECT path FROM entries WHERE parent_path=? AND is_dir=1);", [path])
+        try exec("DELETE FROM scan_queue WHERE path=?;", [path])
         for (table, column) in [("entries", "parent_path"), ("inodes", "root_path"), ("levels", "path")] {
             try exec("DELETE FROM \(table) WHERE \(column) = ?;", [path])
         }
     }
 
-    private func putSummary(_ s: DiskLevelSummary, complete: Bool, base: Int64 = 0, localReadable: Bool? = nil) throws {
-        try exec("INSERT OR REPLACE INTO levels VALUES (?, \(s.totalSize), \(s.selfDeduplicatedSize), \(s.isReadable ? 1 : 0), \(s.directFilesCount), \(s.directDirectoriesCount), \(complete ? 1 : 0), \(base), \((localReadable ?? s.isReadable) ? 1 : 0));", [s.path])
+    private func putSummary(_ s: DiskLevelSummary, complete: Bool, base: Int64 = 0, localReadable: Bool? = nil, unlinkedSize: Int64? = nil) throws {
+        try exec("INSERT OR REPLACE INTO levels VALUES (?, \(s.totalSize), \(s.selfDeduplicatedSize), \(s.isReadable ? 1 : 0), \(s.directFilesCount), \(s.directDirectoriesCount), \(complete ? 1 : 0), \(base), \((localReadable ?? s.isReadable) ? 1 : 0), \(unlinkedSize ?? s.selfDeduplicatedSize));", [s.path])
     }
 
     func beginLevel(_ path: String) throws {
@@ -205,16 +226,27 @@ final class DiskSessionStore: @unchecked Sendable {
             let dev = e.linkKey.map { String(Int64(bitPattern: $0.device)) } ?? "NULL"
             let ino = e.linkKey.map { String(Int64(bitPattern: $0.inode)) } ?? "NULL"
             try exec("INSERT INTO entries VALUES (?, ?, ?, \(e.isDirectory ? 1 : 0), \(kind), \(e.knownSize ?? 0), \(dev), \(ino), \(e.selfDeduplicatedSize.map(String.init) ?? "NULL"), \(e.parentContribution.map(String.init) ?? "NULL")) ON CONFLICT(parent_path,path) DO UPDATE SET name=excluded.name,is_dir=excluded.is_dir,value_type=excluded.value_type,size=excluded.size,link_dev=excluded.link_dev,link_ino=excluded.link_ino,self_size=excluded.self_size,parent_contrib=excluded.parent_contrib;", [parent, e.name, e.path])
+            if e.isDirectory && e.value == .computing {
+                try exec("INSERT OR IGNORE INTO scan_queue VALUES (?);", [e.path])
+            }
         }
     }
 
-    /// Cursor for the scanner's disk-backed work queue. No all-tree path array.
+    /// Every discovered directory is inserted once and removed by primary key.
     func nextUnlistedDirectory() throws -> String? {
         lock.lock()
         defer { lock.unlock() }
-        return try statement("SELECT path FROM entries WHERE is_dir=1 AND value_type=1 AND path NOT IN (SELECT path FROM levels) ORDER BY path LIMIT 1;") { stmt in
-            sqlite3_step(stmt) == SQLITE_ROW ? String(cString: sqlite3_column_text(stmt, 0)) : nil
+        while let path: String = try statement("SELECT path FROM scan_queue ORDER BY path LIMIT 1;", [], { stmt in
+            let result = sqlite3_step(stmt)
+            if result == SQLITE_DONE { return nil }
+            guard result == SQLITE_ROW else { throw queryError() }
+            return String(cString: sqlite3_column_text(stmt, 0))
+        }) {
+            try Task.checkCancellation()
+            try exec("DELETE FROM scan_queue WHERE path=?;", [path])
+            if loadSummary(for: path) == nil { return path }
         }
+        return nil
     }
 
     func finishLevel(_ path: String, readable: Bool, complete: Bool) throws {
@@ -228,11 +260,24 @@ final class DiskSessionStore: @unchecked Sendable {
         defer { lock.unlock() }
         var levels = result.levels
         if levels[result.path] == nil { levels[result.path] = DiskLevel(entries: [], totalSize: result.totalSize) }
+        var linkedChildren = levels.mapValues { Set($0.entries.filter(\.isDirectory).map(\.path)) }
+        for path in Array(levels.keys) {
+            var child = path
+            while child != result.path, child.hasPrefix(LiveDiskScanner.directoryPrefix(result.path)) {
+                let parent = (child as NSString).deletingLastPathComponent
+                guard parent != child else { break }
+                if levels[parent] == nil { levels[parent] = DiskLevel(entries: [], totalSize: 0) }
+                if linkedChildren[parent, default: []].insert(child).inserted {
+                    levels[parent]!.entries.append(DiskEntry(name: (child as NSString).lastPathComponent, path: child, isDirectory: true, value: .computing))
+                }
+                child = parent
+            }
+        }
         try transaction {
             for (path, level) in levels {
                 try deleteLevel(path)
                 let unreadable = level.entries.contains { !$0.isDirectory && $0.value == .unreadable }
-                let base = level.entries.isEmpty ? level.totalSize : level.entries.filter { entry in entry.isDirectory && !levels.keys.contains { $0 == entry.path || $0.hasPrefix(LiveDiskScanner.directoryPrefix(entry.path)) } }.compactMap(\.knownSize).reduce(0, +)
+                let base = level.entries.isEmpty ? level.totalSize : 0
                 try putSummary(.init(path: path, totalSize: level.totalSize, selfDeduplicatedSize: level.totalSize, isReadable: (path != result.path || result.isReadable) && !unreadable, directFilesCount: 0, directDirectoriesCount: 0), complete: true, base: base)
                 try appendEntriesUnlocked(parent: path, entries: level.entries)
             }
@@ -247,81 +292,102 @@ final class DiskSessionStore: @unchecked Sendable {
         return [path, prefix, String(prefix.dropLast()) + "0"]
     }
 
-    private func reachable(_ column: String) -> String {
-        "NOT EXISTS (SELECT 1 FROM entries boundary WHERE boundary.is_dir=1 AND boundary.value_type=3 AND \(scope("boundary.parent_path")) AND (\(column)=boundary.path OR substr(\(column),1,length(boundary.path)+1)=boundary.path||'/'))"
-    }
-
-    private func selfTotal(_ path: String) throws -> Int64 {
-        let args = bounds(path)
-        return try scalar("""
-            SELECT COALESCE(SUM(bytes),0) FROM (
-                SELECT e.size AS bytes FROM entries e WHERE \(scope("e.parent_path")) AND \(reachable("e.parent_path")) AND e.is_dir=0 AND e.value_type=0 AND e.link_dev IS NULL
-                UNION ALL SELECT MAX(e.size) FROM entries e WHERE \(scope("e.parent_path")) AND \(reachable("e.parent_path")) AND e.is_dir=0 AND e.value_type=0 AND e.link_dev IS NOT NULL GROUP BY e.link_dev,e.link_ino
-                UNION ALL SELECT l.base_size FROM levels l WHERE \(scope("l.path")) AND \(reachable("l.path"))
-            );
-            """, args + args + args + args + args + args)
-    }
-
-    private func contribution(child: String, parent: String, ownSize: Int64) throws -> Int64 {
-        let duplicates = try scalar("""
-            SELECT COALESCE(SUM(bytes),0) FROM (
-                SELECT MAX(c.size) AS bytes FROM entries c WHERE \(scope("c.parent_path")) AND c.is_dir=0 AND c.value_type=0 AND c.link_dev IS NOT NULL
-                AND EXISTS (SELECT 1 FROM entries p WHERE \(scope("p.parent_path")) AND \(reachable("p.parent_path")) AND p.is_dir=0 AND p.value_type=0 AND p.link_dev=c.link_dev AND p.link_ino=c.link_ino AND (p.parent_path=? OR p.parent_path<?))
-                GROUP BY c.link_dev,c.link_ino
-            );
-            """, bounds(child) + bounds(parent) + bounds(parent) + [parent, child])
-        return max(0, ownSize - duplicates)
-    }
-
     func recalculateAll() throws {
         lock.lock()
         defer { lock.unlock() }
-        // One row at a time, deepest first, so incomplete children propagate.
-        var lastLength = Int.max
-        var lastPath = ""
-        while let path: String = try statement("SELECT path FROM levels WHERE length(path) < \(lastLength) OR (length(path) = \(lastLength) AND path > ?) ORDER BY length(path) DESC, path ASC LIMIT 1;", [lastPath], { stmt in
-            sqlite3_step(stmt) == SQLITE_ROW ? String(cString: sqlite3_column_text(stmt, 0)) : nil
-        }) {
-            try Task.checkCancellation()
-            try recalculate(path)
-            lastLength = path.unicodeScalars.count
-            lastPath = path
+        try transaction {
+            // One indexed postorder cursor; aggregation never changes its path keys.
+            try statement("SELECT path FROM levels ORDER BY length(path) DESC,path ASC;") { stmt in
+                while true {
+                    let result = sqlite3_step(stmt)
+                    if result == SQLITE_DONE { break }
+                    guard result == SQLITE_ROW else { throw queryError() }
+                    try Task.checkCancellation()
+                    try recalculate(String(cString: sqlite3_column_text(stmt, 0)))
+                }
+            }
+        }
+    }
+
+    private struct DirectoryChild {
+        let path: String
+        let kind: Int32
+        let size: Int64
+    }
+
+    private func directDirectories(_ path: String, after: String) throws -> [DirectoryChild] {
+        try statement("SELECT path,value_type,size FROM entries WHERE parent_path=? AND is_dir=1 AND path>? ORDER BY path LIMIT 100;", [path, after]) { stmt in
+            var result: [DirectoryChild] = []
+            while true {
+                let status = sqlite3_step(stmt)
+                if status == SQLITE_DONE { break }
+                guard status == SQLITE_ROW else { throw queryError() }
+                result.append(DirectoryChild(path: String(cString: sqlite3_column_text(stmt, 0)), kind: sqlite3_column_int(stmt, 1), size: sqlite3_column_int64(stmt, 2)))
+            }
+            return result
         }
     }
 
     private func recalculate(_ path: String) throws {
-        guard loadSummary(for: path) != nil else { return }
-        let localReadable = (try scalar("SELECT local_readable FROM levels WHERE path=?;", [path])) != 0
-        var readable = localReadable
-        var complete = true
-        var files = 0
-        var dirs = 0
-        var offset = 0
-        while true {
-            let page = try loadEntries(parentPath: path, offset: offset, limit: 100)
-            if page.isEmpty { break }
-            for var e in page {
-                if e.isDirectory {
-                    dirs += 1
-                    if e.value == .otherDevice { continue }
-                    if let child = loadSummary(for: e.path) {
-                        let own = child.selfDeduplicatedSize
-                        e.selfDeduplicatedSize = child.isReadable ? own : nil
-                        e.parentContribution = try contribution(child: e.path, parent: path, ownSize: own)
-                        e.value = isComplete(e.path) ? (child.isReadable ? .size(e.parentContribution ?? 0) : .unreadable) : .computing
-                    }
-                } else {
-                    files += 1
-                }
-                if e.value == .computing { complete = false }
-                if e.value == .unreadable { readable = false }
-                try appendEntriesUnlocked(parent: path, entries: [e])
-            }
-            offset += page.count
+        let own: (Int64, Bool)? = try statement("SELECT base_size,local_readable FROM levels WHERE path=?;", [path]) { stmt in
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            return (sqlite3_column_int64(stmt, 0), sqlite3_column_int(stmt, 1) != 0)
         }
-        let total = try selfTotal(path)
-        let base = try scalar("SELECT base_size FROM levels WHERE path=?;", [path])
-        try putSummary(.init(path: path, totalSize: total, selfDeduplicatedSize: total, isReadable: readable, directFilesCount: files, directDirectoriesCount: dirs), complete: complete, base: base, localReadable: localReadable)
+        guard let (base, localReadable) = own else { return }
+        let direct = try statement("""
+            SELECT COALESCE(SUM(CASE WHEN is_dir=0 AND value_type=0 AND link_dev IS NULL THEN size ELSE 0 END),0),
+                   COUNT(CASE WHEN is_dir=0 THEN 1 END),COUNT(CASE WHEN is_dir=1 THEN 1 END),
+                   COUNT(CASE WHEN is_dir=0 AND value_type=2 THEN 1 END)
+            FROM entries WHERE parent_path=?;
+            """, [path]) { stmt in
+                guard sqlite3_step(stmt) == SQLITE_ROW else { throw queryError() }
+                return (sqlite3_column_int64(stmt, 0), sqlite3_column_int64(stmt, 1), sqlite3_column_int64(stmt, 2), sqlite3_column_int64(stmt, 3))
+            }
+        var unlinked = base + direct.0
+        var readable = localReadable && direct.3 == 0
+        var complete = true
+        try exec("DELETE FROM inodes WHERE root_path=?;", [path])
+        try exec("""
+            INSERT INTO inodes SELECT ?,link_dev,link_ino,MAX(size) FROM entries
+            WHERE parent_path=? AND is_dir=0 AND value_type=0 AND link_dev IS NOT NULL GROUP BY link_dev,link_ino;
+            """, [path, path])
+        var after = ""
+        while true {
+            try Task.checkCancellation()
+            let children = try directDirectories(path, after: after)
+            if children.isEmpty { break }
+            for child in children {
+                after = child.path
+                // Mounted subtrees keep their own facts; never merge into this scope.
+                if child.kind == 3 { continue }
+                let facts: (Int64, Int64, Bool, Bool)? = try statement("SELECT self_size,unlinked_size,readable,complete FROM levels WHERE path=?;", [child.path]) { stmt in
+                    guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+                    return (sqlite3_column_int64(stmt, 0), sqlite3_column_int64(stmt, 1), sqlite3_column_int(stmt, 2) != 0, sqlite3_column_int(stmt, 3) != 0)
+                }
+                if let (ownSize, childUnlinked, childReadable, childComplete) = facts {
+                    unlinked += childUnlinked
+                    readable = readable && childReadable
+                    complete = complete && childComplete
+                    let duplicate = try scalar("""
+                        SELECT COALESCE(SUM(c.size),0) FROM inodes c JOIN inodes p
+                        ON p.root_path=? AND p.dev=c.dev AND p.ino=c.ino WHERE c.root_path=?;
+                        """, [path, child.path])
+                    let contribution = max(0, ownSize - duplicate)
+                    let kind = childComplete ? (childReadable ? 0 : 2) : 1
+                    try exec("UPDATE entries SET value_type=\(kind),size=\(contribution),self_size=\(childReadable ? String(ownSize) : "NULL"),parent_contrib=\(childReadable ? String(contribution) : "NULL") WHERE parent_path=? AND path=?;", [path, child.path])
+                    try exec("""
+                        INSERT OR IGNORE INTO inodes SELECT ?,dev,ino,size FROM inodes WHERE root_path=?;
+                        """, [path, child.path])
+                } else {
+                    if child.kind == 0 { unlinked += child.size }
+                    if child.kind == 1 { complete = false }
+                    if child.kind == 2 { readable = false }
+                }
+            }
+        }
+        let linked = try scalar("SELECT COALESCE(SUM(size),0) FROM inodes WHERE root_path=?;", [path])
+        let total = unlinked + linked
+        try exec("UPDATE levels SET total_size=\(total),self_size=\(total),readable=\(readable ? 1 : 0),files_count=\(direct.1),dirs_count=\(direct.2),complete=\(complete ? 1 : 0),unlinked_size=\(unlinked) WHERE path=?;", [path])
     }
 
     func enqueueBrowserChildren(of path: String, generation: Int) throws {
@@ -345,7 +411,7 @@ final class DiskSessionStore: @unchecked Sendable {
     func hasBrowserRequests(generation: Int) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return ((try? scalar("SELECT COUNT(*) FROM browser_queue WHERE generation=\(generation);")) ?? 0) > 0
+        return ((try? scalar("SELECT EXISTS(SELECT 1 FROM browser_queue WHERE generation=\(generation));")) ?? 0) > 0
     }
 
     func clearBrowserRequests() {
@@ -414,7 +480,7 @@ final class DiskSessionStore: @unchecked Sendable {
     }
 
     private func clearSubtreeUnlocked(_ path: String) throws {
-        for (table, column) in [("entries", "parent_path"), ("inodes", "root_path"), ("levels", "path"), ("browser_queue", "path")] {
+        for (table, column) in [("entries", "parent_path"), ("inodes", "root_path"), ("levels", "path"), ("browser_queue", "path"), ("scan_queue", "path")] {
             try exec("DELETE FROM \(table) WHERE \(scope(column));", bounds(path))
         }
     }
