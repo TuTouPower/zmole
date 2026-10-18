@@ -19,6 +19,7 @@ struct AppShellView: View {
         }
         .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
         .background(MoleTheme.background)
+        .withoutSystemFocusRing()
         .preferredColorScheme(preferredColorScheme)
         .environment(\.locale, resolvedLocale)
         .animation(.easeInOut(duration: 0.18), value: navigation.destination)
@@ -150,6 +151,17 @@ struct AppShellView: View {
             dependencies.statusViewModel.start()
         default:
             Task { await dependencies.statusViewModel.stop() }
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func withoutSystemFocusRing() -> some View {
+        if #available(macOS 14.0, *) {
+            self.focusEffectDisabled()
+        } else {
+            self
         }
     }
 }

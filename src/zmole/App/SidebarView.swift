@@ -35,9 +35,9 @@ struct SidebarView: View {
             Rectangle().fill(MoleTheme.line).frame(width: 1)
         }
         .sheet(isPresented: $showingAbout) {
-            AboutView()
-                .frame(width: 420, height: 420)
+            AboutView(isSheet: true)
         }
+        .withoutSystemFocusRing()
     }
 
     private var brand: some View {
@@ -126,6 +126,8 @@ struct SidebarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
+            .withoutSystemFocusRing()
         }
         .padding(.top, 14)
     }
