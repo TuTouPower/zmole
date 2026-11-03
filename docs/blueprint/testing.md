@@ -59,15 +59,15 @@ xcodebuild test -scheme Zmole -destination 'platform=macOS' \
 
 视觉验收截图证据存放于 `docs/guides/visual_acceptance/`（按 `<语言>_<外观>_<尺寸>_<页面>.png` 命名，附 README 说明构建版本、覆盖范围与已知边界）。
 
-## Release zip
+## Release app
 
-发布脚本：
+发布/打包脚本：
 
 ```bash
-./scripts/build_release_zip.sh
+./scripts/package_app.sh
 ```
 
-脚本只构建 Release、校验 `Zmole Local Signing` 签名并输出 `artifacts/releases/Zmole-<version>.zip`。发布验收还需解压后检查主程序与 `mole/bin/analyze-go`、`status-go` 的 Universal 架构，并对解压 App 运行 status、history、analyze 只读流程。
+脚本构建 Release、产物直接输出至 `artifacts/mac-arm64/Zmole.app`（按架构），就地校验 `Zmole Local Signing` 签名并自动维护 `/Applications/Zmole.app` 软链接。发布验收需检查主程序与 `mole/bin/analyze-go`、`status-go` 的 Universal 架构，并对 App 运行 status、history、analyze 只读流程。支持传入 `--run` 直接启动。
 
 ## Schema / codegen 验证
 
