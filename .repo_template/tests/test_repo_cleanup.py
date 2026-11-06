@@ -8,6 +8,7 @@ main 子进程，覆盖默认类别扫描、docs/ 保护、node/scratch/artifact
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -171,6 +172,28 @@ def test_default_categories_do_not_enter_unnamed_dirs(tmp_path):
     assert "node_modules" in paths
 
 
+def test_default_categories_skip_nested_unnamed_dirs(tmp_path):
+    """嵌套 node_modules/.git/artifacts/data/.scratch 也不得被默认类别遍历（Issue #71）。"""
+    repo = tmp_path / "repo"
+    for rel in (
+        "src/node_modules/pkg/x.pyc",
+        "src/node_modules/pkg/debug.log",
+        "src/artifacts/run.log",
+        "src/data/.DS_Store",
+        "src/.scratch/note.log",
+        "src/nested/.git/hooks/pre-commit.log",
+    ):
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+
+    hits, _ = rc.collect(repo, rc.DEFAULT_CATEGORIES, [])
+    assert {h["path"] for h in hits} == set()
+
+    hits, _ = rc.collect(repo, ["node"], [])
+    assert "src/node_modules" in {h["path"] for h in hits}
+
+
 def test_cli_scan_is_read_only(tree):
     before = {str(p) for p in tree.rglob("*")}
     r = subprocess.run(
@@ -203,3 +226,66 @@ def test_cli_unknown_category_rejected(tree):
     )
     assert r.returncode != 0
     assert "未知类别" in r.stderr
+
+
+def test_repo_cleanup_git_timeout(monkeypatch):
+    """验证 repo_root 获取仓库顶层超时时抛出 CleanupError 并包含时限信息（Issue #66）。"""
+    import repo_cleanup as rc
+
+    def mock_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["git"], timeout=30)
+
+    monkeypatch.setattr(rc, "subprocess", SimpleNamespace(**{**vars(subprocess), "run": mock_run}))
+    with pytest.raises(rc.CleanupError, match="超时（30s）"):
+        rc.repo_root()
+
+
+def test_cleanup_does_not_follow_directory_symlink_outside_repo(tmp_path):
+    """验证中间目录软链绝不跟随进入仓库外，且 apply 仅删除软链本身不损毁外部文件（Issue #55）。"""
+    import repo_cleanup as rc
+
+    # 1. 仓库外的独立哨兵目录
+    sentinel = tmp_path / "sentinel"
+    sentinel.mkdir()
+    sentinel_file = sentinel / "sentinel_data.txt"
+    sentinel_file.write_text("critical outside data\n", encoding="utf-8")
+
+    # 2. 仓库内的点名 bulk 目录包含指向哨兵的软链
+    repo = tmp_path / "repo"
+    scratch = repo / ".scratch"
+    scratch.mkdir(parents=True)
+    link = scratch / "external_link"
+    link.symlink_to(sentinel)
+
+    # 3. collect 扫描
+    hits, skipped = rc.collect(repo, ["scratch"], [])
+    hit_paths = {h["path"] for h in hits}
+    # 候选只能是 external_link 本身，绝不能进入外部扫描出 sentinel_data.txt
+    assert ".scratch/external_link" in hit_paths
+    assert not any("sentinel_data" in p for p in hit_paths)
+
+    # 4. apply 删除
+    deleted = rc.apply_delete(repo, hits)
+    assert ".scratch/external_link" in deleted
+    assert not link.exists()
+    assert not link.is_symlink()
+
+    # 外部目标必须完好保留
+    assert sentinel.is_dir()
+    assert sentinel_file.is_file()
+    assert sentinel_file.read_text(encoding="utf-8") == "critical outside data\n"
+
+
+def test_cli_apply_expected_count_blocks_on_change(tree):
+    """验证 apply 传入 --expected-count 时若候选数量不符则拒绝执行（Issue #18）。"""
+    # tree 当前存在 src/app/__pycache__
+    r = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "repo_cleanup.py"), "apply", "--expected-count", "999"],
+        cwd=tree, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode != 0
+    assert "清理候选数量发生变化" in r.stderr
+    assert (tree / "src/app/__pycache__").is_dir()
+
+
+

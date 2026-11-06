@@ -1,5 +1,7 @@
 """Canonical scheduling implementation for the task toolchain."""
 
+from __future__ import annotations
+
 import repo_task.context as ctx
 
 from .documents import parse_tid_list, tid_sort_key
@@ -9,36 +11,42 @@ from .store import discover_effective_tasks, scan_tasks
 
 def _dependency_cycle(dependencies: dict[str, list[str]]) -> list[str] | None:
     state: dict[str, int] = {}
-    stack: list[str] = []
 
-    def visit(tid: str) -> list[str] | None:
-        state[tid] = 1
-        stack.append(tid)
-        for dependency in dependencies.get(tid, []):
-            if dependency not in dependencies:
-                continue
-            if state.get(dependency, 0) == 0:
-                cycle = visit(dependency)
-                if cycle:
-                    return cycle
-            elif state.get(dependency) == 1:
-                start = stack.index(dependency)
-                return stack[start:] + [dependency]
-        stack.pop()
-        state[tid] = 2
-        return None
-
-    for tid in sorted(dependencies, key=tid_sort_key):
-        if state.get(tid, 0) == 0:
-            cycle = visit(tid)
-            if cycle:
-                return cycle
+    for start_tid in sorted(dependencies, key=tid_sort_key):
+        if state.get(start_tid, 0) != 0:
+            continue
+        stack = [start_tid]
+        state[start_tid] = 1
+        it_stack = [iter(dependencies.get(start_tid, []))]
+        while stack:
+            parent = stack[-1]
+            children_it = it_stack[-1]
+            try:
+                dep = next(children_it)
+                if dep not in dependencies:
+                    continue
+                dep_state = state.get(dep, 0)
+                if dep_state == 1:
+                    idx = stack.index(dep)
+                    return stack[idx:] + [dep]
+                elif dep_state == 0:
+                    state[dep] = 1
+                    stack.append(dep)
+                    it_stack.append(iter(dependencies.get(dep, [])))
+            except StopIteration:
+                stack.pop()
+                it_stack.pop()
+                state[parent] = 2
     return None
 
-def compute_schedule() -> dict:
-    """可跑集与分组计算：cmd_view 渲染与 reconcile 行动计划共用的只读调度图。"""
+def compute_schedule(tasks: dict | None = None) -> dict:
+    """可跑集与分组计算：cmd_view 渲染与 reconcile 行动计划共用的只读调度图。
+
+    传入 tasks 时复用调用方已完成的 effective discovery，避免重复扫描（Issue #77）。
+    """
     require_primary_worktree()
-    tasks = discover_effective_tasks()
+    if tasks is None:
+        tasks = discover_effective_tasks()
 
     dependencies: dict[str, list[str]] = {}
     conflicts: dict[str, set[str]] = {tid: set() for tid in tasks}

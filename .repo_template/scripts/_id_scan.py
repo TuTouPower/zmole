@@ -21,11 +21,15 @@ pending.py / findings.py 共用。条目以「一条目一文件」形式存放�
 释放锁时新条目已落盘，后续扫描必然可见，不存在两个进程取到同号的窗口。
 """
 
+from __future__ import annotations
+
+import os
 import re
+import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from repo_task.locks import TASK_ID_LOCK_NAME, git_common_lock
 
@@ -60,7 +64,7 @@ def _run_git(repo_root: Path, args: list[str]) -> str:
 def id_lock(repo_root: Path):
     """在 git 公共目录上取排他锁，覆盖「扫描取号 → 建文件」全过程。
 
-    委托 repo_task.locks.git_common_lock：锁文件先写 1 字节再锁，兼容 Windows
+    委托 repo_task.locks.git_common_lock：锁文件初始化与同线程重入由公共 helper 处理，兼容 Windows
     msvcrt（空文件锁 1 字节超 EOF 抛 OSError，RT-011）。git 失败包装为 IdScanError。
     """
     try:
@@ -221,8 +225,32 @@ def allocate(
         if path.exists():
             raise IdScanError(f"{path} 已存在；请先处理后重试")
         target_dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(body.replace("{id}", entry_id), encoding="utf-8", newline="\n")
+        tmp_path = target_dir / f".tmp_{entry_id}_{slug}.md"
+        try:
+            tmp_path.write_bytes(body.replace("{id}", entry_id).encode("utf-8"))
+            os.replace(tmp_path, path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
     return path
+
+
+def _safe_file_name(name: str) -> str:
+    """files 键必须是目标目录内的相对路径；拒绝绝对路径、..、反斜杠与盘符。"""
+    if not name or "\x00" in name:
+        raise IdScanError(f"文件名非法：{name!r}")
+    path = PurePosixPath(name)
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or "\\" in name
+        or ":" in name
+        or not path.parts
+    ):
+        raise IdScanError(
+            f"文件名非法（不得为绝对路径或越出目标目录）：{name!r}"
+        )
+    return path.as_posix()
 
 
 def allocate_dir(
@@ -240,15 +268,25 @@ def allocate_dir(
     """
     if not SLUG_RE.match(slug):
         raise IdScanError(f"slug 须匹配 {SLUG_RE.pattern}（收到 {slug!r}）")
+    safe_files = {_safe_file_name(name): content for name, content in files.items()}
     with id_lock(repo_root):
         number = scan_max_id(repo_root, prefix, dirs, kind="dir") + 1
         entry_id = f"{prefix}{number:03d}"
         path = target_dir / f"{entry_id}_{slug}"
         if path.exists():
             raise IdScanError(f"{path} 已存在；请先处理后重试")
-        path.mkdir(parents=True)
-        for name, content in files.items():
-            (path / name).write_text(
-                content.replace("{id}", entry_id), encoding="utf-8", newline="\n"
-            )
+        target_dir.mkdir(parents=True, exist_ok=True)
+        tmp_dir = target_dir / f".tmp_{entry_id}_{slug}"
+        try:
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir)
+            tmp_dir.mkdir(parents=True)
+            for name, content in safe_files.items():
+                dest_file = tmp_dir / name
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                dest_file.write_bytes(content.replace("{id}", entry_id).encode("utf-8"))
+            os.replace(tmp_dir, path)
+        except BaseException:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise
     return path

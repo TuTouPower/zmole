@@ -1,58 +1,73 @@
----
-tid: "t012"
-slug: "icon_and_release_zip"
-title: "独立图标与 Gatekeeper 说明"
-status: "done"
-branch: "t012_icon_and_release_zip"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "c11ed2b18ef3db579c95970ea38eaa73cd55401c"
-depends_on: "t001"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+公开发布需要独立图标（非 Mole 商标）。zip 与解压后验收改由 t013 在功能齐后做。本 task 只交图标与 Gatekeeper 说明，可与功能页并行。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 应用图标（macOS icns），视觉不模仿 Mole 地鼠官方标
+- README 含：右键打开、系统设置「仍要打开」、`xattr -cr` 三条路径
 
-- 生成抽象 Z/工具形非地鼠图标源图 `assets/app_icon_source.png`，转换为 `src/zmole/Resources/AppIcon.icns`；显式 Info.plist 注入图标与完整 application bundle 元数据。
-- README 已包含右键打开、系统设置「仍要打开」与 `xattr -cr` 三条未公证处理路径；Release bundle 核验 AppIcon、Info.plist、PkgInfo、Universal 与签名。
+### 非范围
 
-## Review 处置
+- Developer ID、公证、dmg、Sparkle、打 Release zip（t013）
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1–3
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t012_gen_f001|important|已修|三个交付文件加入 intent-to-add 并进入最终 commit/review diff|assets/app_icon_source.png；src/zmole/Info.plist；src/zmole/Resources/AppIcon.icns|
-|t012_gen_f002|important|已修|补齐 bundle identifier、executable、version、package type 等基础 metadata，PkgInfo 为 APPL????|src/zmole/Info.plist；project.yml|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-Round 3 single review `verdict: PASS`，AC 2/2，reviewed_scope `f184f55dd399a8b8`，无遗留 finding。
+<!-- /规范 -->
 
-无 finding 时写“Round N 零 finding”。
+- [ ] AC-001：构建出的 `.app` 含 AppIcon，Dock/Finder 不显示空白占位（相对无图标工程）
+- [ ] AC-002：README 同时出现「仍要打开」与 `xattr -cr`
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：XCTest 63/63；Debug、Release 构建；Release universal x86_64/arm64、AppIcon.icns、Info.plist、PkgInfo、codesign strict；模板 pytest 480 passed；`md_format.py --check`、JSON 与 `git diff --check` 通过。
-- 黑盒：AC-001 按 `[deploy]` 约束以构建产物 `Contents/Resources/AppIcon.icns`、Info.plist、PkgInfo 和签名核验；未做 Finder/Dock 人工渲染检查。AC-002 读取 README。
-- review：single Round 3 PASS，reviewed_scope `f184f55dd399a8b8`。
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 完成独立 Z/工具形图标与 Gatekeeper 说明；不涉及公证、dmg 或 Release zip。
+- AC-001：`[deploy]` 看 Finder/Info.plist 图标文件存在
+- AC-002：读 README
+
+## 上下文区
+
+- 来源：ADR-003、ADR-005；p005 parked；审阅 P2 把打包验收从本 task 拆出
+
+### 有意不测
+
+- 各 macOS 版本 Gatekeeper 文案是否一字不差：不测
+
+### 测试策略
+
+- 图标资源存在性；README grep
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：图标太像 Mole 构成商标问题
+- 回退：抽象字母 Z / 工具形，不用地鼠官方造型
+
+### 依赖与约束
+
+- 依赖 t001
+
+### Finalization 时更新的 blueprint
+
+- 无

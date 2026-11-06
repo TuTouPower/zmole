@@ -1,83 +1,84 @@
----
-tid: "t042"
-slug: "preview_lease_coordinator"
-title: "租约与预览世代样板收敛（review A85）"
-status: "done"
-branch: "t042_preview_lease_coordinator"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "166a65b5f4492efb2506f901fd66c87f2044aaed"
-depends_on: ""
-conflicts_with: ""
-note: "review_20261017_054534 A85（用户 2026-10-17 批准执行）；三个写路径 ViewModel 租约样板收敛，来源 adoption_decision.md"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+`CleanViewModel`（Features/Clean）、`UninstallViewModel`（Features/Uninstall）、`MaintenanceViewModel`（Features/Operations）各自维护一份逐字重复的「写租约 + 预览世代」样板：`isCurrentPreview`、`releaseLease(clearPreviewGeneration:)`、`operationID(for:)`、以及 `coordinator.$invalidationGeneration` 的过期订阅（`expirePreview` + generation 清零）。同类缺陷（busy 分支缺会话终止，A43）此前三处同缺，说明重复已是缺陷复发源。review（`docs/reviews/review_20261017_054534` 的 A85，v5_architecture）建议收敛为共享 `PreviewLeaseCoordinator`/基类。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 抽出共享组件（建议 `Features/Operations/PreviewLeaseCoordinator`，形态可为组合对象或基类）统一承载：
+    - 写租约的获取/释放与 `previewCoordinatorGeneration` 的接管/清除；
+    - `isCurrentPreview` 判定与「协调器失效信号 → 过期预览」订阅处理；
+    - 操作 ID 提取（`ready/confirming/executing` 三态）。
+- `CleanViewModel`、`UninstallViewModel`、`MaintenanceViewModel` 迁移到共享实现，删除三份私有重复。
+- 行为零变化：预览生命周期（预览成功 → 确认 → 执行）、确认前同代校验、租约互斥、忙碌可恢复提示、失效信号使预览过期、busy 分支的会话终止（A43 语义）逐项保持现状。
 
-- 新共享组件 `Features/Operations/PreviewLeaseCoordinator.swift`：持有写租约、跟踪预览 generation、经失效信号回调让页面过期预览；`isCurrentPreview`/`acquire`/`captureGeneration`/`invalidateAndRecapture`/`invalidatePreviews`/`release(clearPreviewGeneration:)`；同文件提供 `PreviewOperationID.from(_:)`（ready/confirming/executing 三态取 id）。
-- 三个写 ViewModel（Clean/Uninstall/Maintenance）迁移到组件：删除各自的 `lease`/`previewCoordinatorGeneration`/`coordinatorSubscription`/`releaseLease`/`isCurrentPreview`/`operationID(for:)` 私有样板；各页面保留自己的过期语义（clean 额外清 `lastReclaimBytes`），经 `leaseCoordinator.onInvalidation` 回调表达。
-- 行为零变化：调用序列与分支逐点对应迁移（acquire/beginPreview/captureGeneration、confirm 的 invalidateAndRecapture、执行结束的 invalidatePreviews+release）；全量测试与集成脚本对照无回归。
-- 新增测试：`CommandConcurrencyTests.testWriteViewModelsShareThePreviewLeaseCoordinator`（三文件结构负断言 + 组件存在）、`UninstallDetailTests.testAnotherWriteInvalidatesAnUninstallPreview`（共享失效路径真实验证）。
-- 验证：`xcodegen generate` + `xcodebuild build` 0 error；全量 `xcodebuild test` 283 例 0 失败；三条集成脚本通过；demo 冒烟（clean 页渲染）正常。
-- 文档：`architecture.md`「App 装配与共享协调」补充共享组件职责。
-- 无用户批准的新轮次上限（2 轮 review 在 review_limit 内）。
+### 非范围
 
-## Review 处置
+- 不修改 `OperationCoordinator` 与 `OperationSession` 的对外语义与状态机。
+- 不改任何 UI、文案与 i18n key。
+- 不合并三个 ViewModel 的其他共性（如 confirm 流程），仅收敛租约/世代样板。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-10-17T14:52:00+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t042_test_f001|minor|已修|结构测试补充 `private var isCurrentPreview` 与 `private func operationID(for` 负断言|tests/unit/CommandConcurrencyTests.swift|
-|t042_test_f002|minor|已修|新增 uninstall 预览被共享失效信号过期的真实用例|tests/unit/UninstallDetailTests.swift testAnotherWriteInvalidatesAnUninstallPreview|
-|t042_test_f003|minor|已修|新组件文件已 `git add -N` 进入派审 diff|src/zmole/Features/Operations/PreviewLeaseCoordinator.swift|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-10-17T15:05:00+08:00)
+<!-- /规范 -->
 
-Round 2 复核记录（非新 finding）：code 轴零新 finding（R2 delta 仅测试与 task.md，生产代码自 R1 未变）；test 轴 f001/f002/f003 全部消除、零新 finding；两轴 verdict PASS，`check_review_status.py` 复跑 `overall=PASS`（review_scope=ok）。
+- [ ] AC-001：三个 ViewModel 不再各自定义租约/世代私有成员与重复的 `isCurrentPreview`/`releaseLease`/`operationID(for:)` 实现；逻辑由共享组件提供（源码结构断言）。
+- [ ] AC-002：`CommandConcurrencyTests`、`RecoverableBusyTests`、`CleanPageTests`、`CleanPreviewStoreTests`、`UninstallTests`、`UninstallDetailTests`、`BatchUninstallTests`、`OptimizeTests`、`PurgeTests`、`OptimizePurgePageTests` 全部通过（行为无回归）。
+- [ ] AC-003：协调器失效信号（写入成功/外部 invalidate）仍使三个页面的已就绪预览按原语义过期并需重新预览（既有用例覆盖）。
+- [ ] AC-004：全量 `xcodebuild test` 与三个集成脚本通过。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足（AC-001–AC-004；AC-004 见下方集成脚本环境说明）
-- 测试：`xcodegen generate` + `xcodebuild build` 0 error；全量 `xcodebuild test` 283 例 0 失败（含新增结构断言与 uninstall 失效用例）；`git diff --check` 干净
-- 黑盒：demo 启动 clean 页渲染正常（租约/预览路径的单测覆盖：CleanPageTests/UninstallDetailTests/OptimizeTests/PurgeTests/CommandConcurrencyTests/RecoverableBusyTests 全绿）；受 AX 限制未做按钮级点击
-- review：`review_code.md` 与 `review_test.md` 均 Round 2 PASS（code 0 finding；test 3 minor 全修）；`check_review_status.py` overall=PASS，reviewed_scope d9603947f8282d74
-- AC 证据：见 `handoff.json`
-- **环境故障披露（非本 task 缺陷）**：三条集成脚本本轮复跑受阻——本机系统 `/usr/bin/trash` 对任意文件挂起（进程树复现：`uninstall.sh --list-stream` 挂在 `/usr/bin/trash mole.probe.*`；`clean_trash_test.sh` 挂在移入 Trash 的断言链）。证据链：本 task diff 不触及 `scripts/`、`tests/integration/`、`Resources/mole`（`git diff --name-only` 核）；同一脚本在上一提交 166a65b（t041 结项）时 8/8、15/15、7/7 全绿；两位独立 reviewer 交叉确认同现象且与 diff 零交集。`killall Finder`/`launchctl kickstart`/多次重试均未恢复，建议用户注销或重启后复验。此故障同时意味着本机 zmole 的移废纸篓类操作会卡住，需系统级处理。
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 三个写 ViewModel 的租约/预览世代样板收敛到 `PreviewLeaseCoordinator`（+`PreviewOperationID`）；行为零变化（调用序列逐点对应迁移，全量测试与集成脚本既有证据对照无回归）。
-- 遗留：无 pending；环境故障（系统 trash 挂起）建议用户在系统层处理。
+- AC-001：源码结构断言可自动（grep 私有重复定义消失、共享类型存在）。
+- AC-002–AC-004：全部可自动测试。
 
-无 finding 时写“Round N 零 finding”。
+## 上下文区
 
-## 收尾报告
+- 来源：review_20261017_054534 A85（核实日期 2026-10-17；决策见 `docs/reviews/review_20261017_054534/adoption_decision.md`）
 
-### 验收与验证
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：待执行时填写
-- 黑盒：待执行时填写
-- review：待执行时填写
-- AC 证据：见 `handoff.json`
+- A43 的三处 busy 分支终止语义：沿用既有 busy 用例（可达性低），不新增注入专线残 runner 的用例。
 
-### 结果摘要
+### 测试策略
 
-- 待执行时填写；遗留只写引用，不复制正文
+- 先以现有测试全绿作为迁移基线；迁移后全量回归（既有用例不改断言，行为零变化是硬约束）。
+- 新增一条源码结构测试：三文件不含重复样板（如 `private func releaseLease(clearPreviewGeneration`）。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：迁移改动触及三个核心写路径 VM，回归面较大；共享组件接口设计不足会引入微妙行为差异。
+- 回退：单 commit 完成迁移，任何回归以 revert 该 commit 恢复；不建议半迁移状态（易出现双轨逻辑）。
+
+### 依赖与约束
+
+- 前置：无（基于当前 main `dd76bb0`）。
+- 约束：行为零变化；不得顺带修改 Session/Coordinator 语义；与 t040（概览估算）改动面不重叠（若并行实施，注意 `AppDependencies` 装配段的行级冲突）。
+- 建议：实施前先跑一次全量 `xcodebuild test` 记录基线（当前全部通过）。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：`App 装配与共享协调` 一节补充共享预览租约组件职责。

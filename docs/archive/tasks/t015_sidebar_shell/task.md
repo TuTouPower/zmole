@@ -1,75 +1,92 @@
----
-tid: "t015"
-slug: "sidebar_shell"
-title: "侧边栏壳与十页导航"
-status: "done"
-branch: "t015_sidebar_shell"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "00814db3ebf3d6b288625cbbd167120f0b9205ce"
-depends_on: ""
-conflicts_with: ""
-note: "取代 t014。grilling 2026-10-16 批准的信息架构与视觉壳。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+现有主窗口是顶部五个模式。已批准的界面基线改为侧边栏十页，并换上对应的视觉壳。业务删除语义留在后续 task。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html`。该文件是 `/Users/karson/Downloads/mole-desktop-demo-cn-final.html` 的仓库副本，校验和必须与来源文件一致。壳层对照其中的 `.app-shell`、`.sidebar`、`.titlebar`、`.command-palette`，以及 `data-page` 为 overview、clean、uninstall、disk、optimize、status、purge、installers、history、settings 的导航。不要用 `docs/design/demo_reference.html`。不要用现有 `docs/design/ui_contract.md` 的顶部五模式。示例数字不是数据。行为与该 HTML 冲突时以本 spec 为准，不另做一套导航。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 侧边栏两个分组，目的地为概览、清理、卸载、磁盘、优化、状态、项目清理、安装包、历史、设置。
+- 启动进入概览。系统菜单中的设置打开侧边栏设置页，不另开一套内容不同的设置窗口。
+- ⌘K 与标题栏搜索只按这十个页面的名称跳转，不能从面板执行清理、卸载、优化、项目清理或安装包移除。
+- 窗口默认约 1200×780，最小 1100×700。使用系统标题栏，内容区不绘制交通灯。
+- 颜色、圆角、间距、字号按 `docs/design/mole_desktop_demo_cn_final.html` 的 CSS 变量落到浅色与深色，包括文件后部的暗色变量。图标用 SF Symbols。侧边栏品牌为 zmole 与「Mac 系统维护」，标记用现有应用图标，不用上游 mole logo。
+- 页面可有很短的淡入。清理、卸载、优化、磁盘、状态、项目清理、历史在本 task 继续呈现现有功能。概览、安装包、设置至少可进入，且没有删除或执行动作。
+- 三语都有这十个目的地的名称。
 
-- 新增 `AppDestination`（十目的地，双分组）、`NavigationModel`（导航状态、命令面板过滤、设置落点）、`AppShellView`（侧边栏 + NavigationStack 内容 + 命令面板 overlay + ⌘K 工具栏按钮）、`SidebarView`、`CommandPaletteView`、`MoleTheme`（按视觉权威 CSS 变量）。
-- 删除 `ContentView.swift` 及顶部五模式 wrapper；`ZmoleApp` 改为 `WindowGroup` + `CommandGroup(replacing: .appSettings)`（设置命令选中侧边栏设置页）+ 默认 1200×780 / 最小 1100×700。移除原 `Settings` scene。
-- `DemoConfiguration.page` 类型由 `AppMode` 改为 `AppDestination`，并保留 `analyze→disk`、`software→uninstall` 演示别名。
-- `SettingsView` 增加 clean 白名单入口；`AppDependencies` 不变更进程边界。
-- 概览、安装包为占位页（无删除/执行动作），由 t016/t023 接入。
-- 黑盒门禁：testing.md 的 GUI demo smoke 需要可显示窗口的图形会话。本次执行环境（agent 会话）下 `open` 启动的 App 在 GUI domain 内无可见窗口，基线与本 task 表现一致（TextEdit 同样无窗口），确认为环境限制而非回归。已尝试 `open`/`launchctl asuser` 均无法取得窗口，无法产出截图验收；改以自动化门禁（109 单测含 demo 注入、contract 测试、Debug 构建）+ 基线一致性作为替代证据。GUI 截图验收待有图形会话时补做。
+### 非范围
 
-## Review 处置
+- 不改清理、卸载、优化、项目清理的删除语义。
+- 不做安装包扫描或移除。
+- 不做菜单栏常驻，关闭主窗口后不留后台图标。
+- 不显示假的 12.4 GB 角标或假的采集圆点；角标与采集圆点分别由 t018、t016 接入。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-10-16T17:23:51+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t015_gen_f001|minor|已修|面板缺方向键实现，已加 selectedIndex + onMoveCommand + 高亮|CommandPaletteView.swift|
-|t015_gen_f002|minor|已修|面板/设置命令测试偏自证，改为集合等值断言并声明接线手工覆盖|NavigationTests.swift|
-|t015_gen_f003|minor|已修|过滤只读进程 locale，改为跨 en/zh-Hans/zh-Hant 解析|NavigationModel.swift|
-|t015_gen_f004|minor|已修|同步 testing.md 与 demo_launch.md 到十目的地 IA 与新尺寸|testing.md / demo_launch.md|
-|t015_gen_f005|minor|已修|sidebar/line 改为自适应基色 + opacity|MoleTheme.swift|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-10-16T17:30:00+08:00)
+<!-- /规范 -->
 
-Round 1 的 f001–f005 于本轮复核确认已消除；本轮新 finding 一条。
+- [ ] AC-001：侧边栏可切换上述十个目的地，当前项有可见选中态，启动时选中概览。
+- [ ] AC-002：命令面板按名称过滤并打开对应页面；面板内不存在会调用清理、卸载、优化、项目清理或安装包执行的动作。
+- [ ] AC-003：系统菜单的设置命令选中侧边栏设置页。
+- [ ] AC-004：窗口最小尺寸不小于 1100×700，内容区没有自绘红黄绿交通灯。
+- [ ] AC-005：侧边栏产品名显示 zmole，不显示 Mole 作为产品名。
+- [ ] AC-006：zh-Hans、zh-Hant、en 下十个目的地都有对应文案，切换语言后侧边栏标签跟着变化。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t015_gen_f006|minor|已修|跨语言过滤修复缺回归测试，已补|NavigationTests.swift|
+### 可测试性声明
 
-### Round 3 (2026-10-16T17:32:00+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-Round 3 零 finding（生产代码自 Round 2 未变，f006 已消除）。
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-## 收尾报告
+<!-- /规范 -->
 
-### 验收与验证
+- AC-001、AC-002、AC-003、AC-005、AC-006：用可注入的导航状态与本地化字符串自动测试。
+- AC-004：窗口最小尺寸用界面常量自动断言；交通灯缺失用视图树自动断言。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足（AC-004 的视图树断言以 `ShellChrome.drawsCustomTrafficLights` 常量替代，项目无 ViewInspector）
-- 测试：`xcodegen generate` + `xcodebuild test -scheme Zmole -destination 'platform=macOS'`：109 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：testing.md `blackbox_verify` 的 GUI demo smoke 受执行环境限制无法取得窗口截图（无图形会话，基线与本 task 一致）；Status 只读 watch 部分由 `StatusStreamTests` 自动化覆盖并通过。见实施笔记。
-- review：`review_general.md` three rounds，最终 verdict PASS，无未处置 finding（全部 minor 已修）
-- AC 证据：见 `handoff.json`
+## 上下文区
 
-### 结果摘要
+- 来源：`docs/design/refactor_grilling.md` Q2、Q3、Q5、Q6、Q43–Q47、Q56。用户 2026-10-16 批准。t014 已 drop。
 
-- 侧边栏十页壳 + ⌘K 命令面板 + 系统菜单设置落点完成；旧顶部五模式导航移除；概览/安装包为无副作用占位页，待 t016/t023。遗留：GUI 截图验收待图形会话补做。
+### 有意不测
+
+- 与 HTML demo 的像素级重合：不做图像差分。
+- 真机窗口拖拽手感：不进自动测试。
+
+### 测试策略
+
+- 导航模型测试覆盖十页、命令面板过滤与「设置」菜单落点。
+- 断言面板动作集合不含破坏性操作标识。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：换导航时把现有清理或卸载入口弄丢。
+- 回退：本 task 只改壳；现有功能视图仍挂在对应目的地上。
+
+### 依赖与约束
+
+- 无前置 task。
+- 后续页面 task 依赖本 task 的目的地标识。
+- 执行时只打开 `docs/design/mole_desktop_demo_cn_final.html`。其 SHA-1 为 `c63069df99bf58b3d9f946b17f7e8f78c30293eb`，与来源文件一致。页面 task 不得改用别的 HTML。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：主导航改为侧边栏十页。
+- `docs/design/ui_contract.md`：顶部五模式改为本壳的布局与尺寸。

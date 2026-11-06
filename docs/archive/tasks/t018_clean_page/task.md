@@ -1,70 +1,88 @@
----
-tid: "t018"
-slug: "clean_page"
-title: "清理页整次预览后执行"
-status: "done"
-branch: "t018_clean_page"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "ef1efac64fa4d2338b4ff5e421b26f4512d91fb0"
-depends_on: "t015,t017"
-conflicts_with: ""
-note: "清理页不按勾选子集执行，显示扫描阶段名。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+清理页的布局对齐权威 demo 的列表与保护说明。mole 不能按勾选子集执行。扫描只有阶段名，没有百分比。删除语义以 t017 为准：移入废纸篓。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderClean`。不要用 `docs/design/demo_reference.html`。不照抄该函数里的勾选执行和 72% 进度。分类列表、统计条、右侧保护说明和底部操作条的位置照该函数。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 清理页展示本次 dry-run 的分类、路径和体积，并提供再次扫描。
+- 不提供「只删除勾中项」。主按钮在本次预览成功并确认后执行一次完整 clean。
+- 不想删除的路径经「保护」写入 clean 白名单，然后当前预览失效并需要重扫。安全默认路径只展示，不能从编辑结果里去掉。
+- 扫描中显示不确定活动状态和当前阶段名。已知阶段名按界面语言显示，未知阶段显示原文。不显示百分比。
+- 右侧说明保守策略，并显示当前 clean 白名单条数，可进入白名单管理。不把演示路径当成扫描结果。
+- 文案写明文件移入废纸篓，以及执行时会重新扫描。确认框绑定这次预览。失败、部分完成、结果未知留在页面内。
+- 最近一次成功预览的可回收量显示在侧边栏清理项；没有成功预览时不显示角标。
 
-- 新增 `CleanPreviewModel.swift`（解析 dry-run 的 `=== 分类 ===` 与 `path # 体积` 行、体积解析、reclaim 合计）与 `CleanScanStage.swift`（阶段目录 + ANSI 剥离；阶段名来自捆绑 `bin/clean.sh` 的 `start_section`）。
-- `CleanViewModel` 增加可选 `MoleStreaming`：有流时用 `clean --dry-run` 流式输出显示当前阶段（timeout 300s），否则回落一次性 `run()`（测试/demo）。新增 `currentStage` 与 `lastReclaimBytes`：预览成功设置、失败/取消/确认取消/执行时清空。
-- 重写 `CleanView` 为整次预览布局：统计条、分类列表（按体积 + 每行「保护」按钮，无勾选子集执行）、右侧保护说明与白名单条数、底部确认执行；扫描中显示阶段名不显示百分比。保护路径经 `WhitelistViewModel.addPattern + save` 写入白名单并经 coordinator 使预览失效。
-- `SidebarView` 清理项在有 `lastReclaimBytes` 时显示角标；`AppShellView` 传入 whitelist 与打开设置的回调。
-- `AppDependencies`：clean dry-run 流使用第三条独立 `MoleBridge`（`cleanStreaming`），与 status watch 流、一次性命令流隔离；demo 回落一次性路径。
-- 文案：`clean.execution_note` / `clean.confirm_summary` / `clean.subtitle` 三语写明移入废纸篓。
-- `docs/blueprint/domain.md` 与 `docs/design/ui_contract.md` 更新清理页不可子集执行。
-- 黑盒：GUI 受环境限制（同前）；已用自动化门禁替代。
+### 非范围
 
-## Review 处置
+- 不在本 task 改捆绑删除实现。
+- 不按类别裁剪 argv。
+- 不把清空废纸篓算进可回收量。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-review_level=full：代码轴 `review_code.md`、测试轴 `review_test.md`。
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t018_code_f001|important|已修|clean 预览流与 status watch 共用 bridge，拆为第三条独立 bridge|AppDependencies.swift|
-|t018_code_f002|important|已修|流式分支缺测试，补 streaming 注入用例|CleanPageTests.swift|
-|t018_code_f003|minor|撤回|无用本地化键在 diff_anchor 前即存在，非本 task 引入|Localizable.xcstrings|
-|t018_code_f004|minor|已修|阶段名单派生自单一映射并给流式加 timeout|CleanScanStage.swift / CleanViewModel.swift|
-|t018_code_f005|minor|撤回|AC-002/AC-006 已有既有专用测试覆盖（ZmoleTests 确认取消与失败摘要），本 task 未重复|ZmoleTests.swift|
-|t018_test_f001|important|已修|生产 streaming 预览零覆盖，补注入用例|CleanPageTests.swift|
-|t018_test_f002|minor|已修|currentStage 未断言，streaming 用例补断言|CleanPageTests.swift|
-|t018_test_f003|minor|已修|角标数值自指，改硬编码期望|CleanPageTests.swift|
-|t018_test_f004|minor|已修|补无子集控件源码扫描测试|CleanPageTests.swift|
-|t018_test_f005|minor|已修|补三语阶段键存在性校验|CleanPageTests.swift|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-## 收尾报告
+<!-- /规范 -->
 
-### 验收与验证
+- [ ] AC-001：预览 argv 含 `clean` 与 `--dry-run`；确认前不出现无 `--dry-run` 的 clean。
+- [ ] AC-002：确认使用本次预览；取消确认后不执行，且该预览不可再次确认。
+- [ ] AC-003：页面没有按勾选子集执行的控件。保护一条路径会写入 clean 白名单并使当前预览失效。
+- [ ] AC-004：扫描输出出现 `Browsers` 时，界面显示该阶段的译名而不是百分比。
+- [ ] AC-005：预览成功后侧边栏清理角标等于本次预览可回收量；预览失败或尚未预览时没有角标。
+- [ ] AC-006：执行失败时页面保留失败摘要，不只用会消失的提示表示完成。
+- [ ] AC-007：zh-Hans 清理页写明移入废纸篓，而不写永久删除。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：133 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed；`bash tests/integration/clean_trash_test.sh`：8/8
-- 黑盒：GUI 受执行环境限制（同前）；阶段/角标/文案/预览世代由自动化覆盖
-- review：`review_code.md` / `review_test.md` 最终均 PASS
-- AC 证据：见 `handoff.json`
+### 可测试性声明
 
-### 结果摘要
+<!-- 规范（门禁必留，不得删除） -->
 
-- 清理页改为整次预览：分类+体积、每行保护、右侧白名单条数、执行前确认、失败摘要持久；扫描显示阶段名不显示百分比；侧边栏清理角标为最近成功预览可回收量；文案三语写明移入废纸篓。遗留：无。
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-007：假 Bridge 输出阶段行与预览文件，自动断言 argv、预览世代、角标和文案。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q8、Q9、Q13–Q15、Q48。用户 2026-10-16 批准。非 TTY 的 clean 会打印阶段名，不打印百分比。
+
+### 有意不测
+
+- 真机废纸篓里是否出现文件：由 t017 覆盖删除落点，本 task 不跑真实删除。
+
+### 测试策略
+
+- 沿用现有 clean 预览世代测试，增加阶段名映射、角标和「无子集执行控件」断言。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。阶段名来自捆绑 `clean.sh` 的 `start_section`。
+
+### 风险与回退
+
+- 风险：界面仍让用户以为取消勾选就不会删。
+- 回退：不提供执行用勾选；排除只走白名单重扫。
+
+### 依赖与约束
+
+- 依赖 t015 的清理目的地与 t017 的废纸篓语义。
+- 执行前仍须本次预览确认。保存白名单使清理预览失效。
+
+### Finalization 时更新的 blueprint
+
+- `docs/design/ui_contract.md`：清理页为整次预览，不含子集执行。
+- `docs/blueprint/domain.md`：写明 clean 不能按勾选子集执行。

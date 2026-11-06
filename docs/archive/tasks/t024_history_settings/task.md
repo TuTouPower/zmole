@@ -1,60 +1,96 @@
----
-tid: "t024"
-slug: "history_settings"
-title: "历史页与设置页"
-status: "done"
-branch: "t024_history_settings"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "cb934138cb075b79802ed765e1cff753e8c1a3aa"
-depends_on: "t015"
-conflicts_with: ""
-note: "历史导出、登录项、两份白名单；不做菜单栏常驻。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+历史和设置成为侧边栏页面。设置承接语言、外观、登录项、两份白名单、捆绑 CLI 信息和关于。不做菜单栏常驻。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderHistory` 与 `renderSettings`。不要用 `docs/design/demo_reference.html`。历史表和设置分组的位置照这两个函数。不照抄「移除前检查」「包含浏览器缓存」开关，也不做该文件里「登录时启动」说明所指的菜单栏常驻。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 历史页展示 `history --json` 的会话：时间、操作、结果、状态。没有记录时显示空状态。导出把本次 JSON 写到用户选择的文件。
+- 设置页提供界面语言：跟随系统、简体中文、繁体中文、English。外观：跟随系统、浅色、深色。默认都跟随系统。
+- 登录时启动是一个开关。开启并注册成功后，用户下次登录会启动本应用并打开主窗口。应用不在「应用程序」文件夹导致注册失败时，开关旁显示失败原因，并且不假装已开启。关闭开关会取消登录项。
+- 不添加菜单栏图标。关闭主窗口后应用不留在后台。
+- clean 白名单编辑路径，optimize 白名单编辑任务 id。注释行不参与匹配。保存失败时保留编辑。保存成功后清理预览失效。安全默认路径只读展示。
+- 设置中的项目扫描路径打开与项目清理相同的 `purge_paths` 编辑。若 t021 尚未放入该编辑器，本 task 提供它，并供项目清理页复用。
+- CLI 行显示捆绑 mole 的 tag 与 bundle 内路径，状态为已连接。不探测系统里的 `mo`。
+- 侧边栏底部显示本机型号和系统版本。版本按钮打开关于：GPL、上游链接、与商业版 Mole for Mac 无关、捆绑版本。
+- 不提供「移除前检查」和「包含浏览器缓存」开关。确认框始终需要。
 
-- 新增 `AppAppearance`（跟随系统/浅色/深色，`@AppStorage`）、`LoginItem`（`LoginItemControlling` 协议 + `SMAppService` 实现 + `LoginItemViewModel`，失败显示原因且不假装开启）、`BundledMoleInfo`（读捆绑 SOURCE_VERSION tag 与可执行路径）。
-- `WhitelistViewModel` 增 `WhitelistKind`：optimize 白名单只接受任务 id，注释拒绝；`WhitelistStore.optimize` 指向 `whitelist_optimize`。
-- `HistoryViewModel` 存原始 JSON 并提供 `export(to:)`；`HistoryView` 加导出按钮（NSSavePanel）与空状态。
-- 重写 `SettingsView`：语言/外观/登录项/项目扫描目录（复用 `purge_paths` 编辑器）/optimize 白名单/clean 白名单/CLI 行/关于/权限；不含被移除的两个开关。
-- `ZmoleApp` 增 `AppDelegate`（关闭最后窗口退出）与 `AppLifecycle` 常量；`AppShellView` 应用外观覆盖。
-- 测试 `tests/unit/SettingsHistoryTests.swift` 覆盖 8 条 AC。
-- 黑盒：GUI 受限（同前），以临时目录/替身自动断言。
+### 非范围
 
-## Review 处置
+- 不改 history 的记录格式。
+- 不做 Sparkle、公证或遥测。
+- 不把优化任务改成可单选。
 
-review_level=single（`review_general.md`）。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t024_gen_f001|minor|已修|history 跑两次，改为单次 raw 解析同源|HistoryViewModel.swift|
-|t024_gen_f002|minor|已修|requiresApproval 静默关闭，补 failureReason|LoginItem.swift|
-|t024_gen_f003|minor|已修|白名单错误键未接入视图，优先渲染 key|WhitelistView.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：178 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；历史导出、白名单类型、登录项替身、生命周期常量由自动化覆盖
-- review：`review_general.md` rounds 1-2 最终 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：注入空 history 时页面为空状态；有会话时行内容来自该 JSON。
+- [ ] AC-002：导出写入的文件内容与本次 history JSON 一致。
+- [ ] AC-003：语言与外观的选择会被持久化，并在下次启动时生效。
+- [ ] AC-004：登录项注册失败时开关保持关闭并显示原因；注册成功时开关为开启。
+- [ ] AC-005：应用没有菜单栏常驻项；关闭最后一个窗口后进程不继续驻留。
+- [ ] AC-006：保存 optimize 白名单只接受任务 id 行；注释行不被当成任务 id。保存 clean 白名单成功后现有清理预览失效。
+- [ ] AC-007：CLI 行的版本文本等于捆绑 `SOURCE_VERSION` 的 tag，且不读取系统 `mo`。
+- [ ] AC-008：设置页不存在移除前检查开关和包含浏览器缓存开关。
 
-### 结果摘要
+### 可测试性声明
 
-- 历史页展示 `history --json` 会话并原样导出；设置页提供语言、外观、登录项、项目扫描目录、两份白名单、CLI 行与关于；不做菜单栏常驻，关闭最后窗口即退出。遗留：无。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-003、AC-006–AC-008：临时配置目录与假登录项接口自动断言。
+- AC-004：登录项服务用替身。真实系统登录项是否在「应用程序」文件夹外失败，由替身返回失败原因覆盖。
+- AC-005：应用激活策略用可断言的策略值；不在 CI 里做登录注销。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q32、Q36–Q42、Q56。用户 2026-10-16 批准。
+
+### 有意不测
+
+- 真实注销再登录后窗口是否出现：不进自动测试。
+- 关于页外链是否能在浏览器打开：不进自动测试。
+
+### 测试策略
+
+- history 用 s001 的 JSON 形状做夹具。白名单用临时配置根目录。登录项用协议替身，不用本机 `SMAppService` 状态。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。登录项失败时必须展示原因，这一行为不依赖未核实的系统枚举。
+
+### 风险与回退
+
+- 风险：未公证应用注册登录项失败，开关却显示已开启。
+- 回退：只有注册调用成功才把开关记为开启。
+
+### 依赖与约束
+
+- 依赖 t015 的历史与设置目的地。
+- 与 t021 共用 purge 路径编辑时只能有一个编辑器实现。
+- 关闭窗口即退出，不建立菜单栏后台。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：设置页字段、登录项与两份白名单。
+- `docs/design/ui_contract.md`：历史页与设置页。
+- `docs/blueprint/domain.md`：optimize 白名单为任务 id。

@@ -14,6 +14,8 @@
 警告，不阻断（CI 无二进制时现有测试不红）；CLI 缺二进制硬失败。
 """
 
+from __future__ import annotations
+
 import argparse
 import shutil
 import subprocess
@@ -112,6 +114,15 @@ def format_paths(rel_paths: list[str], *, check: bool = False) -> list[str]:
             "一般已全局安装：uv tool install md-kx）；未装或不在 PATH 时用 "
             "`uv tool install md-kx` 安装，或把已装的 md_kx 加入 PATH。"
         )
+    # 越界路径防御（Issue #17）
+    for rel in rel_paths:
+        try:
+            resolved = (REPO_ROOT / rel).resolve()
+            if not resolved.is_relative_to(REPO_ROOT.resolve()):
+                raise MdFormatError(f"路径 {rel} 越过仓库边界，拒绝格式化")
+        except OSError as e:
+            raise MdFormatError(f"无法解析路径 {rel}：{e}") from e
+
     snapshots: dict[Path, bytes] = {}
     if not check:
         for rel in rel_paths:
@@ -146,7 +157,7 @@ def format_paths(rel_paths: list[str], *, check: bool = False) -> list[str]:
             after = path.read_bytes()
             if before != after:
                 changed.append(rel)
-    except MdFormatError as error:
+    except (MdFormatError, OSError, subprocess.SubprocessError) as error:
         suffix = "；已回滚本次已格式化的文件" if _restore_snapshots(snapshots) else ""
         raise MdFormatError(f"{error}{suffix}") from error
     return changed
@@ -181,7 +192,10 @@ def main(argv: list[str] | None = None) -> None:
         if args.changed and args.all:
             raise MdFormatError("--changed 与 --all 互斥")
         if args.paths:
-            rels = [p for p in args.paths if not _is_blacklisted(p)]
+            rejected = [p for p in args.paths if _is_blacklisted(p)]
+            if rejected:
+                raise MdFormatError(f"{', '.join(rejected)} 在黑名单，拒绝格式化")
+            rels = args.paths
         elif args.changed:
             rels = collect_changed()
         elif args.all or args.check:

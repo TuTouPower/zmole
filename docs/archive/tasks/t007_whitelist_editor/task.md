@@ -1,62 +1,75 @@
----
-tid: "t007"
-slug: "whitelist_editor"
-title: "白名单配置文件编辑页"
-status: "done"
-branch: "t007_whitelist_editor"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "b36a005650b6ad5d99226d85f896e3991f0573c6"
-depends_on: "t003"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+白名单是文本配置，适合原生编辑。不跑 `mo clean --whitelist` TUI。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 读/写 `~/.config/mole/whitelist`（clean）；optimize 文件若存在则同样可编辑或明确只做 clean 并在 UI 标明
+- 列表、添加、删除、保存；保留文件头注释若已存在则尽量保留
+- 非法行（空行/注释）展示策略：注释只读或一并显示但不当作模式删除
 
-- 新增可注入 URL 的 `WhitelistStore` 与 `WhitelistDocument`，仅读写 clean 白名单文件；解析模式时忽略空行/注释，保存时保留注释和空行。
-- 新增原生 `WhitelistView`/`WhitelistViewModel`，支持模式列表、添加、删除、保存；optimize 白名单明确标注暂不支持，未调用 `MoleBridge`。
-- XCTest 26/26；Debug、Release 构建通过；signed Release 为 x86_64/arm64，bundled mole 1.55.0，strict codesign 通过；模板 pytest 480 passed；CUA 只读核验 clean 标注和注释区；格式与 JSON 检查通过。
+### 非范围
 
-## Review 处置
+- 调用 whitelist TUI；改 mole 默认 SAFETY 模式源码
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t007_gen_f001|important|已修|读取失败后禁止编辑和保存，避免用默认头覆盖原文件|`src/zmole/Features/Whitelist/WhitelistViewModel.swift`; `tests/unit/ZmoleTests.swift`|
-|t007_gen_f002|important|已修|模式行使用独立 UUID，重复模式按单行删除|`src/zmole/Features/Whitelist/WhitelistDocument.swift`; `tests/unit/ZmoleTests.swift`|
-|t007_gen_f003|important|已修|注入 MoleCommandRunning spy，load/add/save 调用计数为零|`src/zmole/Features/Whitelist/WhitelistViewModel.swift`; `tests/unit/ZmoleTests.swift`|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-无 finding 时写“Round N 零 finding”。
+<!-- /规范 -->
 
-### Round 2 (2026-09-21 19:50 UTC+8)
+- [ ] AC-001：对临时目录中的夹具 whitelist 文件，编辑器列出非注释模式行
+- [ ] AC-002：添加一条模式并保存后，文件中出现该行
+- [ ] AC-003：删除一条并保存后，该模式行不再存在
+- [ ] AC-004：本功能不 spawn mole 进程（单测 spy）
 
-Round 2 零 finding。
+### 可测试性声明
 
-## 收尾报告
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收与验证
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：XCTest 29/29；Debug、Release 构建；signed Release universal/codesign；模板 pytest 480 passed；`md_format.py --check`、JSON 与 `git diff --check` 通过。
-- 黑盒：`testing.md` 的 `blackbox_verify` 未定义；CUA 启动 Debug App，确认页面显示 clean whitelist、clean 文件路径、optimize 暂不支持、注释只读；未执行保存，未修改用户配置。
-- review：`review_general.md`，Round 2 PASS，Round 1 三条 finding 已修，零新 finding，scope 见报告。
-- AC 证据：见 `handoff.json`
+<!-- /规范 -->
 
-### 结果摘要
+- 全部 AC 可自动测试（文件 IO 指向测试目录）
 
-- 完成 clean whitelist 文件编辑，支持临时路径测试、注释保留、添加/删除/保存；optimize 白名单暂不支持；无遗留 finding。
+## 上下文区
+
+- 来源：ADR-004；路径来自 mole `lib/manage/whitelist.sh`
+
+### 有意不测
+
+- 与 mole 内部 SAFETY_WHITELIST 合并算法：不在 GUI 重现，只编用户文件
+
+### 测试策略
+
+- 临时文件夹具
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无（文件格式已在上游源码核实：一行一条，`#` 头注释）
+
+### 风险与回退
+
+- 风险：写文件时丢掉用户手写注释
+- 回退：保存策略写进 UI：模式列表保存，文件头用 mole 默认头或保留原头
+
+### 依赖与约束
+
+- 依赖 t003；测试不得改开发者自己的 `~/.config/mole/whitelist`（必须可注入路径）
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：若只支持 clean 文件，注明 optimize 白名单未做

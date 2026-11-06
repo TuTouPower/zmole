@@ -1,57 +1,79 @@
----
-tid: "t010"
-slug: "optimize_run"
-title: "optimize 预览确认后执行"
-status: "done"
-branch: "t010_optimize_run"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "77e50adba0415afd1e5ea5fa896529edc60f47b4"
-depends_on: "t008"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+optimize 无 JSON，但 `--dry-run` 可跑。预览用 stdout 摘要；确认后再执行。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- `optimize --dry-run` 展示**本次** stdout（可滚动文本）
+- 仅本次预览成功后可确认；取消或重新预览使旧预览过期
+- 确认后 `optimize`；取消不 spawn 非 dry-run
+- 预览失败时禁用执行
+- 复用 t008 忙碌/取消/失败展示
 
-- 新增 optimize stdout dry-run 预览、确认后执行、预览/确认取消、失败摘要、ANSI 清理和 Bridge cancel 生命周期。
-- 接入 `ContentView` optimize 页面与三语文案；独立 `OptimizeTests` 覆盖 7 条新增行为测试，XCTest 总计 56/56。
+### 非范围
 
-## Review 处置
+- optimize whitelist TUI；改维护任务集合
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1–2
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t010_code_f001|minor|已修|Bridge 错误改用 optimize 三语 key，stdout/stderr 摘要继续展示|src/zmole/Features/Optimize/OptimizeViewModel.swift；src/zmole/Resources/Localizable.xcstrings|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-Round 2 代码轴与测试轴均 `verdict: PASS`，无遗留 critical/important/minor。
+<!-- /规范 -->
 
-无 finding 时写“Round N 零 finding”。
+- [ ] AC-001：预览 argv 含 `optimize` 与 `--dry-run`
+- [ ] AC-002：预览非零退出时执行按钮不可用，且不保留上一次成功预览文本当作当前预览
+- [ ] AC-003：未确认不 spawn 无 `--dry-run` 的 optimize
+- [ ] AC-004：本次预览成功后确认，argv 为 `optimize` 且无 `--dry-run`
+- [ ] AC-005：确认对话框取消后须重新预览才能执行
+- [ ] AC-006：执行中重复提交不创建第二进程；取消调用 Bridge cancel
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：XCTest 56/56；Debug、Release 构建；signed Release universal/codesign；模板 pytest 480 passed；`md_format.py --check`、JSON 与 `git diff --check` 通过。
-- 黑盒：`testing.md` 的 `blackbox_verify` 为“无”；optimize 副作用不执行，全部由 Bridge spy 与 stdout 夹具验证。
-- review：full Round 2，代码轴与测试轴均 PASS，reviewed_scope `85e59e22dd586fd1`。
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 完成 optimize 预览、确认执行及忙碌/取消/失败生命周期；未执行真实 optimize 副作用。
+- 全部 AC 可自动测试
+
+## 上下文区
+
+- 来源：ADR-004；`s001` 验证 dry-run 退出码
+
+### 有意不测
+
+- 各维护任务副作用：不测
+
+### 测试策略
+
+- spy argv、预览世代、忙碌/取消
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。s001：`optimize --dry-run` exit 0，stdout 为分段文本，无 JSON
+
+### 风险与回退
+
+- 风险：摘要不可读（ANSI）
+- 回退：剥 ANSI 再展示
+
+### 依赖与约束
+
+- 依赖 t008
+
+### Finalization 时更新的 blueprint
+
+- 无

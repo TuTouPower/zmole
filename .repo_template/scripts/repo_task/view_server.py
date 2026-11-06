@@ -1,17 +1,21 @@
 """task 调度看板本地服务。
 
-只读；stdlib http.server；无 WebSocket、无后台轮询。每次请求重新计算
-schedule，页面通过注入 JSON 交给客户端 JS 渲染；静态资源（board.css /
-board.js）从同目录 view_static/ 读取，无构建、无 CDN 依赖。
+只读；stdlib http.server；无 WebSocket、无后台轮询。首页 HTML 在 500ms TTL
+内复用渲染结果；`/task-doc` 每次请求重新计算 schedule。页面通过注入 JSON 交给
+客户端 JS 渲染；静态资源（board.css / board.js）从同目录 view_static/ 读取，
+无构建、无 CDN 依赖。
 """
 
 import contextlib
 import json
 import os
 import platform
+import secrets
 import socket
 import subprocess
 import sys
+import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,14 +30,20 @@ from .plan import (
     compute_batch_plan,
 )
 from .scheduling import compute_schedule
-from .store import discover_effective_sources, git_text_at_ref
+from .store import discover_effective_bundle, git_text_at_ref
 
 _STATIC_DIR = Path(__file__).resolve().parent / "view_static"
-_DOC_NAMES = {"spec": "spec.md", "task": "task.md"}
+_DOC_NAMES = {"task": "task.md", "progress": ctx.PROGRESS_FILE, "spec": "task.md"}
+_SESSION_TOKEN = secrets.token_hex(16)
 
 
 def _find_free_port(host: str) -> int:
-    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+    try:
+        infos = socket.getaddrinfo(host, 0, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+        family = infos[0][0] if infos else socket.AF_INET
+    except socket.gaierror:
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    with contextlib.closing(socket.socket(family, socket.SOCK_STREAM)) as s:
         s.bind((host, 0))
         return s.getsockname()[1]
 
@@ -45,14 +55,41 @@ def _build_model():
     """
     model = build_board_model(compute_schedule())
     model["plan"] = compute_batch_plan(model)
+    model["token"] = _SESSION_TOKEN
     return model
 
 
 def _render_html(model: dict) -> str:
-    """纯函数：读取模板，注入模型 JSON（转义 </script> 防闭合注入）。"""
+    """纯函数：读取模板，注入模型 JSON（转义 </script>、<!-- 与 Unicode 分隔符防注入）。"""
     template = (_STATIC_DIR / "board.html").read_text(encoding="utf-8")
-    payload = json.dumps(model, ensure_ascii=False).replace("</", "<\\/")
+    payload = (
+        json.dumps(model, ensure_ascii=False)
+        .replace("</", "<\\/")
+        .replace("<!--", "<\\!--")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
     return template.replace("__BOARD_JSON__", payload)
+
+
+_RENDER_CACHE_LOCK = threading.Lock()
+_CACHED_HTML: str = ""
+_LAST_RENDER_TIME: float = 0.0
+_RENDER_CACHE_TTL = 0.5  # 500ms 内的并发请求复用渲染结果，平抑高并发资源冲击（Issue #48）
+
+
+def _get_rendered_html() -> str:
+    global _CACHED_HTML, _LAST_RENDER_TIME
+    now = time.monotonic()
+    if _CACHED_HTML and (now - _LAST_RENDER_TIME < _RENDER_CACHE_TTL):
+        return _CACHED_HTML
+    with _RENDER_CACHE_LOCK:
+        now = time.monotonic()
+        if _CACHED_HTML and (now - _LAST_RENDER_TIME < _RENDER_CACHE_TTL):
+            return _CACHED_HTML
+        _CACHED_HTML = _render_html(_build_model())
+        _LAST_RENDER_TIME = now
+        return _CACHED_HTML
 
 
 def _allowed_doc_roots(base: Path) -> tuple[Path, ...]:
@@ -71,7 +108,7 @@ def _resolve_task_doc_in(base: Path, tasks: dict[str, dict], tid: str, doc: str)
         raise ctx.TaskDataError(f"未知任务 {tid!r}")
     filename = _DOC_NAMES.get(doc)
     if filename is None:
-        raise ctx.TaskDataError(f"未知文档类型 {doc!r}（仅 spec/task）")
+        raise ctx.TaskDataError(f"未知文档类型 {doc!r}（仅 task/progress）")
     directory = tasks[tid].get("dir", "")
     root = base.resolve()
     path = (root / directory / filename).resolve()
@@ -99,7 +136,7 @@ def _read_task_doc(schedule: dict, sources: dict, tid: str, doc: str) -> bytes:
             raise ctx.TaskDataError(f"未知任务 {tid!r}")
         filename = _DOC_NAMES.get(doc)
         if filename is None:
-            raise ctx.TaskDataError(f"未知文档类型 {doc!r}（仅 spec/task）")
+            raise ctx.TaskDataError(f"未知文档类型 {doc!r}（仅 task/progress）")
         rel = f"{tasks[tid].get('dir', '')}/{filename}"
         return git_text_at_ref(entry["read_at"], rel).encode("utf-8")
     base = (
@@ -202,6 +239,12 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+        )
         self.end_headers()
         self.wfile.write(body)
 
@@ -225,9 +268,14 @@ class _Handler(BaseHTTPRequestHandler):
     def _route_get(self):
         parts = urlsplit(self.path)
         path = parts.path
+        query = parse_qs(parts.query)
         if path in ("/", "/index.html"):
+            token = (query.get("token") or [""])[0]
+            if _SESSION_TOKEN and token != _SESSION_TOKEN:
+                self._send_error_text(403, "禁止访问：缺少或无效的看板会话令牌")
+                return
             try:
-                html = _render_html(_build_model())
+                html = _get_rendered_html()
             except Exception as e:
                 self._send_error_text(500, f"渲染失败：{e}")
                 return
@@ -250,13 +298,15 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_bytes(200, body, content_type)
             return
         if path == "/task-doc":
-            query = parse_qs(parts.query)
+            token = (query.get("token") or [""])[0]
+            if _SESSION_TOKEN and token != _SESSION_TOKEN:
+                self._send_error_text(403, "禁止访问：缺少或无效的看板会话令牌")
+                return
             tid = (query.get("tid") or [""])[0]
             doc = (query.get("doc") or [""])[0]
             try:
-                body = _read_task_doc(
-                    compute_schedule(), discover_effective_sources(), tid, doc
-                )
+                tasks, sources = discover_effective_bundle()
+                body = _read_task_doc(compute_schedule(tasks), sources, tid, doc)
             except ctx.TaskDataError as e:
                 self._send_error_text(404, str(e))
                 return
@@ -278,10 +328,12 @@ def _is_loopback_host(host: str) -> bool:
 
 
 def serve(host="127.0.0.1", port=0, *, allow_non_loopback=False):
+    if not isinstance(port, int) or port < 0 or port > 65535:
+        sys.exit(f"看板端口非法：{port!r}；端口必须在 0 到 65535 之间（0 为自动选空闲端口）")
     port = port or _find_free_port(host)
     # ThreadingHTTPServer 对 IPv6 字面量需要方括号才能当 URL host
     url_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-    url = f"http://{url_host}:{port}/"
+    url = f"http://{url_host}:{port}/?token={_SESSION_TOKEN}"
     if not _is_loopback_host(host):
         if not allow_non_loopback:
             sys.exit(
@@ -295,7 +347,19 @@ def serve(host="127.0.0.1", port=0, *, allow_non_loopback=False):
             file=sys.stderr,
         )
     try:
-        httpd = ThreadingHTTPServer((host, port), _Handler)
+        infos = socket.getaddrinfo(host, 0, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+        family = infos[0][0] if infos else socket.AF_INET
+    except socket.gaierror:
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+    server_cls = ThreadingHTTPServer
+    if family == socket.AF_INET6:
+        class _IPv6ThreadingHTTPServer(ThreadingHTTPServer):
+            address_family = socket.AF_INET6
+        server_cls = _IPv6ThreadingHTTPServer
+
+    try:
+        httpd = server_cls((host, port), _Handler)
     except OSError as error:
         sys.exit(f"看板端口 {port} 绑定失败（{error}）；改用 --port 0 自动选空闲端口")
     print(f"task 看板已启动：{url}")

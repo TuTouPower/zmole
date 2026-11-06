@@ -1,8 +1,25 @@
 # 测试
 
-模板仓默认门禁命令（复制新项目后按实际工具链替换）。章节名 `doctor_cmd` / `test_cmd` / `blackbox_verify` 是 preflight 与 skill 的机械锚点，不得改名；命令写在对应章节正文。未使用某类时章节保留，正文写「无」。
+本项目门禁命令按 macOS SwiftUI 工具链配置。章节名 `verification_policy` / `verification_notes` / `doctor_cmd` / `test_cmd` / `blackbox_verify` 是 preflight 与 skill 的机械锚点，不得改名；命令写在对应章节的唯一 bash/sh 块，示例与说明改用 `text` 围栏或正文。未使用某类门禁时整节正文恰写「无」，理由记入 `verification_notes`。
 
 下列默认命令在消费仓根的 POSIX shell（macOS）执行。任一检查非零退出则停止后续验收。
+
+## verification_policy
+
+project_configured
+
+## verification_notes
+
+本项目已按 macOS SwiftUI 应用配置验证范围。`verification_policy` 取 `project_configured`；doctor_cmd / test_cmd / blackbox_verify 的命令由本仓脚本与 Xcode 工具链执行，模板同步只校验其格式并跑模板契约测试，不代跑业务门禁。
+
+实际验证范围：doctor_cmd 校验契约用例可收集（`pytest .repo_template/tests -q --collect-only -m contract`）、`md_kx`、完整 Xcode（`xcodebuild -version`）、XcodeGen、`Zmole Local Signing` 签名身份与图标单测依赖（bash/swift/sips/iconutil），并执行 `xcodegen generate`；test_cmd 以 `xcodebuild test -scheme Zmole -destination 'platform=macOS'` 跑全量 Swift 单测，接 `pytest .repo_template/tests -q -m contract` 模板契约，再依次跑四条集成脚本（clean_trash、installer_interface、uninstall_stream、brew_cask_index）覆盖 Bridge/CLI 集成；blackbox_verify 保留 `ZmoleTests/StatusStreamTests` 的 streaming fixture 行为验证。
+
+不适用门禁与理由：
+
+- 无独立真实 CLI 黑盒自动化门禁：zmole 为 GUI 应用，捆绑 mole CLI；真实只读黑盒仅允许 `--version`、`status --json` 等命令，破坏性命令按约定只用 dry-run 或测试夹具，禁止纳入 blackbox smoke，也不得检测或启动 PATH 中的 `mo`。Demo UI smoke 与截图为人工视觉验收（证据存 `docs/guides/visual_acceptance/`），命令仅作 `text` 示例不作为 bash 门禁。
+- lint 未引入 SwiftLint（「门禁类别清单」记为「无」）；Swift 类型检查与测试 target 编译由 `xcodebuild` 全量编译覆盖，不单列静态检查命令。
+- 无 codegen / DB migration（Schema / codegen 验证章节记为「无」）。
+- 生产 Release 构建、签名与 Universal 架构校验由 `./scripts/package_app.sh`（Release app 章节）在发布时执行，不并入日常 doctor/test 门禁。
 
 ## doctor_cmd
 
@@ -35,9 +52,9 @@ bash tests/integration/brew_cask_index_test.sh
 
 ## blackbox_verify
 
-演示 UI smoke（不启动真实 mole）：
+演示 UI smoke（人工视觉验收，不作自动化门禁；命令为 `text` 示例）：
 
-```bash
+```text
 DEMO_ROOT="$PWD/.scratch/ui_rebuild/demo_data"
 mkdir -p "$DEMO_ROOT"
 open -a Zmole --args --demo --demo-page disk --demo-state populated \

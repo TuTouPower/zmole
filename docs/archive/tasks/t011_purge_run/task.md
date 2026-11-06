@@ -1,57 +1,83 @@
----
-tid: "t011"
-slug: "purge_run"
-title: "purge 预览确认后 --yes 执行"
-status: "done"
-branch: "t011_purge_run"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "ff5317f1eb1a4f28cfcc2e38bcd931f5a836866c"
-depends_on: "t008"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+非 TTY 且**非 dry-run** 时，真实 purge 必须 `--yes`（`project.sh` 约 1682 行）。dry-run 不受该门闩限制。非 TTY 下 mole 自动勾选「非近期」项目，不读 stdin。s001 把「空名单」归因于 EOF/`--yes` 是错的：当时假 HOME 里没有合格候选，或项目仍算近期。
 
-## 实施笔记
+预览：`purge --dry-run`（不要为了预览强行加 `--yes`）。执行：`purge --yes`。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-- 新增 purge stdout dry-run 预览、确认后 `--yes` 执行、预览/确认取消、失败摘要、ANSI 清理和 Bridge cancel 生命周期。
-- 接入 `ContentView` purge 页面与三语文案；optimize/purge 共用 `MaintenanceOutput` 摘要逻辑；XCTest 总计 63/63，`PurgeTests` 7/7。
+- 预览：`purge --dry-run`，把**本次** stdout 当摘要
+- 仅本次预览成功（exit 0）后可确认
+- 确认后执行：`purge --yes`（无 `--dry-run`）
+- 未确认不 spawn 无 `--dry-run` 的 `--yes`
+- 不存在既无 `--dry-run` 又无 `--yes` 的 purge
+- 复用 t008 预览过期、忙碌、取消、失败展示
 
-## Review 处置
+### 非范围
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+- `purge --paths` 配置 UI；交互选择器；PTY
 
-### Round 1–2
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t011_code_f001|minor|已修|将 optimize/purge 重复的 ANSI 与 stdout/stderr 摘要逻辑抽到共享 `MaintenanceOutput`|src/zmole/Features/MaintenanceOutput.swift；src/zmole/Features/Optimize/OptimizeViewModel.swift；src/zmole/Features/Purge/PurgeViewModel.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-Round 2 代码轴与测试轴均 `verdict: PASS`，无遗留 critical/important/minor。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-无 finding 时写“Round N 零 finding”。
+<!-- /规范 -->
 
-## 收尾报告
+- [ ] AC-001：预览 argv 含 `purge` 与 `--dry-run`，**不含** `--yes`
+- [ ] AC-002：执行 argv 含 `purge` 与 `--yes`，不含 `--dry-run`
+- [ ] AC-003：未确认时，不含 `--dry-run` 的 `--yes` 调用次数为 0
+- [ ] AC-004：代码路径中不存在「无 `--dry-run` 且无 `--yes`」的 purge
+- [ ] AC-005：预览非零时确认不可用
+- [ ] AC-006：确认取消或预览之后目标/条件变化（再次点预览）后，必须用新预览才能执行
+- [ ] AC-007：执行中重复提交不创建第二进程；取消调用 Bridge cancel
 
-### 验收与验证
+### 可测试性声明
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：XCTest 63/63；Debug、Release 构建；signed Release universal/codesign；模板 pytest 480 passed；`md_format.py --check`、JSON 与 `git diff --check` 通过。
-- 黑盒：`testing.md` 的 `blackbox_verify` 为“无”；purge 副作用不执行，Bridge spy 与 stdout/ANSI 夹具覆盖全部行为。
-- review：full Round 2，代码轴与测试轴均 PASS，reviewed_scope `97a6e83192bbb17b`。
-- AC 证据：见 `handoff.json`
+<!-- 规范（门禁必留，不得删除） -->
 
-### 结果摘要
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- 完成 purge dry-run 预览、确认后 `--yes` 执行及忙碌/取消/失败生命周期；未执行真实 purge 副作用。
+<!-- /规范 -->
+
+- 全部 AC 可自动测试
+
+## 上下文区
+
+- 来源：审阅纠正 s001；`project.sh` 非 TTY 自动选非近期；`--yes` 只放行真实执行
+
+### 有意不测
+
+- 真删 `node_modules`：不测
+
+### 测试策略
+
+- spy argv 与预览世代；预览夹具用 s001 `purge_dry_run.txt` / `purge_dry_run_yes.txt` 作文本形状参考，不以「必须 --yes 才能预览」为准
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。源码已说明 dry-run 不需要 `--yes`。空名单 = 无合格非近期候选，不是 EOF。
+
+### 风险与回退
+
+- 风险：执行漏 `--yes` 被 mole 拒绝；或误以为预览必须 `--yes`
+- 回退：预览/执行两套 argv 工厂，单测锁死
+
+### 依赖与约束
+
+- 依赖 t008
+
+### Finalization 时更新的 blueprint
+
+- 无

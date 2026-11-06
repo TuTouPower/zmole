@@ -1,57 +1,81 @@
----
-tid: "t003"
-slug: "app_shell_i18n"
-title: "侧栏、三语与设置关于页"
-status: "done"
-branch: "t003_app_shell_i18n"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "52da180a86ca19c0a41332a742b9d306d02a5879"
-depends_on: "t002"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+已定三语、设置可覆盖、关于页说明与 mole 的关系。权限失败时再引导，不在启动时上课。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 侧栏信息架构（第一版条目：Status、History、Analyze、Clean、Uninstall、Optimize、Purge、Whitelist、Settings）
+- String Catalog：`en` / `zh-Hans` / `zh-Hant`
+- 设置：跟随系统或强制一种语言（立即生效或需重启须在 UI 写明）
+- 关于：zmole 名、GPL-3.0、基于 mole 非 Mole for Mac、捆绑 mole 版本、打开 GitHub Releases 的链接，URL 必须是 `https://github.com/TuTouPower/zmole/releases`（禁止占位符交付）
+- 可复用的「破坏性确认」空壳组件（标题、摘要、确认/取消；确认前不调用执行 Bridge）
+- 权限失败提示组件：说明可打开系统设置，不在首次冷启动强制弹出
 
-- 2026-09-21：完成九项侧栏、`en`/`zh-Hans`/`zh-Hant` String Catalog、系统跟随与设置覆盖、About/权限引导、破坏性确认空壳；About 通过 t002 `MoleBridge.version()` 显示捆绑版本。
-- 2026-09-21：发现动态 `LocalizedStringKey` 在运行时显示键名；改为枚举分支中的静态本地化键，CUA 复核英文、简体、繁体即时切换与不支持语言回落英文。
+### 非范围
 
-## Review 处置
+- 各功能真实数据；installer 等侧栏项；公证
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-09-21 17:41 UTC+8)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t003_gen_f001|minor|已修|移除未使用的 `SidebarItem.isDestructive`，避免与路由 case 列表分叉|`src/zmole/App/ContentView.swift`|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-09-21 17:51 UTC+8)
+<!-- /规范 -->
 
-Round 2 零 finding。
+- [ ] [deploy] AC-001：系统语言为英文 / 简体 / 繁体时，未覆盖则界面为对应语言；其它系统语言回落英文
+- [ ] [deploy] AC-002：设置中强制另一种已支持语言后，界面改为该语言
+- [ ] [deploy] AC-003：关于页含 zmole、GPL、mole 来源声明、非 Mole for Mac、捆绑版本（来自 t002 API），且 Releases 链接为 `https://github.com/TuTouPower/zmole/releases`
+- [ ] AC-004：侧栏无 installer / update / remove 项
+- [ ] AC-005：确认组件在取消时不调用任何 Bridge 执行方法（单测）
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodegen generate`；Debug `xcodebuild test` 10/10；Debug `xcodebuild build`；Release `xcodebuild build`；`mise exec -- pytest .repo_template/tests -q` 480 passed；`md_format.py --check` 与 `git diff --check` 通过。
-- 黑盒：CUA 启动 Debug App；验证九项侧栏、英文/简体/繁体即时切换、不支持系统语言回落英文、About 信息与 Releases 链接、破坏性确认取消。
-- review：single/general Round 2 PASS，零 finding，scope 见 `review_general.md`。
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 完成三语 App shell 与设置入口；无遗留 finding。
+- AC-001、AC-002、AC-003：改系统语言或设置后手工
+- AC-004：读导航配置或 snapshot
+- AC-005：单测
+
+## 上下文区
+
+- 来源：ADR-005、ADR-004；`docs/plan.md`
+
+### 有意不测
+
+- 每句文案的翻译质量：不测
+
+### 测试策略
+
+- 导航与确认取消用单测；语言用手工矩阵
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：SwiftUI 语言覆盖需改 `AppleLanguages` 或自定义 bundle
+- 回退：覆盖后提示重启 App 也可接受，须写在设置页
+
+### 依赖与约束
+
+- 依赖 t002
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/conventions.md`：本地化覆盖方式

@@ -1,67 +1,87 @@
----
-tid: "t021"
-slug: "optimize_purge_pages"
-title: "优化页与项目清理页"
-status: "done"
-branch: "t021_optimize_purge_pages"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "e0a077092a195a016ba55ee18facf378244d6272"
-depends_on: "t015"
-conflicts_with: ""
-note: "优化只读任务；项目清理不按勾选删除。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+优化和项目清理从原来的分段里拆成两个侧边栏页面。两者都不能按界面勾选裁剪执行范围。优化里会删文件的任务，以及项目清理，仍是永久删除。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderOptimize` 与 `renderPurge`。不要用 `docs/design/demo_reference.html`。页头、说明条和列表的位置照这两个函数。不照抄优化任务开关，也不照抄项目清理的勾选删除。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 优化页列出 mole 的真实任务，不用 demo 的示例任务文案代替。会删除文件的任务在行上标明。任务行只读。
+- 模拟运行与运行维护各自走预览和确认。状态文本来自本次 dry-run：会执行、跳过、原因。一次运行不按界面选择裁剪任务。
+- 项目清理页展示本次 dry-run 将处理的项。执行使用带 `--yes` 的 purge，范围是 mole 认定的项，不是勾选子集。
+- 扫描目录编辑 `~/.config/mole/purge_paths`，项目清理页和设置页都能打开同一编辑器。
+- 两页都写明：项目清理和优化中的删除是永久删除。失败与部分完成留在页面内。
+- 优化页的管理白名单切换到设置中的优化白名单区域。该区域的编辑由 t024 交付；本 task 只保证入口到达设置页。
 
-- 新增 `OptimizePlan.swift`：从真实 `optimize --dry-run`（`➤ 任务` 段 + 缩进明细）解析只读任务行、跳过原因与“会删文件”标记；`OptimizeView` 重写为任务行 + 原始输出 + 永久删除提示 + 白名单入口（跳设置）。
-- 新增 `PurgePaths.swift`（`PurgePathsStore` 读写 `~/.config/mole/purge_paths` + 校验）与 `PurgePathsViewModel`（保存取 `.purge` 写租约并 `invalidatePreviews`）；`PurgePathsEditorView` 编辑器；`PurgeView` 重写为预览 + 扫描目录/白名单入口 + 永久删除提示。
-- `AppDependencies` 增 `purgePathsViewModel`；`AppShellView` 传入设置跳转。
-- `docs/blueprint/architecture.md`、`docs/design/ui_contract.md` 更新两页只读计划与永久删除。
-- 测试 `tests/unit/OptimizePurgePageTests.swift`：优化/purge argv（无子集）、真实 dry-run 样例解析、当前跳过措辞、purge_paths 往返与非法保存、保存使预览失效、永久删除文案。
-- 黑盒：GUI 受限（同前），已用自动化替代。
+### 非范围
 
-## Review 处置
+- 不把优化或项目清理改成废纸篓。
+- 不提供按任务或按产物勾选后只删所选。
+- 不编辑 optimize 白名单文件内容，那是 t024。
 
-review_level=full：`review_code.md` / `review_test.md`。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t021_code_f001|important|已修|解析器与真实优化输出脱节，重写为 ➤ 段+明细|OptimizePlan.swift|
-|t021_code_f002|important|已修|编辑器不加载，改 onAppear load|PurgePathsEditorView.swift|
-|t021_code_f003|important|已修|保存扫描目录取写租约并失效预览|PurgePaths.swift|
-|t021_code_f004|minor|撤回|保存过滤注释行，属小行为差异，不影响 AC|PurgePaths.swift|
-|t021_code_f005|minor|已修|load 重置 didSave|PurgePaths.swift|
-|t021_code_f006|important|已修|跳过措辞漏判，补 is healthy / close these apps before|OptimizePlan.swift|
-|t021_code_f007|minor|撤回|测试引用 spike 样例路径，归档后需同步，属维护项|OptimizePurgePageTests.swift|
-|t021_test_f001|important|已修|夹具改用真实 mole 样例|OptimizePurgePageTests.swift|
-|t021_test_f002|minor|已修|补永久删除行文案断言|OptimizePurgePageTests.swift|
-|t021_test_f003|minor|已修|补无预览→无行断言|OptimizePurgePageTests.swift|
-|t021_test_f004|minor|撤回|冗余但无害的 no-subset 断言，保留记录意图|OptimizePurgePageTests.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：162 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；arg 与预览文本映射、purge_paths 往返由自动化覆盖
-- review：`review_code.md`（rounds 1-3）、`review_test.md`（rounds 1-3）最终均 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：优化运行的 argv 不包含界面选出的任务 id 子集。
+- [ ] AC-002：优化预览文本里的跳过原因出现在对应任务行；没有预览时不把任务标成已执行。
+- [ ] AC-003：会删除文件的优化任务有可见的永久删除说明。
+- [ ] AC-004：项目清理确认后的 argv 含 `purge` 与 `--yes`，且不含勾选子集。
+- [ ] AC-005：取消项目清理确认后不执行。
+- [ ] AC-006：从项目清理页保存扫描目录后，`purge_paths` 内容与编辑结果一致；非法保存失败时编辑内容仍留在界面。
+- [ ] AC-007：两页文案写明永久删除，而不写移入废纸篓。
 
-### 结果摘要
+### 可测试性声明
 
-- 优化页列出真实任务（只读、跳过原因落在行、删除任务标永久删除），预览后确认执行，白名单入口到设置。项目清理页预览后 `purge --yes` 执行，扫描目录编辑器写 `purge_paths` 并取写租约失效旧预览；两页写明永久删除。遗留：minor 维护项已撤回。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-007：假进程与临时 purge 配置文件自动断言。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q23、Q28、Q29、Q55。用户 2026-10-16 批准。optimize 无任务参数；purge 非交互用 `--yes`。
+
+### 有意不测
+
+- 真机永久删除项目产物：不进自动测试。
+
+### 测试策略
+
+- argv 断言加上预览文本映射。purge 配置用临时路径，不写开发者真实配置。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：用户以为关掉某一行就不会删。
+- 回退：任务行不可切换；排除优化任务只能通过 t024 的白名单。
+
+### 依赖与约束
+
+- 依赖 t015 的优化、项目清理和设置目的地。
+- 与清理、卸载、安装包、白名单保存共用单一写入租约。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：优化与项目清理分为两个页面。
+- `docs/design/ui_contract.md`：两页的只读计划与永久删除文案。

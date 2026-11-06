@@ -69,10 +69,10 @@ def repo_layout(tmp_path, monkeypatch):
     tasks_dir.mkdir(parents=True)
     archive_dir.mkdir(parents=True)
     (tasks_dir / "t001_spec_doc").mkdir()
-    (tasks_dir / "t001_spec_doc" / "spec.md").write_text("# spec 正文\n", encoding="utf-8")
     (tasks_dir / "t001_spec_doc" / "task.md").write_text("# task 正文\n", encoding="utf-8")
+    (tasks_dir / "t001_spec_doc" / "progress.md").write_text("# note 正文\n", encoding="utf-8")
     (archive_dir / "t002_archived").mkdir()
-    (archive_dir / "t002_archived" / "spec.md").write_text("# 归档 spec\n", encoding="utf-8")
+    (archive_dir / "t002_archived" / "task.md").write_text("# 归档 task\n", encoding="utf-8")
     monkeypatch.setattr(ctx, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(ctx, "TASKS_DIR", tasks_dir)
     monkeypatch.setattr(ctx, "ARCHIVE_TASKS_DIR", archive_dir)
@@ -81,20 +81,20 @@ def repo_layout(tmp_path, monkeypatch):
 
 def test_resolve_task_doc_ok(repo_layout):
     tasks = {"t001": {"dir": "docs/tasks/t001_spec_doc"}}
-    path = view_server._resolve_task_doc(tasks, "t001", "spec")
-    assert path.read_text(encoding="utf-8") == "# spec 正文\n"
-    assert view_server._resolve_task_doc(tasks, "t001", "task").name == "task.md"
+    path = view_server._resolve_task_doc(tasks, "t001", "task")
+    assert path.read_text(encoding="utf-8") == "# task 正文\n"
+    assert view_server._resolve_task_doc(tasks, "t001", "progress").name == "progress.md"
 
 
 def test_resolve_task_doc_archived_ok(repo_layout):
     tasks = {"t002": {"dir": "docs/archive/tasks/t002_archived"}}
-    path = view_server._resolve_task_doc(tasks, "t002", "spec")
-    assert path.read_text(encoding="utf-8") == "# 归档 spec\n"
+    path = view_server._resolve_task_doc(tasks, "t002", "task")
+    assert path.read_text(encoding="utf-8") == "# 归档 task\n"
 
 
 def test_resolve_task_doc_rejects_unknown_tid(repo_layout):
     with pytest.raises(ctx.TaskDataError):
-        view_server._resolve_task_doc({}, "t999", "spec")
+        view_server._resolve_task_doc({}, "t999", "task")
 
 
 def test_resolve_task_doc_rejects_bad_doc(repo_layout):
@@ -109,27 +109,27 @@ def test_resolve_task_doc_rejects_missing_file(repo_layout):
     (tasks_dir / "t003_missing").mkdir()
     tasks3 = {"t003": {"dir": "docs/tasks/t003_missing"}}
     with pytest.raises(ctx.TaskDataError):
-        view_server._resolve_task_doc(tasks3, "t003", "spec")
+        view_server._resolve_task_doc(tasks3, "t003", "task")
 
 
 def test_resolve_task_doc_rejects_path_traversal(repo_layout):
     tasks = {"t001": {"dir": "../../../etc"}}
     with pytest.raises(ctx.TaskDataError):
-        view_server._resolve_task_doc(tasks, "t001", "spec")
+        view_server._resolve_task_doc(tasks, "t001", "task")
 
 
 def test_read_task_doc_from_worktree_source(tmp_path):
     """worktree 来源任务：读该 worktree 的文件，而非主仓过期副本。"""
     main = tmp_path / "main"
     (main / "docs/tasks/t001_x").mkdir(parents=True)
-    (main / "docs/tasks/t001_x/spec.md").write_text("# 主仓旧版\n", encoding="utf-8")
+    (main / "docs/tasks/t001_x/task.md").write_text("# 主仓旧版\n", encoding="utf-8")
     worktree = tmp_path / "main_t001"
     (worktree / "docs/tasks/t001_x").mkdir(parents=True)
-    (worktree / "docs/tasks/t001_x/spec.md").write_text("# worktree 最新\n", encoding="utf-8")
+    (worktree / "docs/tasks/t001_x/task.md").write_text("# worktree 最新\n", encoding="utf-8")
 
     schedule = {"tasks": {"t001": {"dir": "docs/tasks/t001_x"}}}
     sources = {"t001": {"source": "worktree", "read_at": str(worktree)}}
-    body = view_server._read_task_doc(schedule, sources, "t001", "spec")
+    body = view_server._read_task_doc(schedule, sources, "t001", "task")
     assert body.decode("utf-8") == "# worktree 最新\n"
 
 
@@ -152,7 +152,7 @@ def test_read_task_doc_from_branch_source(tmp_path, monkeypatch):
     _git(repo, "commit", "-m", "init")
     _git(repo, "checkout", "-b", "t001_x")
     (repo / "docs/archive/tasks/t001_x").mkdir(parents=True)
-    (repo / "docs/archive/tasks/t001_x/task.md").write_text("# 分支归档 task\n", encoding="utf-8")
+    (repo / "docs/archive/tasks/t001_x/progress.md").write_text("# 分支归档 note\n", encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-m", "task")
     _git(repo, "checkout", "main")
@@ -160,10 +160,10 @@ def test_read_task_doc_from_branch_source(tmp_path, monkeypatch):
     monkeypatch.setattr(ctx, "REPO_ROOT", repo)
     schedule = {"tasks": {"t001": {"dir": "docs/archive/tasks/t001_x"}}}
     sources = {"t001": {"source": "branch", "read_at": "t001_x"}}
-    body = view_server._read_task_doc(schedule, sources, "t001", "task")
-    assert body.decode("utf-8") == "# 分支归档 task\n"
+    body = view_server._read_task_doc(schedule, sources, "t001", "progress")
+    assert body.decode("utf-8") == "# 分支归档 note\n"
     with pytest.raises(ctx.TaskDataError):
-        view_server._read_task_doc(schedule, sources, "t001", "spec")
+        view_server._read_task_doc(schedule, sources, "t001", "task")
 
 
 def test_handler_maps_system_exit_to_error_response():
@@ -332,3 +332,158 @@ def test_build_model_has_no_schedule_status(monkeypatch):
     assert {node['id'] for node in model['nodes']} == {'t001', 't002'}
     assert all('schedule_status' not in node for node in model['nodes'])
     assert model['edges'] == [{'type': 'conflict', 'from': 't001', 'to': 't002'}]
+
+
+def test_serve_rejects_out_of_range_port():
+    """验证非法端口在启动前明确拒绝，避免原始 OverflowError 崩溃（Issue #63）。"""
+    with pytest.raises(SystemExit, match="看板端口非法：-1；端口必须在 0 到 65535 之间"):
+        view_server.serve(port=-1)
+    with pytest.raises(SystemExit, match="看板端口非法：70000；端口必须在 0 到 65535 之间"):
+        view_server.serve(port=70000)
+
+
+def test_render_html_escapes_html_comments_and_separators():
+    """验证标题包含 HTML 注释与特殊 Unicode 分隔符时被转义（Issue #60）。"""
+    model = {
+        "project": "demo",
+        "nodes": [{"id": "t001", "title": "<!-- comment --> test\u2028split", "category": "runnable"}],
+        "edges": [],
+        "summary": {"active": 0, "runnable": 1},
+    }
+    html = view_server._render_html(model)
+    assert "<!-- comment -->" not in html
+    assert "<\\!-- comment -->" in html
+    assert "\u2028" not in html
+    assert "\\u2028" in html
+
+
+def test_handler_sends_security_headers():
+    """验证看板 HTTP 响应包含基础安全头（nosniff, X-Frame-Options, CSP）（Issue #60）。"""
+    headers = []
+
+    class DummyHandler:
+        def send_response(self, status): pass
+        def send_header(self, k, v): headers.append((k, v))
+        def end_headers(self): pass
+        wfile = type("DummyWFile", (), {"write": lambda self, b: None})()
+
+    view_server._Handler._send_bytes(DummyHandler(), 200, b"ok", "text/html")
+    hdr_dict = dict(headers)
+    assert hdr_dict.get("X-Content-Type-Options") == "nosniff"
+    assert hdr_dict.get("X-Frame-Options") == "DENY"
+    assert "Content-Security-Policy" in hdr_dict
+
+
+def test_rendered_html_cache_debounce(monkeypatch):
+    """验证高频并发请求复用短缓存，避免重复跑全量拓扑计算（Issue #48）。"""
+    build_count = {"n": 0}
+
+    def fake_build():
+        build_count["n"] += 1
+        return {"project": "demo", "nodes": [], "edges": [], "summary": {}}
+
+    monkeypatch.setattr(view_server, "_build_model", fake_build)
+    monkeypatch.setattr(view_server, "_CACHED_HTML", "")
+    monkeypatch.setattr(view_server, "_LAST_RENDER_TIME", 0.0)
+
+    # 1. 连续 5 次快速请求
+    for _ in range(5):
+        html = view_server._get_rendered_html()
+        assert "window.__BOARD__ =" in html
+
+    # 只调用了一次全量构建
+    assert build_count["n"] == 1
+
+
+def test_task_doc_endpoint_requires_valid_session_token(repo_layout, monkeypatch):
+    """验证 /task-doc 接口校验 session token，未授权请求返回 403（Issue #44）。"""
+    tasks_dir, _ = repo_layout
+    monkeypatch.setattr(view_server, "_SESSION_TOKEN", "test-session-token")
+    tasks = {"t001": {"tid": "t001", "dir": "docs/tasks/t001_spec_doc"}}
+    monkeypatch.setattr(view_server, "compute_schedule", lambda tasks=None: {
+        "tasks": tasks,
+        "selected": ["t001"],
+    })
+    monkeypatch.setattr(view_server, "discover_effective_bundle", lambda: (tasks, {}))
+
+    responses = []
+
+    class MockHandler:
+        def __init__(self, path):
+            self.path = path
+        def _send_error_text(self, status, message):
+            responses.append((status, message))
+        def _send_bytes(self, status, body, ct):
+            responses.append((status, body))
+
+    # 1. 缺少 token 返回 403
+    h1 = MockHandler("/task-doc?tid=t001&doc=task")
+    view_server._Handler._route_get(h1)
+    assert responses[-1][0] == 403
+    assert "禁止访问" in responses[-1][1]
+
+    # 2. 错误 token 返回 403
+    h2 = MockHandler("/task-doc?tid=t001&doc=task&token=wrong_token")
+    view_server._Handler._route_get(h2)
+    assert responses[-1][0] == 403
+
+    # 3. 正确 token 返回 200
+    h3 = MockHandler("/task-doc?tid=t001&doc=task&token=test-session-token")
+    view_server._Handler._route_get(h3)
+    assert responses[-1][0] == 200
+    assert b"# task \xe6\xad\xa3\xe6\x96\x87" in responses[-1][1]
+
+
+def test_root_requires_session_token_and_does_not_leak_it(repo_layout, monkeypatch):
+    """首页也必须校验 token，未持有者无法从 403 响应取得 token（Issue #73）。"""
+    monkeypatch.setattr(view_server, "_get_rendered_html", lambda: "<html>board</html>")
+    monkeypatch.setattr(view_server, "_SESSION_TOKEN", "test-session-token")
+    responses = []
+
+    class MockHandler:
+        def __init__(self, path):
+            self.path = path
+        def _send_error_text(self, status, message):
+            responses.append((status, message))
+        def _send_bytes(self, status, body, ct):
+            responses.append((status, body))
+
+    view_server._Handler._route_get(MockHandler("/"))
+    assert responses[-1][0] == 403
+    assert "test-session-token" not in responses[-1][1]
+
+    view_server._Handler._route_get(MockHandler("/index.html?token=wrong"))
+    assert responses[-1][0] == 403
+
+    view_server._Handler._route_get(
+        MockHandler("/?token=test-session-token")
+    )
+    assert responses[-1][0] == 200
+    assert responses[-1][1] == b"<html>board</html>"
+
+
+def test_find_free_port_and_serve_ipv6_loopback(monkeypatch):
+    """验证 IPv6 loopback (::1) 能够正确分配空闲端口并识别 AF_INET6（Issue #38）。"""
+    port = view_server._find_free_port("::1")
+    assert isinstance(port, int)
+    assert port > 0
+
+    started = []
+    class FakeServer:
+        def __init__(self, addr, handler):
+            started.append((addr, self.address_family if hasattr(self, "address_family") else None))
+        def serve_forever(self):
+            raise KeyboardInterrupt
+        def shutdown(self):
+            pass
+
+    monkeypatch.setattr(view_server, "ThreadingHTTPServer", FakeServer)
+    monkeypatch.setattr(view_server, "_open_browser", lambda url: None)
+
+    view_server.serve(host="::1", port=port)
+    assert len(started) == 1
+    assert started[0][0] == ("::1", port)
+
+
+
+

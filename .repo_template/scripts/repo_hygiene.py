@@ -15,7 +15,10 @@
   repo_hygiene.py archive-review review_xxx [--write]
 """
 
+from __future__ import annotations
+
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -29,6 +32,8 @@ REVIEWS_DIR = REPO_ROOT / "docs/reviews"
 ARCHIVE_REVIEWS = REPO_ROOT / "docs/archive/reviews"
 HANDOFF = REPO_ROOT / "docs/handoff.md"
 ARCHIVE_HANDOFF = REPO_ROOT / "docs/archive/handoff.md"
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 SPIKE_DIR_RE = re.compile(r"^s[0-9]+_[a-z0-9_]+$")
 SPIKE_SID_RE = re.compile(r"^s[0-9]+$")
 ARCHIVE_HANDOFF_HEADER = (
@@ -41,11 +46,15 @@ class HygieneError(Exception):
     pass
 
 
-def _git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", "-C", str(REPO_ROOT), *args],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
+def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(REPO_ROOT), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as err:
+        raise HygieneError(f"git {' '.join(args)} 超时（{timeout}s）") from err
 
 
 def _rel(path: Path) -> str:
@@ -57,9 +66,22 @@ def _rel(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def _split_handoff(text: str) -> tuple[list[str], list[list[str]]]:
-    """返回 (header, sections)。header=首个 H2 前的行；sections=各 H2 节（含标题行）。"""
+    """返回 (header, sections)。围栏内的 ``## `` 行不作为节边界（Issue #79）。"""
     lines = text.splitlines()
-    h2 = [i for i, line in enumerate(lines) if line.startswith("## ")]
+    h2 = []
+    fence = None
+    for index, line in enumerate(lines):
+        if fence is not None:
+            close = FENCE_CLOSE_RE.match(line)
+            if close and close.group(1)[0] == fence[0] and len(close.group(1)) >= fence[1]:
+                fence = None
+            continue
+        opening = FENCE_RE.match(line)
+        if opening:
+            fence = (opening.group(1)[0], len(opening.group(1)))
+            continue
+        if line.startswith("## "):
+            h2.append(index)
     if not h2:
         return lines, []
     header = lines[: h2[0]]
@@ -105,17 +127,27 @@ def cmd_archive_handoff(args: argparse.Namespace) -> None:
         if ARCHIVE_HANDOFF.is_file()
         else ARCHIVE_HANDOFF_HEADER
     )
-    # 幂等：archive append 与 handoff 重写是两次写；若上一轮 append 后 handoff
-    # 重写失败，重跑时必须跳过已追加的内容，否则重复段落。
-    if existing.rstrip("\n").endswith(stale_text.rstrip("\n")):
-        print(f"{_rel(ARCHIVE_HANDOFF)} 已含待迁段落，跳过追加（上次中断前的 append 已生效）")
+    # 幂等：archive append 与 handoff 重写是两次写；用本轮段落摘要标记确认
+    # append 已生效。仅凭归档尾部文本相同不能证明是本轮追加（Issue #79）。
+    marker = (
+        "<!-- repo-hygiene:handoff-sha256="
+        + hashlib.sha256(stale_text.encode("utf-8")).hexdigest()
+        + " -->"
+    )
+    if marker in existing:
+        print(f"{_rel(ARCHIVE_HANDOFF)} 已含本轮待迁段落，跳过追加（上次中断前的 append 已生效）")
+    elif existing.rstrip("\n").endswith(stale_text.rstrip("\n")):
+        raise HygieneError(
+            f"{_rel(ARCHIVE_HANDOFF)} 尾部已与待迁段落相同但缺少归档标记；"
+            "无法确认是否本轮已追加。未改写 handoff.md，请人工核对归档后重试"
+        )
     else:
         if existing and not existing.endswith("\n"):
             existing += "\n"
         if existing and not existing.endswith("\n\n"):
             existing += "\n"
         ARCHIVE_HANDOFF.parent.mkdir(parents=True, exist_ok=True)
-        _replace_text(ARCHIVE_HANDOFF, existing + stale_text)
+        _replace_text(ARCHIVE_HANDOFF, existing + stale_text + marker + "\n")
     body = "\n".join(header).strip()
     _replace_text(HANDOFF, (body + "\n\n" + _join_blocks([latest])) if body else _join_blocks([latest]))
     print(f"已迁 {len(stale)} 节到 {_rel(ARCHIVE_HANDOFF)}；handoff.md 保留最新节")
@@ -169,11 +201,18 @@ def cmd_archive_spike(args: argparse.Namespace) -> None:
                if p.is_dir() and p.name.startswith(sid + "_") and SPIKE_DIR_RE.match(p.name)]
     if len(matches) != 1:
         raise HygieneError(f"sid {sid} 匹配 {len(matches)} 个 spike 目录；期望恰好 1 个")
+    from repo_task.finalization import validate_spike
+    try:
+        validate_spike(REPO_ROOT, matches[0])
+    except ValueError as error:
+        raise HygieneError(str(error)) from error
     _move_dir(matches[0], ARCHIVE_SPIKES / matches[0].name, args.write)
 
 
 def cmd_archive_review(args: argparse.Namespace) -> None:
     name = args.dir
+    if "/" in name or "\\" in name or ".." in name or Path(name).name != name:
+        raise HygieneError(f"review 目录名非法：{name!r} 不能包含路径分隔符或父目录引用")
     if not name.startswith("review_"):
         raise HygieneError(f"review 目录名应以 review_ 开头，收到 {name!r}")
     if not REVIEWS_DIR.is_dir():

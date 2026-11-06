@@ -1,58 +1,88 @@
----
-tid: "t026"
-slug: "overview_storage_estimate_cache"
-title: "概览磁盘估算缓存与后台刷新"
-status: "done"
-branch: "t026_overview_storage_estimate_cache"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "ec8bfbf37a782d1b3227cfd1aea7fca289fcd886"
-depends_on: "t025"
-conflicts_with: ""
-note: "开屏用缓存即时显示，后台刷新。来源 p007。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+概览页开屏时自动串行执行 4 次 `analyze`（/Applications、/System、~/Library/Developer、/Users）计算五段磁盘估算；`/Users` 级扫描可达数十秒到数分钟，既拖慢首屏又占用命令通道。用户明确要求：不做“点击计算”按钮，改为用缓存即时显示并在后台刷新。
 
-## 实施笔记
+来源 pending `p007`。核实（2026-10-16，含用户修订：不做按钮）：问题仍存在。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：`p007`（2026-10-16 核实；用户修订：不做按钮）。
+- 缓存 4 个目录的字节和（apps/system/developer/users）与采集时间；最终五段中的“其他”每次用当前 status 已用空间现算，不缓存。
+- 缓存两份：进程内 + 磁盘（`~/Library/Application Support/zmole/storage_estimate.json`，含 `schemaVersion` 与 `capturedAt`，原子写）。
+- 进概览时先读磁盘缓存：有则立即渲染（容量来自 status，五段标“估算”）；无则先显示容量与五段占位，后台计算完成后填充。
+- 后台刷新触发（无按钮）：缓存缺失或超过 TTL（6 小时）时刷新；监听 `OperationCoordinator.invalidationGeneration`，写入类操作成功后视为估算失效并后台重算。
+- 同一时刻只允许一次估算在飞；估算在独立只读通道执行（依赖 t025），不占用其它命令通道。
+- 某目录 `analyze` 失败/超时：该段缓存为空、界面占位；成功段照常渲染并写缓存。
+- demo 模式不读不写缓存，使用夹具。
 
-- 新增 `StorageEstimateCache`（App 容器下 `storage_estimate.json`，schemaVersion/capturedAt，原子写，TTL 6h / 最大年龄 7 天）；`StorageEstimate.swift` 增 `StorageSums`(Codable) + `loadSums()`。
-- `OverviewViewModel` 增缓存/coordinator/clock：`primeEstimate` 先渲染缓存、`refreshEstimateIfNeeded` 仅在缺失/过期/失效时后台重算、`estimateNeedsRefresh`、`estimateInvalidated`（含 mid-scan 失效保留）；部分缓存不抑制重试。
-- `OverviewView` 先 prime 再后台刷新，并监听失效；`AppDependencies` 传 `.live` 缓存（demo 为 nil）。
-- `docs/blueprint/architecture.md` 更新估算缓存与刷新口径。
-- 测试 `tests/unit/OverviewCacheTests.swift` 覆盖 6 条 AC 与两个回归（mid-scan 失效、部分缓存重试）。
+### 非范围
 
-## Review 处置
+- 不做用户可见的“重新计算”按钮。
+- 不改变五段目录口径与公式，不改捆绑 analyze。
+- 缓存不跨 schema 版本迁移。
 
-review_level=single（`review_general.md`）。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t026_gen_f001|minor|已修|mid-scan 失效被清空，改为计数比对保留|OverviewViewModel.swift|
-|t026_gen_f002|minor|已修|不完整缓存按新鲜处理，改 isComplete 强制重试|StorageEstimate.swift / OverviewViewModel.swift|
-|t026_gen_f003|minor|撤回|mid-scan 失效保留但不自动再排一次；下次触发/进入概览会重算，非阻断|OverviewViewModel.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：193 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；缓存/新鲜度/失效/部分失败由假 analyze + 临时缓存 + 假时钟覆盖
-- review：`review_general.md` rounds 1-2 最终 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：存在有效磁盘缓存时，概览在不调用 analyze 的情况下即渲染出五段（非占位）。
+- [ ] AC-002：无缓存时概览先显示容量，五段为占位，随后后台计算完成并填充。
+- [ ] AC-003：缓存未过期时不重复执行 analyze。
+- [ ] AC-004：缓存过期或收到 coordinator 失效信号后，后台重算并更新缓存与界面。
+- [ ] AC-005：某个目录 analyze 失败时该段为占位，其余段仍渲染且成功段写入缓存。
+- [ ] AC-006：`schemaVersion` 不符或超过最大年龄（7 天）的缓存视为无效并重算。
 
-### 结果摘要
+### 可测试性声明
 
-- 概览五段估算改为缓存优先即时渲染、后台按 TTL/写入失效刷新，在独立只读通道执行；无手动按钮；部分失败段占位且可重试。遗留：一个 minor（mid-scan 失效重排）已撤回。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-006：注入假 analyze 命令、临时缓存目录与假时钟自动断言。
+
+## 上下文区
+
+- 来源：`p007`（用户实测反馈 2026-10-16；修订：不做按钮）
+- 相关：`p006`/t025（独立只读通道）
+
+### 有意不测
+
+- 真实 `/Users` 扫描耗时：不进自动测试。
+- 估算与系统设置存储分类的一致性：本页为目录估算，不做一致性断言。
+
+### 测试策略
+
+- 假 analyze 返回固定字节；用临时目录承载缓存文件；用可控时钟判断 TTL 与最大年龄。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：缓存值随时间与磁盘变化失真，误导用户。
+- 回退：TTL + 事件失效 + 界面“估算”标注；缓存无效即重算。
+
+### 依赖与约束
+
+- 依赖 t025（独立只读通道）。
+- macOS 13+；缓存写在 App 容器，不触碰 `~/.config/mole/`。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：概览估算的缓存与后台刷新口径。

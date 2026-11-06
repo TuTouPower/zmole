@@ -1,64 +1,86 @@
----
-tid: "t008"
-slug: "clean_run"
-title: "clean 预览确认后执行"
-status: "done"
-branch: "t008_clean_run"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "e1bfc29e87ddc097449c5b2218997626026faca4"
-depends_on: "t003"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+clean 会永久删除。必须**本次**预览成功后再确认。非 TTY 下 mole 会自动跑用户级清理，故未确认不得 spawn 无 `--dry-run` 的 clean。
 
-## 实施笔记
+本 task 同时定下 t009–t011 共用的预览新鲜度与执行生命周期（实现放共享类型/组件）。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-- 新增 clean preview generation/store：每次预览先移除旧 `clean-list.txt`，只读取本次 dry-run 写出的文件；文件缺失、空文件、失败或内容变化均使确认失效。
-- 新增 `CleanViewModel`/`CleanView` 生命周期：预览 `clean --dry-run`、确认后 `clean`、确认取消、执行取消、重复执行防重入、Bridge cancel 与失败摘要；ContentView 持有共享 VM，切换侧栏不自动重跑。
-- 新增 clean 三语文案与初始化失败本地化；AC-005 测试同时锁定 catalog 语义和 `CleanView` 文案接线。
-- XCTest 38/38；Debug、Release 构建通过；signed Release universal/codesign 通过；bundled mole 1.55.0；模板 pytest 480 passed；格式、JSON、diff 检查通过。
+- `clean --dry-run` 成功结束后读取**本次**写出的 `clean-list.txt`（路径可注入）；展示并标明「执行会重扫」
+- 仅当存在未过期的成功预览时，确认才可点。过期：预览失败、用户取消预览、确认对话框取消、再次点预览、list 文件不是这次 run 写的
+- 确认后 spawn `clean`（无 dry-run）；取消则不 spawn 执行
+- 复用 t003 确认组件
+- 执行中：忙碌，忽略重复点击；提供取消，取消须结束 Bridge 中的 Process；失败/部分完成展示 mole 输出摘要
+- 切到其它侧栏项再回来：不得自动再 spawn；若仍忙碌则显示进行中
 
-## Review 处置
+### 非范围
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+- `--external`、whitelist TUI、系统级 sudo 策略定制（沿用 mole osascript）
 
-### Round 1–5
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t008_code_f001|important|已修|失败路径保留 stdout/stderr 并展示合并摘要，补充非零执行测试|src/zmole/Features/Clean/CleanViewModel.swift:133-145；tests/unit/ZmoleTests.swift|
-|t008_code_f002|minor|已修|clean 错误与 Bridge 初始化失败统一改用三语 String Catalog|src/zmole/Features/Clean/CleanViewModel.swift:16-57；src/zmole/Resources/Localizable.xcstrings|
-|t008_test_f001|important|已修|AC-005 测试断言三语指定语义，并断言 `CleanView` 实际接入该 key|tests/unit/ZmoleTests.swift:430-471|
-|t008_test_f002|important|已修|补充旧列表、未写列表与 dry-run 非零路径，确认不可执行且不回读旧文件|tests/unit/ZmoleTests.swift:389-418|
-|t008_test_f003|important|已修|失败测试精确断言 stdout/stderr 摘要与非零错误|tests/unit/ZmoleTests.swift:503-528|
-|t008_test_f004|important|已修|执行占用前置断言，spy 等待超时抛错并精确核对单次执行|tests/unit/ZmoleTests.swift:452-477；tests/unit/ZmoleTests.swift:846-851|
+<!-- 规范（门禁必留，不得删除） -->
 
-Round 2–5 逐轮复核前轮 finding；Round 5 两轴 `verdict: PASS`，review scope `b3700c2d73fcb37c`，无遗留 critical/important/minor。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-无 finding 时写“Round N 零 finding”。
+<!-- /规范 -->
 
-## 收尾报告
+- [ ] AC-001：预览调用的 argv 含 `clean` 与 `--dry-run`
+- [ ] AC-002：确认前，执行用 Bridge 方法调用次数为 0（无 dry-run 的 clean）
+- [ ] AC-003：用户取消确认后，仍不出现无 `--dry-run` 的 clean，且预览标记为过期，需重新预览才能再确认
+- [ ] AC-004：本次预览成功后确认，argv 为 `clean` 且不含 `--dry-run`
+- [ ] AC-005：预览 UI 含「执行时会重新扫描、列表可能变化」的说明
+- [ ] AC-006：dry-run 非零或未写出本次 list 文件时，界面为预览失败，确认不可用；不得展示目录里旧的 `clean-list.txt`
+- [ ] AC-007：执行过程中再次点击执行不创建第二个 Process
+- [ ] AC-008：执行中点取消后，Bridge `cancel` 被调用，忙碌结束
+- [ ] AC-009：执行非零退出时展示失败摘要，不假装成功
 
-### 验收与验证
+### 可测试性声明
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：XCTest 38/38；Debug、Release 构建；signed Release universal/codesign；bundled mole 1.55.0；模板 pytest 480 passed；`md_format.py --check`、JSON 与 `git diff --check` 通过。
-- 黑盒：`testing.md` 的 `blackbox_verify` 未定义；本 task 未对真实 clean 执行破坏性操作，全部行为由临时 list 文件与 Bridge spy 验证。
-- review：full Round 5，代码轴与测试轴均 PASS。
-- AC 证据：见 `handoff.json`
+<!-- 规范（门禁必留，不得删除） -->
 
-### 结果摘要
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- 完成 clean 预览、确认后执行和取消/失败/忙碌生命周期；无遗留 finding。
+<!-- /规范 -->
+
+- AC-001–AC-004、AC-006–AC-009：假 Bridge spy 自动
+- AC-005：UI 文案测试或 snapshot
+
+## 上下文区
+
+- 来源：ADR-004；审阅 P1 预览约束、P2 生命周期
+
+### 有意不测
+
+- 真机删除效果：不进自动测试
+
+### 测试策略
+
+- spy 参数、调用次数、预览世代 token；旧 list 文件夹具
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。s001：`clean --dry-run` 写出 `$HOME/.config/mole/clean-list.txt`
+
+### 风险与回退
+
+- 风险：误 spawn 真实 clean；读到上次预览文件
+- 回退：预览世代 token；执行入口检查 token
+
+### 依赖与约束
+
+- 依赖 t003；review_level=full；生命周期依赖 t002 的 cancel/忙碌 API
+
+### Finalization 时更新的 blueprint
+
+- 无

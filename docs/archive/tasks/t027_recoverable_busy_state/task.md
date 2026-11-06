@@ -1,62 +1,81 @@
----
-tid: "t027"
-slug: "recoverable_busy_state"
-title: "mole busy 降级为可恢复提示"
-status: "done"
-branch: "t027_recoverable_busy_state"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "97734278e417bd4b1f84f647e052b2f3ee35ef1c"
-depends_on: "t025"
-conflicts_with: ""
-note: "区分瞬时忙碌与真实失败。来源 p008。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+命令通道被占用时，各页面直接把 `MoleBridgeError.busy`（“另一个 mole 命令正在运行”）当作失败塞进持久错误区，例如安装包页显示红色「安装包扫描失败 / 另一个 mole 命令正在运行」。瞬时的命令占用被误报为功能失败，误导用户。
 
-## 实施笔记
+来源 pending `p008`。核实（2026-10-16）：问题仍存在。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：`p008`（2026-10-16 核实）。用户实测安装包页 busy 显示为红色失败。
+- 区分「瞬时忙碌（busy）」与「真实失败」：busy 不得以失败状态展示。
+- busy 时给出可恢复提示（例如“另一个 mole 命令正在运行，请稍后重试”），并在通道空闲后可清除/重试。
+- 真实错误（非 busy）保持现有持久失败展示与摘要。
+- 覆盖只读与写入页面中会把 `MoleBridgeError.busy` 映射为错误的路径（分析、历史、卸载列表、安装包扫描、清理/优化/项目清理预览、概览估算/历史）。
 
-- 新增 `CommandBusy.isBusy` 与 `RecoverableBusyNotice`（中性提示视图）；`MoleBridgeError.isBusy`。
-- 各 VM 增 `showBusyNotice`（Analyze/History/Overview/Installers/Uninstall/Clean/Maintenance）：busy 时不设失败、保留既有数据；协调器租约忙改为置提示并回滚 session（Clean/Maintenance/Uninstall 改为先 acquire 再 beginPreview）。真实失败不变。
-- 各页渲染中性 busy 提示。t025 的写入互斥用例改为表示无关断言（不 spawn）。
-- `docs/design/ui_contract.md` 更新忙碌态与失败态区分。
-- 测试 `tests/unit/RecoverableBusyTests.swift` 覆盖三条 AC。
+### 非范围
 
-## Review 处置
+- 不实现命令自动排队或后台重试。
+- 不改并发通道模型（由 t025 交付）。
+- 不改变真实失败的文案与持久结果区行为。
 
-review_level=single（`review_general.md`）。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t027_gen_f001|important|已修|Uninstall 先 beginPreview 后 acquire，busy 卡 previewing；改为先 acquire|UninstallViewModel.swift|
-|t027_gen_f002|minor|已修|Installers 成功后未清 busy 提示|InstallersViewModel.swift|
-|t027_gen_f003|minor|已修|MoleBridgeError 两 case 并到一行，已分行|MoleBridgeError.swift|
-|t027_gen_f004|minor|已修|删除 CommandBusy 死代码|CommandBusy.swift|
-|t027_gen_f005|minor|已修|Overview busy 不清 errorMessage|OverviewViewModel.swift|
-|t027_gen_f006|minor|已修|t025 用例改为表示无关断言|CommandConcurrencyTests.swift|
-|t027_gen_f007|minor|已修|Overview 真实失败未清 busy 提示|OverviewViewModel.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：198 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；busy/失败区分由假进程与协调器租约覆盖
-- review：`review_general.md` rounds 1-3 最终 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：命令因通道忙碌返回 `busy` 时，页面展示可恢复提示，且错误区不处于失败状态。
+- [ ] AC-002：非 busy 的真实失败仍展示为失败并保留摘要。
+- [ ] AC-003：busy 提示在通道空闲后可通过重试清除并成功执行。
 
-### 结果摘要
+### 可测试性声明
 
-- 命令通道忙碌（含写入租约占用）不再显示为失败，改为中性可恢复提示并可重试；真实失败保持原有持久结果区与摘要。遗留：无。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-003：注入先后返回 busy 与成功的假进程自动断言。
+
+## 上下文区
+
+- 来源：`p008`（用户实测反馈 2026-10-16）
+- 相关：`p006`/t025（busy 仅出现在写入通道或同页重复提交）
+
+### 有意不测
+
+- 真机多页面切换的时序观感：不进自动测试。
+
+### 测试策略
+
+- 假 process 第一次抛 `MoleBridgeError.busy`、第二次成功；断言首次为可恢复提示、二次成功且提示清除。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：把真实失败误判为可恢复，用户拿不到错误信息。
+- 回退：只对 `MoleBridgeError.busy` 单一路径降级，其余错误不变。
+
+### 依赖与约束
+
+- 依赖 t025（统一 busy 语义与通道模型）。
+- macOS 13+。
+
+### Finalization 时更新的 blueprint
+
+- `docs/design/ui_contract.md`：忙碌态与失败态的区分展示。

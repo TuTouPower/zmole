@@ -1,81 +1,87 @@
----
-tid: "t016"
-slug: "overview_status"
-title: "概览首页与状态页"
-status: "done"
-branch: "t016_overview_status"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "43243a5d0d7b3bc9d8f832717358f7a792358de6"
-depends_on: "t015"
-conflicts_with: ""
-note: "概览真实采样、五段估算、状态页。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+概览是新的首页。状态页改到侧边栏后仍用现有 watch，并补上权威 demo 里已有真实字段的指标。五段磁盘分类 mole 不提供，用目录体积估算。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderOverview` 与 `renderStatus`。不要用 `docs/design/demo_reference.html`，也不要用现有 `docs/design/ui_contract.md` 的状态页结构。示例数字、假进程和固定柱状图不是数据。五段的名称和环的位置照该 HTML，数值口径以本 spec 为准。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 概览展示 status 的健康分、CPU、内存、可用磁盘。快捷卡片只跳转页面，不执行清理、优化或删除。问候语可以随时段变化，不携带指标。
+- 磁盘环五段：应用程序为 `/Applications`，系统为 `/System`，开发者为 `~/Library/Developer`，用户数据为 `/Users` 减去开发者，其他为 status 已用空间减去前四段且不小于 0。环上标明估算。总量、已用、可用仍来自 status。五段未完成时显示占位，不填演示数字。
+- 最近操作来自 history。没有记录时不显示示例条目。趋势只绘制已经采到的点；采样不足时显示还没有足够采样。
+- 状态页展示健康分、CPU、内存、磁盘读写、温度、网络上下行、进程表、僵尸进程数。缺失字段显示未知。进程表只读。采样间隔维持 1 秒。页头可暂停。离开状态页或没有订阅者时停止 watch。恢复后的缺字段不把 0 显示成真实速率。
+- 状态正在采集时，侧边栏状态项显示圆点；暂停或离页后圆点消失。
 
-- 新增 `StorageBreakdown` 五段公式 + `StorageEstimateLoader`（四次 analyze 目录求和，串行）；`OverviewMetrics`、`OverviewTrend`、`OverviewQuickAction`、`OverviewViewModel`；重写 `OverviewView`（健康分/CPU/内存/可用磁盘、五段环、快捷卡、最近操作、趋势）。
-- `StatusSnapshot` 增加 `cpuTemperature`（thermal.cpu_temp）与 `zombieCount`；`StatusView` 增温度/僵尸面板；新增 `StatusReadout` 统一缺失值显示“未知”。
-- `AppShellView` 按目的地统一 start/stop 共享 status watch；`SidebarView` 状态项在采集中显示圆点。
-- 关键决策：`MoleBridge` 单 active runner，常驻 status watch 与一次性命令冲突。App 装配改为两条独立 `MoleBridge`（流式 = status watch；一次性 = analyze/history/预览等）。概览的五段估算串行执行，且在 history 之后、首次拿到已用空间时只加载一次（无逐 tick 重算）。
-- `DemoMoleProcess`/`DemoMoleStreaming` 夹具改为按路径返回 analyze，并补 thermal/zombie 字段。
-- 黑盒：同 t015，GUI demo smoke 受执行环境限制无法取得窗口；已用自动化门禁（121 单测含注入夹具）替代，见 t015 实施笔记。
+### 非范围
 
-## Review 处置
+- 不调用系统私有存储框架。
+- 不把五段估算写成与系统设置一致。
+- 不结束进程，不改 watch 的删除行为。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-10-16T17:57:26+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t016_gen_f001|important|已修|watch 与一次性命令共用单 bridge 互斥，拆为两条独立 bridge|AppDependencies.swift|
-|t016_gen_f002|important|已修|估算绑定 collectedAt 逐 tick 重算，改为一次性触发|OverviewView.swift|
-|t016_gen_f003|minor|已修|网络缺失改显示“未知”|StatusReadout.swift|
-|t016_gen_f004|minor|已修|补 AC-006/AC-007 断言|OverviewTests.swift|
-|t016_gen_f005|minor|已修|概览重复 start 移除，watch 生命周期交给壳|OverviewView.swift|
-|t016_gen_f006|minor|已修|refresh 加重入保护|OverviewViewModel.swift|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-10-16T18:02:00+08:00)
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t016_gen_f007|important|已修|四次 analyze 并发共用命令 bridge，改为串行|StorageEstimate.swift|
-|t016_gen_f008|minor|已修|architecture.md 两条 bullet 合并，已拆开|architecture.md|
-|t016_gen_f009|minor|已修|单 bridge 兜底会重现争用，已移除|AppDependencies.swift|
+- [ ] AC-001：注入一份 status 快照后，概览上的健康分、CPU、内存、可用磁盘与该快照一致。
+- [ ] AC-002：概览快捷卡片只改变当前页面，不调用清理、优化、项目清理、卸载或安装包执行。
+- [ ] AC-003：四段目录体积与已用空间按上述公式得到五段；任一输入缺失时该段为占位而不是演示常量。
+- [ ] AC-004：history 为空时概览不出现示例操作；有记录时最近操作的标题与时间来自该记录。
+- [ ] AC-005：采样点少于趋势所需数量时不绘制固定柱状图，并显示采样不足。
+- [ ] AC-006：状态页对缺失的温度或网络显示未知，进程行没有结束动作。
+- [ ] AC-007：离开状态页后 watch 停止；暂停时侧边栏圆点不显示为采集中。
 
-### Round 3 (2026-10-16T18:06:00+08:00)
+### 可测试性声明
 
-Round 3 verdict PASS；新 finding 两条 minor。
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t016_gen_f010|minor|撤回|首帧已用空间等待上限 12s，超时则本次不估算是可接受取舍，非 spec AC|OverviewView.swift|
-|t016_gen_f011|minor|撤回|跨页短暂 busy 属单命令 bridge 的既有语义，后续命令级排队作为长期架构项，不在本 task|AppDependencies.swift|
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-## 收尾报告
+<!-- /规范 -->
 
-### 验收与验证
+- AC-001–AC-007：注入假 status、假 history 与假目录体积后自动断言。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：121 tests / 0 failures；`pytest .repo_template/tests -q -m contract` 见下
-- 黑盒：GUI demo smoke 受执行环境限制无法取得窗口（同 t015）；状态只读 watch 由 StatusStreamTests 自动化覆盖
-- review：`review_general.md` three rounds，最终 verdict PASS；f001/f002/f007 等 important 全部修复
-- AC 证据：见 `handoff.json`
+## 上下文区
 
-### 结果摘要
+- 来源：`docs/design/refactor_grilling.md` Q7、Q22、Q25–Q27、Q33–Q35。用户 2026-10-16 批准。
 
-- 概览首页接入真实 status（健康分/CPU/内存/可用磁盘/趋势）+ 五段目录估算 + history 最近操作；状态页补温度与僵尸进程，缺失显示未知；watch 按页面生命周期启停，侧边栏状态项显示采集圆点。遗留：t010/t011 两条 minor 已撤回（可接受取舍）。
+### 有意不测
+
+- 真实磁盘与系统设置数字是否接近：不进自动测试。估算偏差在界面标明。
+
+### 测试策略
+
+- 五段公式用固定字节夹具，包括相减为负时归零。
+- watch 生命周期沿用现有 StatusWatch 测试替身。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。status 与 analyze 字段已由 s001 样例核对。
+
+### 风险与回退
+
+- 风险：全盘分析拖慢概览首屏。
+- 回退：容量先显示，五段完成前保持占位。
+
+### 依赖与约束
+
+- 依赖 t015 的概览与状态目的地。
+- `/Users` 与开发者目录必须是两次可区分的体积，不能把包含关系重复相加。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：概览数据来源与五段估算口径。
+- `docs/design/ui_contract.md`：概览与状态页结构。

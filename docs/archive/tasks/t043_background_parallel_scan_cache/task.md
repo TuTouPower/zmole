@@ -1,79 +1,99 @@
----
-tid: "t043"
-slug: "background_parallel_scan_cache"
-title: "后台并行扫描与 24 小时缓存"
-status: "done"
-branch: "t043_background_parallel_scan_cache"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "a7dc728648e71029b450d300ed12b734bbff828d"
-depends_on: ""
-conflicts_with: ""
-note: "用户 2026-10-17 批准：预览改后台扫描；独立项并行；结果落盘；每 24 小时刷新；仅应用运行期间。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+当前 `PrewarmService` 是单 worker 固定队列：卸载名单 → 安装包名单 → clean → optimize → purge，任意时刻只跑一项；页面又只在打开时取一次结果。结果是用户打开清理/优化页时经常为空，必须手动点“预览”并从头扫描。用户要求：扫描在后台运行，独立项并行；页面不打开也提前跑；结果落盘；应用运行期间每 24 小时刷新一次。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 五个只读扫描项：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`。
+- 独立项并行执行，各自使用独立命令通道；clean 扫描与 clean 用户刷新/执行因共用 `clean-list.txt` 而互斥。
+- 结果持久化到应用支持目录，启动时先加载缓存；缓存带 `capturedAt` 与 schema 版本。
+- 应用运行期间每 24 小时刷新一次；手动刷新、写入失效也触发重扫。
+- 扫描失败保留上次成功结果，并暴露失败状态；不阻塞其他项。
+- 应用退出时取消所有后台扫描进程。
 
-- 新增 `BackgroundScanService`（`src/zmole/Features/Operations/BackgroundScanService.swift`）：五项只读扫描各起独立任务并行执行；启动加载缓存、缺失或超过 24 小时的项重扫；周期 tick 默认 60s 检查时效；失败保留上次结果并最多每小时重试；写入租约吊销后经监听重扫；FDA 未授权时安装包项延后。
-- 新增 `BackgroundScanCache`（同目录）：schemaVersion 1 的 JSON 落盘到 `~/Library/Application Support/zmole/background_scan_cache.json`；损坏或旧 schema 整文件忽略。领域类型补 `Codable`：`CleanPreviewSnapshot`/`CleanPreviewGeneration`/`CleanPreviewEntry`/`CleanPreviewSection`/`UninstallAppListing`，`InstallerCandidate` 由 Decodable 扩为 Codable。
-- clean 互斥：用户预览与执行前调用 `userDidRescanAndWaitForTermination(.clean)` 取消并等待后台进程；`deferredClean` 压制取消到用户取租约间隙内的周期重扫；`isCleanBusy` 同时看用户活动与写入租约。
-- `MoleCommandLanes` 增加 5 条后台扫描通道（`BackgroundScanLanes`），`allProcessLanes`/`allStreams` 纳入 shutdown 取消集合；`AppDependencies` 装配服务并新增 `backgroundScanEnabled`（测试关闭，避免单元测试启动真实扫描与污染 Application Support 缓存；该污染在实现期被测试发现并修复）。
-- `PrewarmService`/`PrewarmItem`/`PrewarmPayload`/`PrewarmResult`/`PrewarmResultProviding` 与 `tests/unit/PrewarmTests.swift` 整体删除。理由：串行队列、单 worker、空闲门控、consume-once 语义与本 task 的并行+持久缓存契约整体冲突，就地改断言会变成按实现改测试；旧文件中仍成立的页面采纳与确认保护用例已按新语义等价保留在 `tests/unit/BackgroundScanTests.swift`（uninstall/installers 采纳、clean 确认保护、optimize/purge 采纳）。
-- 测试 spy 均在进程/流边界；服务测试使用真实 `BackgroundScanService`/`BackgroundScanCache`/`CleanPreviewStore`/`UninstallListStream`/`InstallerInterface`/`OperationCoordinator`，缓存全部写临时目录。
+### 非范围
 
-## Review 处置
+- 页面文案、按钮与布局改造（t044）。
+- 移除“预览”门禁、卸载页预览步骤（t044）。
+- 应用退出后继续扫描；不引入 LaunchAgent 或菜单栏常驻。
+- 磁盘分析、状态流、历史、概览存储估算的刷新策略；它们保持现有机制。
+- 修改 mole CLI 的 argv 契约。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-10-17T18:41:00+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t043_code_f001|minor|已修|cancelAndWait 先翻转任务取消位再等通道，消除取消窗口内回写陈旧结果|src/zmole/Features/Operations/BackgroundScanService.swift:179|
-|t043_test_f001|important|已修|AC-002 用例预置既有结果、区分等待终止前后、断言内存与磁盘结果被清除|tests/unit/BackgroundScanTests.swift:38|
-|t043_test_f002|minor|已修|补成员集合断言并在 Round 2 补在途取消用例（后由 f004 修正判别力）|tests/unit/CommandConcurrencyTests.swift:38|
-|t043_test_f003|minor|已修|补 periodicTick + 可变时钟用例，推进 24h 后断言重扫|tests/unit/BackgroundScanTests.swift:145|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-10-17T19:02:41+08:00)
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t043_code_f002|minor|已修|request 的 clean 分支同时检查 deferredClean 与 isCleanBusy，deferred 仅由 noteActivityChanged 解除|src/zmole/Features/Operations/BackgroundScanService.swift:166|
-|t043_code_f003|minor|已修|cancelAndWait 不再手动清 tasks，交由 run 的 defer 收尾，避免覆盖新注册任务|src/zmole/Features/Operations/BackgroundScanService.swift:176|
-|t043_test_f004|important|已修|在途取消用例改 sleep 60、断言 MoleBridgeError.cancelled，取消 no-op 不再能通过|tests/unit/CommandConcurrencyTests.swift:57|
+- [ ] AC-001：应用启动后，未命中 24 小时缓存的只读扫描项自动开始，无需打开任何页面；互不冲突的扫描项可同时处于运行中，观测到至少两项并行。
+- [ ] AC-002：clean 扫描与 clean 用户刷新/执行互斥；执行开始前被取消的后台 clean 进程已终止，观测不到两个进程同时写 `clean-list.txt`。
+- [ ] AC-003：每项完成结果写入磁盘并带 `capturedAt`；重启应用后，在本次扫描完成前页面即可读取上次结果。
+- [ ] AC-004：应用运行期间，缓存超过 24 小时会触发该项自动重扫；未超过 24 小时不因时间自动重扫（手动刷新与写入失效除外）。
+- [ ] AC-005：同一项已有扫描运行时，刷新请求不产生第二个同类进程；该次扫描完成后结果与 `capturedAt` 更新。
+- [ ] AC-006：写入成功使后台扫描结果失效；失效后重新扫描，确认框打开期间新结果不替换正在确认的数据。
+- [ ] AC-007：单项扫描失败不阻塞其他项；该项保留上次成功结果并暴露失败状态，其他项继续完成。
+- [ ] AC-008：后台只运行只读命令与 `--dry-run`，不运行 `clean`、`optimize`、`purge --yes`、不带 `--dry-run`/`--list-stream` 的卸载。
+- [ ] AC-009：无完全磁盘访问权限时安装包扫描不启动；授权事件到来后自动补跑。
+- [ ] AC-010：应用退出时后台扫描进程被取消，不残留子进程。
+- [ ] AC-011：缓存文件损坏或 schema 版本不匹配时被忽略，应用不崩溃，并按无缓存处理重新扫描。
 
-### Round 3 (2026-10-17T19:06:00+08:00)
+### 可测试性声明
 
-Round 3 零 finding（代码轴 PASS，测试轴 PASS）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 4 (2026-10-17T19:08:00+08:00)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t043_test_f005|minor|遗留|deferred 压制与 cancelAndWait 收尾两条并发修复缺反事实测试；t044 重写 clean 刷新路径时补|p015|
+<!-- /规范 -->
 
-## 收尾报告
+- 全部 AC 可自动测试。
+- AC-010 通过取消后台扫描通道后 MoleBridge 的忙碌状态与任务退出验证。
 
-### 验收与验证
+## 上下文区
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodegen generate`；`xcodebuild test -scheme Zmole -destination 'platform=macOS'` 296 用例 0 失败；`xcodebuild build -configuration Release` 通过；`pytest .repo_template/tests -q -m contract` 147 通过；`tests/integration/clean_trash_test.sh`、`installer_interface_test.sh`、`uninstall_stream_test.sh` 全部通过；`git diff --check` 干净
-- 黑盒：testing.md 的 demo smoke 已启动（zh-Hans、demo-data-root 隔离）；另用 Debug 构建启动真实应用：缓存命中三项（installer/uninstall/optimize）未重扫，缺失的 clean 与 purge 并行执行并分别落盘，clean 完成后缓存含五项且带 capturedAt；退出后无残留 mole 子进程
-- review：full；code PASS（rounds 1-3）、test PASS（rounds 1-4）、`check_review_status.py overall=PASS review_scope=ok`、`reviewed_scope 17abd136a2cec471`
-- AC 证据：见 `handoff.json`
+- 来源：用户口述 2026-10-17；现有 `docs/specs/prewarm.md` 与 `docs/blueprint/architecture.md`「空闲预跑」；当前实现 `PrewarmService`、`PrewarmTests`。
 
-### 结果摘要
+### 有意不测
 
-- 后台五类只读扫描并行执行，结果持久化并在 24 小时内复用；用户 clean 与后台 clean 通过取消等待与 deferred 标记互斥；写入失效、失败保留/退避、FDA 延后、退出取消均有单元覆盖。
-- 遗留：`p015`（deferred 压制与 cancelAndWait 收尾的反事实测试，minor）。
+- 应用退出后定时扫描：项目明确不做常驻，非本 task 范围。
+- 并行扫描对磁盘 I/O 的实际性能影响：不做基准测试，只验证行为与互斥正确性。
+- 真实 mole 五类扫描的耗时：使用夹具与命令 spy，真实命令由现有集成脚本覆盖。
+
+### 测试策略
+
+- 新增后台扫描服务测试：并行启动、互斥、24 小时时效、手动刷新复用、失败保留、缓存读写、损坏缓存、FDA 延后。
+- 新增 `BackgroundScanTests` 覆盖并行启动、互斥、24 小时时效、手动刷新复用、失败保留、缓存读写、损坏缓存、FDA 延后；旧的 `PrewarmTests` 的串行顺序/单并发断言随 `PrewarmService` 整体删除，其页面采纳与确认保护的用例按新语义保留在新文件中。
+- 缓存读取用临时目录，不触碰真实 `~/Library/Application Support`。
+- 命令 spy 记录调用、并发数与取消次数；断言只读 argv 白名单。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。`clean --dry-run` 写 `clean-list.txt`、`optimize/purge --dry-run` 只读、`uninstall --list-stream` 渐进输出均已在现有 spec 与测试中核实。
+
+### 风险与回退
+
+- 风险：并行扫描同时触发大量磁盘 I/O，可能拖慢交互；缓存文件格式变化导致升级后不可用；clean 扫描与用户执行竞态。
+- 回退：保留单队列开关或按缓存 schema 忽略旧文件；clean 侧保留“取消并等待终止”互斥路径。出现严重 I/O 问题时可按项降低并发，不改变外部行为。
+
+### 依赖与约束
+
+- 依赖 t025 的多命令通道与 t029 的预跑基础。
+- 平台 macOS 13+；缓存只写应用支持目录，不写 `~/.config/mole`。
+- 后台扫描不得获取写入租约，不得执行破坏性命令。
+
+### Finalization 时更新的 blueprint
+
+- `docs/specs/prewarm.md`：改为后台并行扫描、持久缓存、24 小时刷新、失败保留。
+- `docs/blueprint/architecture.md`：更新「空闲预跑」章节与命令通道说明。
+- `docs/blueprint/domain.md`：预跑条目改为后台扫描。

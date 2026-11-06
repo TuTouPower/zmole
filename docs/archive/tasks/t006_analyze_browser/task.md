@@ -1,61 +1,78 @@
----
-tid: "t006"
-slug: "analyze_browser"
-title: "analyze JSON 只读浏览"
-status: "done"
-branch: "t006_analyze_browser"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "145c21f2ee8132717638b9935fc1e9afcbd9dfc4"
-depends_on: "t003"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+磁盘浏览用 `analyze --json`。第一版不提供删除。`--json` 必须在路径参数之前。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- overview：`analyze --json`
+- 下钻：点击目录 → `analyze --json <path>`，内容区换成该次结果的 entries
+- 返回上级：再请求父路径或 overview，展示对应结果
+- 加载/失败态；无删除按钮、无把选中项移到废纸篓的操作
 
-- 新增 `AnalyzeSnapshotLoader`、`AnalyzeViewModel` 和 SwiftUI 浏览页，固定调用 `analyze --json [path]`，支持 overview、目录下钻、返回、刷新和失败态；界面不提供删除或移到废纸篓动作。
-- 加载期间 Back/目录导航/刷新均防重入，避免同一 `MoleBridge` 并发运行；`AnalyzeDisplayState` 作为展示投影供 UI 使用。
-- XCTest 23/23；Debug、Release 构建通过；signed Release 为 x86_64/arm64，bundled mole 1.55.0，codesign strict 验证通过；模板 pytest 480 passed；真实 CUA 已验证 overview、`/Applications` 下钻与返回。
+### 非范围
 
-## Review 处置
+- 交互 TUI、删除、外部卷专项（可后加路径入口但不删）
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t006_gen_f001|important|已修|加载期间禁用 Back，并在 ViewModel 导航入口防止重入|`src/zmole/Features/Analyze/AnalyzeView.swift`、`AnalyzeViewModel.swift`|
-|t006_gen_f002|minor|已修|新增展示投影、overview/下钻条目断言及加载期间导航回归测试|`src/zmole/Features/Analyze/AnalyzeSnapshot.swift`、`tests/unit/ZmoleTests.swift`|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-09-21 19:17 UTC+8)
+<!-- /规范 -->
 
-Round 2 零 finding。
+- [ ] AC-001：overview 夹具展示 entries 的 name 与 size
+- [ ] AC-002：点击某目录后，下钻 argv 中 `--json` 在路径之前，且路径为该目录的 `path`；界面 entries 来自下钻夹具而非仍显示 overview
+- [ ] AC-003：从下钻返回上级后，界面再次展示上级/overview 夹具条目
+- [ ] AC-004：界面无删除/移到废纸篓动作
+- [ ] [deploy] AC-005：对本机捆绑 mole 能打开 overview、点进一目录看到该路径条目、返回，且不进入 TUI
 
-无 finding 时写“Round N 零 finding”。
+### 可测试性声明
 
-## 收尾报告
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收与验证
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：XCTest 23/23；Debug、Release 构建通过；signed Release 为 x86_64/arm64，bundled mole 1.55.0，`codesign --verify --deep --strict` 通过；模板 pytest 480 passed；`md_format.py --check` 与 `git diff --check` 通过。
-- 黑盒：`testing.md` 未定义 `blackbox_verify`；CUA 启动捆绑 Debug App，验证 overview 展示根目录条目与大小，点击 `Applications` 后显示 `/Applications` 子条目，Back 返回 overview，未进入 TUI。
-- review：`review_general.md`，Round 2 PASS，Round 1 两条 finding 已修，零新 finding，scope 见报告。
-- AC 证据：见 `handoff.json`
+<!-- /规范 -->
 
-### 结果摘要
+- AC-001–AC-004：自动
+- AC-005：手工
 
-- 完成 `analyze --json` 只读浏览，支持 overview、目录下钻、返回、刷新与失败态；无删除或移到废纸篓动作，无遗留 finding。
+## 上下文区
+
+- 来源：ADR-004；p002 已 park 删除
+
+### 有意不测
+
+- 扫描性能与大目录内存：本 task 不设指标
+
+### 测试策略
+
+- 两套夹具（overview / 子路径）驱动导航状态
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。s001：overview 与路径扫描形状已抓。
+
+### 风险与回退
+
+- 风险：大目录 JSON 很大导致 UI 卡顿
+- 回退：列表虚拟化或限制展示条数并标明截断
+
+### 依赖与约束
+
+- 依赖 t003
+
+### Finalization 时更新的 blueprint
+
+- 无

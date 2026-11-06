@@ -1,65 +1,95 @@
----
-tid: "t058"
-slug: "users_developer_overlap"
-title: "概览复用统一测量并消除 Developer 重遍历"
-status: "done"
-branch: "t058_users_developer_overlap"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "4e6a7b02451bae4fc43e02b064bc49c94c3dfccc"
-depends_on: "t051"
-conflicts_with: "t046,t057"
-note: "用户 2026-10-17 批准；同日架构审阅授权修订：使用同一有界测量会话取得 users 总量及 Developer 归属，移除旧概览 analyze 通道与拆路径方案。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+当前概览同时探测 /Users 和 ~/Library/Developer，请求范围重叠。禁止祖先路径并拆分 /Users、主目录、Library 会让调用方重新实现目录枚举、直接文件和错误聚合，且无法从简单路径加减证明统计等价。目标是概览复用已有只读测量会话，一次遍历同时获得用户总量和 Developer 命名子树统计。
 
-## 实施笔记
+本文件描述本 task 完成后的目标，当前状态仍为 backlog。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-### 需求修订（2026-10-17T23:15:20+08:00）
+- 概览使用 t052/t056 的统一只读测量后端，按根和命名子树查询统计；分段展示继续使用 t051 的事件接口。目录事实由测量层负责，概览不递归枚举并拆拼路径。
+- 一轮 /Users 测量同时得到包含 Developer 的用户总量与 Developer 归属合计，不再单独遍历 Developer。只需要补 Developer 且没有可用 /Users 会话时可以单独测，但不得与覆盖它的同版本会话重复遍历。
+- 分类规则明确：当前用户 Developer 子树拥有优先归属；跨 Developer 与其他用户路径的硬链接，在 users 范围只计一次并归属 Developer。显示用户数据为 users 范围去重总量减 Developer 贡献，二者非负且相加等于 users 总量。独立目录自身大小不冒充分类贡献。
+- /Applications、/System 顶层（排除 Volumes）、/Users 的文件统计统一使用测量层的分配块、链接、设备和不可读规则。系统任一必要子项失败仍不可用；Developer 路径不存在时按 0 占用处理，不可读时开发者与依赖它的用户分段不可用，符号链接只计链接自身。
+- 无 FDA 不读取 /Users 或其受保护替代路径；Developer 已可独立读取时可展示开发者，用户段仍未知。FDA 或世代变化后只共享兼容身份，不能把旧独立 Developer 结果拼成新 users 快照。
+- 总容量继续来自独立轻量容量源或已启用状态采样，其他仅在所需分段同属有效版本且完整时派生。统计口径变化使旧概览缓存 schema 退休，丢弃重算。
+- 移除概览专属 analyze 目录探测、固定通道及相应装配；其他仍使用 AnalyzeSnapshotLoader 的消费者保留。demo 提供统一测量契约的内存事实，不读取真实文件。
+- 后端替换后重放 t048 的资源对照，基于最终生产路径重新确认默认名额；旧 analyze 后端的对照只能作历史基线。
 
-- 授权：用户要求按架构质量、设计完整性和技术债修复全部待办 task；本次仅修订目标文档，尚未实施。
-- 决策与追溯：撤回禁止祖先路径、强制现有 CLI 的拆路径方案；概览复用有界测量会话，一次 users 遍历取得 Developer 归属，并移除旧概览探测装配。
-- AC 变更：AC-001 的禁止祖先路径契约退休；保留 AC-002、AC-003 的分类/完整性意图，新增 AC-004～AC-010，覆盖最终后端的资源默认值复核。
+### 非范围
 
-### 统一测量后端接入与消除重遍历实施（2026-10-18T04:55:00+08:00）
+- CLI 增加排除参数、在 Swift Feature 中重写清理引擎，以及同时保留两套生产估算后端。
+- 更改五段名称、删除能力或 t048 的资源名额。
 
-- `DiskMeasurementSession` 扩展：新增 `measureSubtreeOutcome` 与 `isSubtreeReadable`，支持等待指定命名子树测量完成并安全提取统计结果。
-- `StorageEstimateLoader` 重构：支持注入统一 `DiskMeasurementSession`；一轮 `/Users` 遍历同时获取包含 Developer 的用户总量及当前用户 `Library/Developer` 命名子树统计；分类规则明确由 Developer 优先归属，跨目录硬链接归属 Developer，用户数据为 users 减 Developer 贡献。保留 channel fallback 供单测兼容。
-- 缓存口径升级：`StorageEstimateCache.schemaVersion` 由 2 升级至 3，旧 schema 1/2 缓存整体丢弃重算。
-- `AppDependencies` 消除通道：移除 `estimatePool` 独立通道与 analyze 目录命令通道装配，直接将 `analyzeViewModel.session` 注入 `StorageEstimateLoader`。
-- 测试环境保护：`ZmoleApp` 增加 `isTesting` 判定，避免测试运行期间宿主应用启动触发真实全盘 `/Users` 扫描与资源争抢。
-- 验证与基准测试：编写 `OverviewUnifiedMeasureTests.swift` 覆盖 AC-002～AC-010；基准测试复核名额 1、2、3、4（Budget 1: avg=0.0241s, Budget 2: avg=0.0126s, Budget 3: avg=0.0119s, Budget 4: avg=0.0123s），确认生产默认并发名额 3 稳健适用（记录 ADR 013）。
+### 验收标准
 
-## Review 处置
+<!-- 规范（门禁必留，不得删除） -->
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 1 (2026-10-18T04:56:00+08:00)
+<!-- /规范 -->
 
-Round 1 零 finding
+- [x] AC-002：同快照夹具 users=100、Developer 归属=30 时，用户段=70、开发者=30；Developer 归属=0 时用户段=100，不重复减去。
+- [x] AC-003：/System/Volumes 不遍历；任一必要系统子项失败则系统不可用；用户段未知时其他未知。
+- [x] AC-004：完整估算只遍历一次 /Users 内的 Developer 内容，命名子树统计由该次会话产出；概览没有独立 Developer 重遍历或 analyze 命令。
+- [x] AC-005：用户目录直接文件、隐藏项与其他用户子目录全部计入 users 范围；稀疏文件、符号链接和跨设备目录遵循统一测量语义。
+- [x] AC-006：Developer 与其他路径共享硬链接时 users 总量只计一次，归属 Developer；逆转遍历或 worker 完成顺序，分段仍一致。
+- [x] AC-007：无 FDA 不遍历 /Users；授权后使用新权限版本测量。缺 Developer、不可读 Developer 和合法 0 大小可区分，失败不能伪装成 0。
+- [x] AC-008：概览与磁盘提出兼容请求时复用同一会话事实与实际遍历，取消一方不破坏另一方；不兼容世代各自正确完成且遵守总名额。
+- [x] AC-009：旧统计口径缓存被丢弃；新结果遵守版本新鲜度与渐进分段，Demo 不读真实文件系统。
+- [x] [deploy] AC-010：最终统一后端按 t048 相同重复对照方法核对名额 1、2、3、4，记录并确认或更新生产默认值，不能直接套用旧 analyze 后端的最优值。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：374 个单元测试全绿，4 个集成测试全绿，pytest contract 测试全绿。
-- 黑盒：xcodebuild build passed
-- review：full: review_code.md & review_test.md PASS round 1, reviewed_scope 46da0104eae79a0a, 0 finding
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 概览成功复用 `DiskMeasurementSession` 统一测量后端，一次 `/Users` 遍历同时获取包含 Developer 的用户总量及当前用户 `Library/Developer` 命名子树统计，消除独立 Developer 重遍历与旧 `estimatePool` / analyze 目录命令通道。
-- 分类规则严格保证 Developer 优先归属，跨目录硬链接归属 Developer，用户数据为 users 减 Developer 贡献，非负且相加等于 users。
-- 缓存版本平滑升级为 schemaVersion 3。全量 374 个单测与集成测试回归全绿。
+- AC-002～AC-009 可自动测试。生产统一测量层、分段模型与只读临时树联合测试，记录实际枚举/测量次数；不能仅断言请求路径字符串。
+- AC-010 使用本机只读夹具按 t048 方法复核最终后端的名额，不用 CI 墙上时间作门槛。
+
+## 上下文区
+
+- 来源：无；2026-10-17 核对 StorageEstimateLoader.loadSums 的重叠路径和 breakdown 减法；用户授权优先架构质量，允许调整测量接口。
+
+### 有意不测
+
+- 不用根路径调用次数冒充真实少读字节；临时夹具记录枚举次数，真机物理读取量未取得时明确未测。
+
+### 测试策略
+
+- 含 users 直接文件、多个用户、Developer、跨目录硬链接、稀疏文件和符号链接的临时树，独立计算分类期望。
+- 同时从磁盘和概览订阅同一会话，统计枚举入口次数；随后取消其中一个、再刷新另一个，验证共享与世代隔离。
+- 覆盖缺失、不可读、权限升级、部分系统失败和旧 cache schema；保留 Volumes 排除与其他未知的保护断言。
+- 原强制 analyze 的实现断言在本 task 整体退休，替换为统一测量生产入口测试；不把旧预期改成新实现输出。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。
+
+### 风险与回退
+
+- 风险：旧 analyze 与新测量层统计口径不同。完整声明新口径、升级派生缓存并以独立夹具验证，不能静默沿用旧值。
+- 风险：共享用户总量与独立 Developer 快照混世代会错减；分类贡献必须来自同一快照。
+- 回退：撤回统一估算装配，丢弃新格式派生缓存；不保留运行时后端切换或兼容包袱。
+
+### 依赖与约束
+
+- 依赖 t051 的渐进分段事件与资源准入链，已传递获得 t052/t056 的统一会话与有界存储。
+- macOS 13+；仍只读，不改变捆绑 mole 的清理语义。旧 CLI 约束在本 task 明确退休。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`、`docs/specs/overview.md`：统一测量、命名子树贡献、缓存新口径与容量来源。
+- `docs/specs/mole_bridge.md`：移除概览专属 analyze 通道；`docs/blueprint/domain.md`、`docs/blueprint/decisions.md`：分类归属与统一统计语义。

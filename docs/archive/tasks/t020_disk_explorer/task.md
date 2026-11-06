@@ -1,61 +1,84 @@
----
-tid: "t020"
-slug: "disk_explorer"
-title: "磁盘浏览与面积图"
-status: "done"
-branch: "t020_disk_explorer"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "a6b20775333d4ce11d98401017e0638e32dd96ea"
-depends_on: "t015"
-conflicts_with: ""
-note: "只读磁盘浏览，面积按当前层字节。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+磁盘页改为权威 demo 的左列表、右面积图。analyze 只返回当前目录一层，类型只有目录和文件，没有删除接口。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderDisk`。不要用 `docs/design/demo_reference.html`。面包屑、工具条、文件列表、面积图和底部选中详情的位置照该函数。不增加删除控件。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 面包屑、返回上级、当前目录搜索、按大小或名称排序、单击在列表和面积图之间同步选择、展开子项、双击或按钮进入目录。
+- 方块面积只用当前层条目的字节。小方块仍可从列表选中。
+- 类型只区分目录和文件。
+- 没有删除、移入废纸篓或清理按钮。要删除时只能离开本页去清理或项目清理。
+- 重新分析刷新当前根。扫描未完成时不显示演示体积。
 
-- `AnalyzeViewModel` 增加 `open(path:)`（面包屑）、`refreshCurrent`（重扫当前根）、展开子项（`toggleExpanded`/`children(of:)`/`expandedPaths`/`childrenByPath`，仅列表用，面积图仍只用当前层），并注入 `FileRevealing` 做在 Finder 中显示。
-- 抽出纯函数 `AnalyzeSort`/`AnalyzeListOrder`/`AnalyzeArea.share` 便于断言。
-- 重写 `AnalyzeView`：可点面包屑、返回、当前层搜索、按大小/名称排序、列表与面积图选中同步、目录展开与进入、叶子在 Finder 中显示；无删除/清理控件。
-- `tests/unit/DiskExplorerTests.swift` 覆盖下钻 argv、面包屑、展开、面积占比、排序、Finder path、无删除控件。
-- 黑盒：GUI 受限（同前），已用自动化替代。
+### 非范围
 
-## Review 处置
+- 不一次加载整棵磁盘树。
+- 不做五段概览估算，那是 t016。
+- 不增加 analyze 删除参数，不代按键。
 
-review_level=single（`review_general.md`）。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t020_gen_f001|minor|已修|删除未使用的 AppKit 导入|AnalyzeView.swift|
-|t020_gen_f002|minor|已修|refreshCurrent 清理展开缓存|AnalyzeViewModel.swift|
-|t020_gen_f003|minor|撤回|单层展开满足“展开子项”，深层展开非需求|AnalyzeView.swift|
-|t020_gen_f004|minor|撤回|展开失败缓存空结果与并发属边界，无 AC 影响|AnalyzeViewModel.swift|
-|t020_gen_f005|minor|已修|补面积图与列表 path 一致断言|DiskExplorerTests.swift|
-|t020_gen_f006|minor|撤回|AC-005 源码扫描为辅助证据，代码确无删除控件|AnalyzeView.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：153 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；下钻/排序/面积/展开/Finder 由自动化覆盖
-- review：`review_general.md` rounds 1-2 最终 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：进入子目录会再次以该 path 调用 analyze，列表只显示这次返回的直接子项。
+- [ ] AC-002：面积占比等于该项字节除以当前层字节合计。
+- [ ] AC-003：在面积图选中一项后列表选中同一 path；搜索只过滤当前层。
+- [ ] AC-004：按名称排序改变行顺序，不改变各项字节。
+- [ ] AC-005：磁盘页不存在删除或移入废纸篓控件。
+- [ ] AC-006：叶子项可请求在 Finder 中显示其 path；目录项提供进入而不是删除。
 
-### 结果摘要
+### 可测试性声明
 
-- 磁盘页改为面包屑 + 当前层列表 + 面积图 + 底部详情：下钻按 path 调 analyze、面积用当前层字节、列表/面积选中同步、可展开子项、叶子可在 Finder 中显示，无任何删除控件。遗留：minor 边界项已撤回。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-006：注入两层 analyze JSON 后自动断言。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q20、Q21、Q52。用户 2026-10-16 批准。
+
+### 有意不测
+
+- 大目录分析耗时与完全磁盘访问权限下的真实体积：不进自动测试。
+
+### 测试策略
+
+- 面积与排序用固定字节夹具。断言下钻 argv 含目标 path。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。analyze JSON 形状见 s001。
+
+### 风险与回退
+
+- 风险：把概览五段估算和本页面积混成同一口径。
+- 回退：本页只使用当前层 entries。
+
+### 依赖与约束
+
+- 依赖 t015 的磁盘目的地。
+- 分析保持只读。
+
+### Finalization 时更新的 blueprint
+
+- `docs/design/ui_contract.md`：磁盘页为列表加面积图，无删除。

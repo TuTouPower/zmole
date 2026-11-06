@@ -1,54 +1,77 @@
----
-tid: "t004"
-slug: "status_snapshot"
-title: "status JSON 快照页"
-status: "done"
-branch: "t004_status_snapshot"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "fa8b98cb8702fded5dbe75e8d4e14d9548b276d9"
-depends_on: "t003"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+status 有 `--json`，适合做成只读看板。不做 `--watch`。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- `mole status --json` 经 Bridge；展示健康分与 CPU、内存、磁盘摘要
+- 加载中、失败、JSON 损坏态
+- 显式传 `--json`，不依赖「非 TTY 自动 JSON」
+- 刷新按钮：成功后更新上述字段
 
-- 2026-09-21：新增 `StatusSnapshot` 解码、`StatusSnapshotLoader` 与 `StatusViewModel`；默认经 `MoleBridge` 调用 `status --json`，测试可注入命令闭包。
-- 2026-09-21：Status 页覆盖加载中、成功、刷新、非法 JSON、非零退出；刷新开始先清空快照，失败不会保留旧成功数据。
+### 非范围
 
-## Review 处置
+- 交互式 TUI、`--watch`、进程杀除
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-09-21 18:12 UTC+8)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-Round 1 零 finding。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
+<!-- /规范 -->
 
-## 收尾报告
+- [ ] AC-001：对 `s001` 夹具 JSON，界面展示 `health_score`，以及 CPU 用量（或 `cpu.usage`）、内存 used/total（或 used_percent）、至少一块磁盘 used/total（或 used_percent）
+- [ ] AC-002：非零退出或非法 JSON 时可见错误文案，不展示过期成功数据冒充当前结果，不崩溃
+- [ ] AC-003：Bridge 参数含 `status` 与 `--json`
+- [ ] [deploy] AC-004：对捆绑 mole 点刷新后，健康分与 CPU/内存/磁盘区域均有数值（本机）
 
-### 验收与验证
+### 可测试性声明
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodegen generate`；Debug `xcodebuild test` 13/13；Debug/Release `xcodebuild build`；`pytest .repo_template/tests -q` 480 passed；`md_format.py --check`、JSON 校验与 `git diff --check` 通过。
-- 黑盒：CUA 启动 Debug App，首次加载与刷新均展示健康分、CPU、内存 Used/Total、多个磁盘 Used/Total；刷新后数值更新。
-- review：single/general Round 1 PASS，零 finding，scope 见 `review_general.md`。
-- AC 证据：见 `handoff.json`
+<!-- 规范（门禁必留，不得删除） -->
 
-### 结果摘要
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- 完成 status JSON 只读快照页、显式参数调用、刷新和失败态；无遗留 finding。
+<!-- /规范 -->
+
+- AC-001、AC-002、AC-003：自动
+- AC-004：本机手工
+
+## 上下文区
+
+- 来源：`docs/plan.md`；字段见 `samples/status_json.shape.json`
+
+### 有意不测
+
+- 健康分算法：不测（上游）
+
+### 测试策略
+
+- fixture 解码后断言 UI/ViewModel 字段；参数断言为辅
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。s001 已抓非空 status 对象。
+
+### 风险与回退
+
+- 风险：字段增删导致严格解码失败
+- 回退：关键字段缺失则错误态，多余字段忽略
+
+### 依赖与约束
+
+- 依赖 t003；夹具 s001 status_json
+
+### Finalization 时更新的 blueprint
+
+- 无（稳定后可补 `schemas/mole_cli/`，非本 task 必须）

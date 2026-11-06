@@ -1,58 +1,76 @@
----
-tid: "t005"
-slug: "history_list"
-title: "history JSON 列表页"
-status: "done"
-branch: "t005_history_list"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "2c3240d7f0c24376ef615db252aa20ec26f9d958"
-depends_on: "t003"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+`mo history --json` 可回答「mole 删过什么」。s001 只抓到空 `sessions`/`deletions`。单条记录字段以锁定源码 `lib/core/history.sh` 的 `history_render_json_*` 为准，样例见 `samples/history_json.schema_from_source.json`。默认 limit=20，上限 200。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- `history --json --limit`：默认 20；可设 1–200；超出交给 mole 钳制或 UI 先挡住
+- 列表展示会话摘要：`command`、`started_at` 或 `ended_at`、`items`/`size` 至少一类
+- 无记录空态；Bridge 失败或非法 JSON 为失败态
 
-- 2026-09-21：新增 history JSON 解码、Bridge loader、默认 limit=20 与 1–200 钳制；History 页展示 sessions/deletions、空态、刷新和失败态。
-- 2026-09-21：以源码字段构造非空会话夹具，覆盖 command、started/ended 时间、items/size；CUA 启动捆绑 App 验证真实 history 列表和刷新。
+### 非范围
 
-## Review 处置
+- 改日志文件、撤销删除
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-09-21 18:30 UTC+8)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t005_gen_f001|important|已修|空 ended_at 回退非空 started_at，并拒绝空白 command|`src/zmole/Features/History/HistorySnapshot.swift`|
-|t005_gen_f002|minor|已修|新增 displayState 投影并由 UI 消费，补会话与空态测试|`src/zmole/Features/History/HistorySnapshot.swift`; `tests/unit/ZmoleTests.swift`|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-09-21 18:38 UTC+8)
+<!-- /规范 -->
 
-Round 2 零 finding。
+- [ ] AC-001：按源码字段构造的非空 `sessions` 夹具，列表展示对应 `command` 与时间之一
+- [ ] AC-002：`sessions` 与 `deletions` 皆空时显示空态而非崩溃
+- [ ] AC-003：默认刷新的 Bridge 调用含 `history`、`--json`、`--limit 20`
+- [ ] AC-004：limit=1 时 argv 为 `--limit 1`；UI 不发送 0
+- [ ] AC-005：非零退出或非法 JSON 时失败态，不把空列表当成「没有历史」除非 mole 成功返回空数组
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodegen generate`；Debug `xcodebuild test` 18/18；Debug/Release `xcodebuild build`；`pytest .repo_template/tests -q` 480 passed；`md_format.py --check`、JSON 校验与 `git diff --check` 通过。
-- 黑盒：CUA 启动 Debug App，验证真实 Sessions/Deletions 列表和 Refresh 更新。
-- review：single/general Round 2 PASS，前轮 2 条 finding 已修，零新 finding，scope 见 `review_general.md`。
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 完成 history JSON 列表、默认/自定义 limit、空态和失败态；无遗留 finding。
+- 全部 AC 可自动测试
+
+## 上下文区
+
+- 来源：s001 空态顶层形状；记录字段来自 `history_render_json_sessions` / `_deletions`（command/started_at/ended_at/items/size/operation_count/failed_tasks/actions.\* 与 timestamp/mode/status/size_kb/path）
+
+### 有意不测
+
+- 日志轮转与磁盘上 oplog 格式：不测
+
+### 测试策略
+
+- 空夹具 + 源码字段合成非空夹具；失败夹具
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。顶层键 s001 已见；元素字段以源码为准并写入 `history_json.schema_from_source.json`（非运行抓取）。
+
+### 风险与回退
+
+- 风险：源码字段改名
+- 回退：解码失败走失败态
+
+### 依赖与约束
+
+- 依赖 t003
+
+### Finalization 时更新的 blueprint
+
+- 无

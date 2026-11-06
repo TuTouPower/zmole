@@ -1,74 +1,85 @@
----
-tid: "t017"
-slug: "clean_trash_routing"
-title: "清理删除改走废纸篓"
-status: "done"
-branch: "t017_clean_trash_routing"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "0be6d3ef39d0e480ebff7e9a6e71d63cf2f51fb3"
-depends_on: ""
-conflicts_with: ""
-note: "捆绑 clean 改为废纸篓且不再清空废纸篓。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+`mo clean` 现经 `safe_remove` 执行 `rm -rf`，并会永久清空用户废纸篓。已批准的产品行为是：清理移入废纸篓，失败时不改回永久删除，且同一次清理不再清空废纸篓。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 捆绑 clean 中今天会永久删除的用户可见目标改为移入废纸篓。
+- 废纸篓移动失败时目标仍留在原处，结果为失败，不再调用永久删除。
+- 同一次 clean 不再清空 `~/.Trash` 里原有的文件。预览也不再把清空废纸篓计为可回收空间。
+- 需要提权的目标若不能移入废纸篓，同样失败并保留原文件，不永久删除。
+- 补丁限于捆绑树内的 clean 删除路径。上游 tag 升级时要能看出这是本地补丁。
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+### 非范围
 
-- 在 `lib/core/file_ops.sh` 新增 `_mole_clean_trash_destination` / `_mole_clean_trash_path`（非提权、HOME 或 `MOLE_TRASH_DIR` 落点、同名去重），并在 `safe_remove` 的删除 sink 加 `MOLE_CURRENT_COMMAND=clean` 分支：clean 走移入废纸篓，失败保留原文件并返回非零，不回退 `rm -rf`。
-- `safe_sudo_remove` 的 clean 提权分支不再直接 root `mv` 进用户可控 `~/.Trash`，改为委托仓库既有 `_mole_move_path_to_user_trash`（root 暂存中继 + 以 invoking user 身份落篓），并传播 124/`>=128` 取消码。
-- `lib/clean/user.sh` 的 `clean_trash` 直接 `return 0`（同一次不再清空废纸篓；dry-run 预览也不登记）。
-- 补丁全部带 “zmole local patch (t017)” 标记，便于上游升级重放。
-- 测试：新增 `tests/integration/clean_trash_test.sh`，source 真实生产库，用临时 HOME / 废纸篓目录，覆盖 AC-001..005（含同名去重、非 clean 仍永久删除）。已把该测试加入 `docs/blueprint/testing.md` 的 `test_cmd`。
-- `docs/blueprint/domain.md` 更新 clean/optimize 词条；`decisions.md` 追加 007。
-- 黑盒：GUI 相关不在本 task；集成测试为可执行黑盒。
+- 不改卸载的废纸篓默认，不改项目清理和优化任务的永久删除。
+- 不改界面文案与清理页布局，那是 t018。界面视觉只认 `docs/design/mole_desktop_demo_cn_final.html`，本 task 不得另做页面。
+- 不提供按路径子集执行 clean。
 
-## Review 处置
+### 验收标准
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+<!-- 规范（门禁必留，不得删除） -->
 
-review_level=full：代码轴 `review_code.md`、测试轴 `review_test.md`。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t017_code_f001|important|已修|提权入篓绕开既有安全 helper，改为委托 `_mole_move_path_to_user_trash`|file_ops.sh|
-|t017_code_f002|minor|已修|存在性判定补 `-L`，悬挂链接可入篓|file_ops.sh|
-|t017_code_f003|minor|已修|提权入篓传播 124/`>=128` 取消码|file_ops.sh|
-|t017_code_f004|minor|撤回|`clean_trash` 原体保留供上游升级重放，属有意保留|user.sh|
-|t017_code_f005|minor|已修|注释错位，拆到对应函数|file_ops.sh|
-|t017_code_f006|minor|已修|`domain.md` 状态词条越界改动，已回退|domain.md|
-|t017_code_f007|minor|已修|陈旧注释归位到 `safe_remove` 之上|file_ops.sh|
-|t017_test_f001|important|已修|AC-003 假绿，改为运行真实 `clean_trash` 并断言既有废纸篓项存活|clean_trash_test.sh|
-|t017_test_f002|important|已修|提权 sink 零覆盖，补提权用例|clean_trash_test.sh|
-|t017_test_f003|minor|已修|移除 AC-004 死 stub|clean_trash_test.sh|
-|t017_test_f004|minor|已修|补非 clean 仍永久删除的负向用例|clean_trash_test.sh|
-|t017_test_f005|minor|已修|提权用例改委托后自然消除旧 stub 问题|clean_trash_test.sh|
-|t017_test_f006|important|已修|提权用例改断言委托标记，变为红绿可信|clean_trash_test.sh|
+<!-- /规范 -->
 
-零 finding 轮次：代码轴 Round 2 与 Round 4、测试轴 Round 2（除 f005）与 Round 4 无新增阻断项；详见两份报告。
+- [ ] AC-001：对夹具中的可清理文件执行 clean 后，该文件不在原路径，且出现在测试废纸篓目录。
+- [ ] AC-002：废纸篓移动失败时，原路径文件仍在，且不存在对该路径的永久删除。
+- [ ] AC-003：执行前放进废纸篓的夹具文件，在 clean 结束后仍然还在废纸篓。
+- [ ] AC-004：dry-run 预览不把清空用户废纸篓列成待删除项。
+- [ ] AC-005：提权删除无法移入废纸篓时，该目标保留，命令结果为失败而不是永久删除成功。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`bash tests/integration/clean_trash_test.sh`：8/8；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：集成测试即可执行黑盒（真实生产库 + 临时 HOME 废纸篓）；GUI smoke 不涉及本 task
-- review：`review_code.md` / `review_test.md` 均最终 PASS；未解决 important 为 0
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 捆绑 clean 的删除改走废纸篓，失败保留原文件不回退永久删除；同一次不再清空废纸篓；提权路径委托既有安全 helper。遗留：无（f004 为有意保留）。
+- AC-001–AC-005：在临时 HOME 与测试废纸篓目录中自动运行捆绑 clean。不碰开发者真实废纸篓。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q12、Q54。用户 2026-10-16 批准。现有 `lib/clean` 不调用 `mole_delete`；`clean_trash` 用 `safe_remove` 清空 `~/.Trash`。
+
+### 有意不测
+
+- Finder 废纸篓的真实动画与 iCloud 废纸篓：不进自动测试。
+- 全机 clean 的耗时：不进自动测试。
+
+### 测试策略
+
+- 用临时目录充当用户主目录和废纸篓。失败用例把废纸篓目录做成不可写。
+- 断言没有 `rm -rf` 掉原目标；可用删除日志或文件是否仍存在判断。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。删除路径已在捆绑 `file_ops.sh`、`user.sh` 的 `clean_trash` 与 clean 段核对。
+
+### 风险与回退
+
+- 风险：补丁漏掉某条仍走 `safe_remove` 的清理段，造成部分永久删除。
+- 回退：保留上游脚本副本对照；测试覆盖用户缓存、废纸篓清空和失败不回退三条。
+
+### 依赖与约束
+
+- 无前置 task。
+- 不挂 PTY，不代按键。
+- 测试不得删除仓库外的真实用户文件。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：清理改为移入废纸篓，且不清空废纸篓。
+- `docs/blueprint/decisions.md`：追加一条清理删除路径决策，不改写 001–006 原文。

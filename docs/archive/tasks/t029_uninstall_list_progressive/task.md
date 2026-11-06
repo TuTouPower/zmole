@@ -1,84 +1,133 @@
----
-tid: "t029"
-slug: "uninstall_list_progressive"
-title: "名单复用与空闲预跑"
-status: "done"
-branch: "t029_uninstall_list_progressive"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "ab664ca5f9ba3a484abad7a3c1c0056123e82534"
-depends_on: "t028"
-conflicts_with: ""
-note: "用户 2026-10-17 批准（原 t029；合并 t030/t031）。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+打开卸载页会等 `uninstall --list` 把每个应用的大小算完，这段时间整页只有转圈。名单返回后，界面又对每个应用串行读取 Bundle 和 Spotlight，补版本和上次使用时间。预览和确认执行各自再跑一遍应用扫描；确认执行前还会再调用一次 `uninstall --list`。安装包页每次删除一个文件，捆绑 `installer --remove` 都会重新遍历全部扫描根，再判断目标是否仍在候选里，批量删除 N 个文件就会扫描 N 次。
 
-## 实施笔记
+另外，清理、优化、项目清理的 dry-run，以及卸载名单和安装包名单，都要等用户打开页面或点击扫描才开始。预览目前还会先占用全局写入租约，因此一次只读扫描会挡住真正的删除。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+用户已确认（2026-10-17）：冷扫描先列出已发现的应用，大小随后补上；版本和上次使用时间用这一次扫描的结果；同一次会话里预览和确认复用这份名单；名单相对预览已变化时拒绝执行并重新扫描。安装包页会话内复用当前名单，删除只复核目标文件的大小和 identity。这些只读扫描在应用空闲时按顺序预先跑完，打开页面时直接显示已有结果和扫描时间；删除仍必须用户确认，后台不执行删除。
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+## 契约区
 
-- CLI：`uninstall.sh` 新增 `--list-stream`（JSONL：先身份行、后完整行、末 `{"event":"done"}`；身份行经 fd 3 流出，避免与 `scan_applications` 的 stdout 路径捕获冲突）。完整行的版本读目标自身 `Info.plist`（无 Spotlight），上次使用取本次扫描的 epoch；大小 N/A 保持未知。`installer.sh --remove` 不再重扫扫描根：只做目标自身复核（仍在扫描根内、深度 ≤ 扫描深度、候选扩展名/zip 载荷、大小与 identity 未变），另加 `MOLE_INSTALLER_SCAN_DISABLED` 集成测试钩子证明删除路径不重扫。该行为变化同步更新了 `installer_interface_test.sh`（新增 t029 两例，原有 AC 全保留）。
-- 卸载名单侧：新增 `UninstallListStream` + `UninstallAppListing`（渐进行，later-row-wins）+ 解析器；`UninstallViewModel` 重写为流式合并，列表先出、大小/版本随后；Spotlight 元数据提供者删除，版本/上次使用随行携带；确认改用 `UninstallTargetChecking` 轻量核对（路径存在 + bundle id 未变），不再二次 `--list`；身份变化拒绝并重扫名单（保留失败展示）。图标改为异步 `UninstallIconProviding`，列表先可交互、图标随后补上。`UninstallApp.id` 改为 path（渐进阶段稳定），新增 version/lastUsed 字段。
-- 安装包侧：`loadListIfNeeded` 会话复用；删除逐文件复核仍在当前会话名单内（`installers.error.not_listed`）。CLI 删除不再遍历扫描根。
-- 预跑：新增 `PrewarmService`（Features/Operations）：固定顺序 卸载名单→安装包名单→clean/optimize/purge dry-run；单 worker、单 lane、不取写入租约；空闲 = 无租约且无外部活动（磁盘扫描、卸载/安装包名单扫描、正在查看的清理预览）；写入开始取消当前项、写入成功（invalidatePreviews）清空结果并重排队列；失败项跳过并在下一次空闲重试；用户重扫取消当前项并丢弃；结果带 `capturedAt` 供页面标注扫描时间；generation 守卫防止作废后的迟到结果落盘；清理项在用户持有预览时延后。`MoleCommandLanes` 增加 `uninstallStream` 与 `prewarm` 通道；`AnalyzeViewModel.isScanning` 供空闲判定。demo 不建预跑（`prewarmService == nil`），卸载名单由 `DemoUninstallListStream` 分阶段产出以展示渐进态。
-- 页面：清理/优化/项目清理在 `.task` 采纳预跑结果（仅当无本地预览）；卸载/安装包打开页面优先采纳预跑名单；各页显示扫描时间。
-- 测试：套件 233 例通过。新增 `PrewarmTests`（顺序/互斥/无租约/写入取消/作废重跑/用户重扫/失败重试/磁盘扫描与清理预览阻塞/demo 禁用/各页采纳/确认保护）、`UninstallStreamTests`（渐进行先于大小、图标后到、解析器边界）。原卸载测试从「列表走 process」迁移到「列表走注入流」，原「changed path / missing target 重扫列表」两例合并为注入 target checker 的拒绝+重扫例（理由：路径缺失与身份变化在轻量核对下是同一拒绝路径）。
+### 范围
 
-## Review 处置
+- 卸载冷扫描在全部应用大小算完之前列出已发现的应用。尚无大小的应用标为计算中，不显示为 0。大小随后补上。
+- 版本和上次使用时间来自同一次扫描已经得到的数据。名单出现后，不再为每个应用查询 Spotlight 或 `NSMetadataItem`。
+- 应用图标在列表可滚动之后补上。列表渲染不因逐个同步读取图标而停住。
+- 同一次会话中，卸载预览和确认执行复用当前名单，不再为了执行而重新计算每个应用的大小。
+- 卸载确认执行前核对目标身份。当前应用相对预览时的路径、bundle id 没有变化时，直接执行。有变化时拒绝本次执行，不 spawn 卸载命令，并重新扫描名单。卸载名由扫描派生、不重扫无法轻量复核，其变化由预览/执行命令自身失败暴露。
+- 「检查关联文件」仍只在用户点击后，对该应用跑一次 `uninstall --dry-run`。未点击时不跑。
+- 没有用户确认时不执行卸载。
+- 安装包名单在页面会话内复用，直到用户重新扫描或名单被写入操作作废。
+- 删除某个已列出安装包文件时，只检查该路径自身：它是名单中的那一项，当前大小和 identity 与名单记录一致。
+- 安装包删除过程不遍历扫描根，不读取名单以外的目录。
+- 安装包路径不在当前名单中、大小不一致或 identity 不一致时，拒绝删除，原文件保留。
+- 安装包批量删除沿用同一份名单，每个文件单独复核，仍然一次失败不影响其他文件的原有失败报告。
+- 没有用户确认时不删除安装包文件。
+- 空闲时按这个顺序各预跑一次，任意时刻只有一个在跑：卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run`。
+- 空闲指没有写入租约，且没有用户正在看的扫描。磁盘页有进行中的扫描时不算空闲。
+- 预跑走只读通道，不获取写入租约。
+- 预跑完成后，打开卸载、安装包、清理、优化、项目清理页面时直接显示该结果，并标出扫描时间，不立刻再扫一遍。
+- 清理、卸载、优化、项目清理、安装包删除或白名单保存使已有预跑结果作废。作废后回到空闲时再按原顺序预跑。
+- 用户对某一项点重新扫描时，取消当前预跑，并立即重跑该项。
+- 用户开始一次写入时，取消当前预跑。写入可以立刻获得写入租约。
+- 确认框开着时，新的预跑结果不替换正在确认的那一份。清理执行前仍核对 `clean-list.txt` 就是这份已确认的预览。
+- 某一项预跑失败时，继续后面的项。失败项在下一次空闲时重试。
+- demo 模式不启动预跑，不 spawn 捆绑 mole。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 非范围
 
-### Round 1 (2026-10-17T03:00:00+08:00)
+- 不在后台执行 `clean`、`optimize`，也不执行 `purge --yes`。
+- 不把「检查关联文件」放进预跑队列。
+- 不改概览五段估算、状态页采样和历史页读取。
+- 不改变 t028 的磁盘扫描口径、空闲判定使用的磁盘扫描状态。
+- 不按固定时间间隔重复预跑。只有作废、失败重试或用户重新扫描才再跑。
+- 不改变关联文件 dry-run 的扫描内容和删除范围。
+- 不改安装包扫描根、深度和 zip 判断规则。
+- 不改安装包删除去向：仍然移入废纸篓，失败不退回永久删除。
+- 不自动执行卸载或删除。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t029_code_f001|important|已修|空闲合并去重（retries 优先、队列剔除同项），被取消项只重跑一次|src/zmole/Features/Operations/PrewarmService.swift|
-|t029_code_f002|important|已修|`AnalyzeViewModel.isScanning` 改为 `@Published`，list/worker 起止刷新，磁盘测量结束可见|src/zmole/Features/Analyze/AnalyzeViewModel.swift|
-|t029_code_f003|minor|已修|clean 预跑跳过条件并入用户预览进行中（`isPreviewing`）|src/zmole/App/AppDependencies.swift|
-|t029_code_f004|minor|已修|采纳 reviewer 建议改 spec：AC-005 与范围只核对路径+bundle id，卸载名变化由命令失败暴露|docs/tasks/t029_uninstall_list_progressive/spec.md|
-|t029_code_f005|minor|已修|删除零引用：`UninstallListSnapshot`、`UninstallPreviewSnapshot.identities`、`UninstallListDecoder`（测试改 JSONDecoder）、`UninstallListFilter.visible`（测试改 visibleListings）、`PrewarmItem.commandArguments`|src/zmole/Features/Uninstall/UninstallSnapshot.swift|
-|t029_code_f006|minor|已修|`performList` 收尾按本次流到的 path 裁剪 listings/selection/related/icons|src/zmole/Features/Uninstall/UninstallViewModel.swift|
-|t029_code_f007|minor|已修|删除同分支三元，统一 `.secondary`|src/zmole/Features/Uninstall/UninstallView.swift|
-|t029_code_f008|minor|已修|提取 `UninstallListMerge` 供 VM 与预跑共用|src/zmole/Features/Uninstall/UninstallListStream.swift|
-|t029_test_f001|important|已修|新增 `UninstallTargetCheckerTests`：路径缺失/身份相同/身份变化/空 bundle id 四分支|tests/unit/UninstallTargetCheckerTests.swift|
-|t029_test_f002|important|已修|删除不可达的逐文件守卫；测试改为断言选择始终来自会话名单、重扫后不可删除|tests/unit/InstallersPageTests.swift|
-|t029_test_f003|important|已修|新增 `UninstallStreamingAssemblyTests`（`init(streaming:)` 装配解析）与 `tests/integration/uninstall_stream_test.sh`（真实脚本 + `MOLE_UNINSTALL_SCAN_ROOT` fixture 根），登记进 testing.md test_cmd；Prewarm 顺序测试补 uninstallList 结果断言，并新增取消重排 exactly-once 回归|tests/unit/UninstallStreamTests.swift / tests/integration/uninstall_stream_test.sh|
+### 验收标准
 
-### Round 2 (2026-10-17T03:20:00+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t029_code_f009|important|已修|`performList` 改为以本次扫描结果整体替换 `listings`（局部合并后赋值），重扫不再追加重复行；测试补「重扫后无重复 path」断言|src/zmole/Features/Uninstall/UninstallViewModel.swift|
-|t029_code_f010|minor|已修|删除零引用 `UninstallIdentity` 与 `UninstallApp.identity`|src/zmole/Features/Uninstall/UninstallSnapshot.swift|
-|t029_test_f004|important|已修|用户 2026-10-17 在会话中明确批准 AC-005 文本变更（确认前只核对路径与 bundle id，卸载名变化由命令失败暴露），spec 保持已批准文本|docs/tasks/t029_uninstall_list_progressive/spec.md|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 3 (2026-10-17T03:40:00+08:00)
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t029_code_f011|minor|已修|`performList` 结束（含取消路径）统一裁剪选中/关联/图标到本次流到的 path，隐藏选中不再残留|src/zmole/Features/Uninstall/UninstallViewModel.swift|
+- [ ] AC-001：全部应用大小算完之前，卸载页已列出已发现的应用；尚无大小的应用不显示为 0 字节。
+- [ ] AC-002：卸载名单出现后，不再为每个应用查询 Spotlight。版本和上次使用时间来自该次扫描结果。
+- [ ] AC-003：图标尚未全部就绪时，卸载列表已经可以滚动；图标随后出现。
+- [ ] AC-004：同一次会话中，卸载预览和确认执行不再重新计算每个应用的大小。
+- [ ] AC-005：确认时应用的路径或 bundle id 相对预览有变化，则拒绝执行，不 spawn 卸载命令，并重新扫描名单；卸载名变化不在确认前复核（由预览/执行命令自身失败暴露）。
+- [ ] AC-006：未点击「检查关联文件」时，不运行 `uninstall --dry-run`。
+- [ ] AC-007：没有用户确认时，不运行不带 `--dry-run` 的 `uninstall`。
+- [ ] AC-008：用同一份安装包名单删除多个文件时，扫描根只在列出时遍历一次；每个文件的删除不再遍历扫描根。
+- [ ] AC-009：安装包目标的当前大小或 identity 与名单不一致时，拒绝删除，原文件仍在。
+- [ ] AC-010：安装包路径不在当前名单中时，拒绝删除，原文件仍在。
+- [ ] AC-011：没有用户确认时，不删除任何安装包文件。
+- [ ] AC-012：无写入且无进行中的用户扫描时，按卸载名单、安装包名单、`clean --dry-run`、`optimize --dry-run`、`purge --dry-run` 的顺序各跑一次，且任意时刻只有一个在跑。
+- [ ] AC-013：这些预跑不获取写入租约。预跑进行中用户可以开始一次写入，写入开始时预跑被取消。
+- [ ] AC-014：预跑完成后打开对应页面，不重新发起该扫描，并显示扫描时间。
+- [ ] AC-015：写入成功后已有预跑结果作废；回到空闲后会再预跑。确认框显示期间，新结果不替换正在确认的那一份。
+- [ ] AC-016：预跑不 spawn 不带 `--dry-run` 的 `clean` 或 `optimize`，也不 spawn `purge --yes`。
+- [ ] AC-017：用户重新扫描某一项时，取消当前预跑并立即重跑该项。
+- [ ] AC-018：磁盘页扫描进行中不开始预跑。
+- [ ] AC-019：demo 模式不启动预跑。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足（19/19 AC，见 `handoff.json` 的 `ac_evidence`；AC-005 文本经用户 2026-10-17 批准收紧为路径+bundle id）
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'` 236 通过（新增 PrewarmTests、UninstallStreamTests、UninstallTargetCheckerTests）；`pytest .repo_template/tests -q -m contract` 147 通过；`tests/integration/clean_trash_test.sh`、`installer_interface_test.sh`、`uninstall_stream_test.sh` 通过
-- 黑盒：demo 卸载页（`--demo --demo-page uninstall --demo-state populated`，浅色 zh-Hans，新构建）显示同次扫描带来的版本/最近使用与大小；捆绑 `uninstall --list-stream` 实测身份行先行、完整行含 size/version/last_used_epoch、末 `{"event":"done"}`
-- review：full 双轴 Round 4 PASS（code 4 轮、test 4 轮，全部 blocker 闭环）；`reviewed_scope 4cd8a9b2eaaa5528`；无未解决 finding
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 卸载名单改为 `uninstall --list-stream` 渐进加载：先列身份、大小/版本/上次使用随后补上；图标异步补；预览/确认复用会话名单，确认前只做轻量身份核对（路径+bundle id），身份变化拒绝并重扫。
-- 安装包删除不再重扫扫描根，只复核目标自身；页面会话复用名单。
-- 新增空闲预跑队列（卸载名单→安装包名单→clean/optimize/purge dry-run）：单并发、无写入租约、写入开始取消、写入成功作废重跑、失败下次空闲重试；各页打开直接呈现预跑结果并标记扫描时间；demo 不预跑。
-- 遗留：无
+- AC-001–AC-019：全部 AC 可自动测试。
+
+## 上下文区
+
+- 来源：用户 2026-10-17 批准的性能清单第 2、3、4 项。现状见 `src/zmole/Features/Uninstall/`、`src/zmole/Features/Installers/InstallersViewModel.swift`、捆绑 `uninstall.sh` 的 `scan_applications` 与 `installer.sh` 的 `installer_remove_path`（每次删除都调用 `collect_installers_noninteractive`）；当前 `previewClean` 与 `previewMaintenance` 在 dry-run 前调用 `OperationCoordinator.acquire`，清理执行前的列表核对见 `CleanPreviewStore.verifyUnchanged`。`s001` 测得 `uninstall --list` 约 36 秒，单次 `--dry-run` 约 33 秒。
+
+### 有意不测
+
+- 真实 `/Applications` 全量扫描耗时：不进自动测试。
+- 真实下载目录的扫描耗时：不进自动测试。
+- 真实 dry-run 与名单扫描的耗时：不进自动测试。
+
+### 测试策略
+
+- 注入可分阶段返回的应用源：先给应用身份，再给大小。
+- 注入会记录调用的元数据源和图标源，断言名单出现后不再逐个查询，且列表在图标完成前可滚动。
+- 注入命令记录，断言预览和确认执行的参数里没有第二轮全量大小扫描；身份变化时不 spawn 卸载命令。
+- 用临时扫描根放置已列出的安装包，以及一个不应被读取的无关目录；删除时断言无关目录没有被遍历；改动目标文件的大小或 identity 后断言删除被拒绝且文件仍在。
+- 注入可记录参数、可被取消的命令。用可控时钟或显式空闲信号驱动预跑队列。
+- 断言预跑顺序、互斥、写入租约、取消、作废后重跑，以及确认框打开时结果不被替换。
+- demo 装配下断言没有预跑命令。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：跳过确认前的全量重扫后，磁盘上的应用已变化却仍被卸载。
+- 风险：不再全盘重扫后，把已不再是安装包候选的路径送去删除。
+- 风险：预跑结果在用户确认前已过时，清理按旧的 `clean-list.txt` 执行。
+- 回退：卸载与安装包均要求目标仍在当前名单内，且大小和 identity 与列出时一致，否则拒绝；大小仍可以是上一轮的估算，执行不依赖估算字节。预跑确认框期间不替换结果；执行前继续核对列表文件；写入成功使结果作废；后台不执行删除。
+
+### 依赖与约束
+
+- 依赖 t028：预跑空闲判定使用磁盘页扫描状态；磁盘页扫描进行中不预跑。
+- 运行于 macOS。卸载仍须先预览再确认。预跑只读。不写白名单，不扩大安装包扫描根。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：卸载名单先列出再补大小；确认复用会话名单，身份变化才重扫；安装包删除复用当前名单，只复核目标文件的大小和 identity；空闲时按顺序预跑五类只读扫描；预跑不占写入租约；写入成功后作废。

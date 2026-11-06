@@ -1,65 +1,83 @@
----
-tid: "t025"
-slug: "command_concurrency_lanes"
-title: "命令并发通道按类型区分"
-status: "done"
-branch: "t025_command_concurrency_lanes"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "156c58d3f779f9e3562e1f727c0fe1e7c9d50127"
-depends_on: ""
-conflicts_with: ""
-note: "只读命令可并发、写入串行、长驻流独立。来源 p006。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+当前 App 装配把所有一次性 mole 命令（analyze、history、uninstall --list/dry-run/执行、clean、optimize、purge、installer list/remove、--version）共用一个 `MoleBridge`（内部单 active runner，第二个请求抛 `MoleBridgeError.busy`），只有 `status --watch` 与 `clean --dry-run` 流各占一条独立通道。后果：只读、慢扫描、写入全被串成一条线，实测 `analyze --json /` 约 2m41s，期间任何其它页面命令都被拒为 busy。mole 本身是多进程脚本，可并发运行不同子命令；串行是 App 层的设计缺陷。
 
-## 实施笔记
+来源 pending `p006`。核实（2026-10-16）：问题仍存在。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：`p006`（2026-10-16 核实）。用户实测 `analyze --json /` 约 2m41s 阻塞其它页面。
+- 按命令类型定义执行通道：只读命令可并发；写入命令保持单一写入通道并用 `OperationCoordinator` 租约互斥；长驻流（status watch、clean dry-run 流）各自独立通道。
+- 只读命令至少包含：`status --json`、`history --json`、`analyze --json`、`uninstall --list`、`installer --list-json`。
+- 各功能页装配到对应通道；同一功能页在一次请求未完成前不得重复提交（保持现有约束）。
+- `MoleBridgeError.busy` 仅在写入通道或同页重复提交时出现；只读并发不得互相 busy。
 
-- 新增 `MoleCommandLanes`：9 条一次性通道（analyze/history/uninstall/installer/statusCommand/cleanCommand/optimize/purge/estimate）+ statusStream + cleanStream；提供 `makeCommandBridges`、`.demo`、`.unavailable`。
-- `AppDependencies` 按通道装配，各功能页/loader 使用各自 lane；写入仍由 `OperationCoordinator` 单一租约互斥。`AppDependencies.lanes` 暴露供装配断言。
-- `UnavailableMoleProcess/Streaming` 改为 internal 供 lanes 复用。
-- `docs/blueprint/architecture.md` 更新命令并发通道分类。
-- 测试 `tests/unit/CommandConcurrencyTests.swift`：桥互不 busy、流不阻塞、写入 VM 互斥、同桥重复提交 busy、生产装配 9 条 lane 互异。
+### 非范围
 
-## Review 处置
+- 不改 mole 的扫描规则或删除语义。
+- 不改界面布局、文案与命令参数。
+- 不实现用户可见的命令队列/进度排队界面。
 
-review_level=full：`review_code.md` / `review_test.md`。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t025_code_f001|minor|撤回|陈旧注释，无行为影响|StorageEstimate.swift / OverviewView.swift|
-|t025_code_f002|minor|撤回|概览与历史共用只读 history lane，同时只可见一页，接受|MoleCommandLanes.swift|
-|t025_code_f003|minor|已修|补生产装配 lane 互异与写入 VM 互斥用例|CommandConcurrencyTests.swift|
-|t025_code_f004|minor|已修|waitUntilBusy 改 XCTFail|CommandConcurrencyTests.swift|
-|t025_code_f005|minor|撤回|AC-004 用例标签措辞，无功能影响|CommandConcurrencyTests.swift|
-|t025_test_f001|important|已修|补 AppDependencies 装配与 MoleCommandLanes 断言|CommandConcurrencyTests.swift|
-|t025_test_f002|minor|已修|消除 XCTSkip fail-open|CommandConcurrencyTests.swift|
-|t025_test_f003|minor|已修|补跨 lane 写入 VM 互斥端到端用例|CommandConcurrencyTests.swift|
-|t025_test_f004|minor|撤回|AC-003 用假进程，AC-001/002 用真实 sleep 作机制证明|CommandConcurrencyTests.swift|
-|t025_test_f005|minor|撤回|流 lane 唯一性未单测；流各由单一消费者持有，AC-002 已覆盖流不阻塞|CommandConcurrencyTests.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：184 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed；两个 bash 集成测试通过
-- 黑盒：GUI 受限（同前）；并发/互斥由真实桥与假进程自动覆盖
-- review：`review_code.md`（rounds 1-2）、`review_test.md`（rounds 1-2）最终均 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：当一个只读命令长时间未结束时，另一个只读命令仍能成功发起，不被拒绝为 busy。
+- [ ] AC-002：`status --watch` 长驻期间发起的只读命令不会被拒绝为 busy。
+- [ ] AC-003：两个写入命令不会同时执行；并发发起时第二个被互斥拒绝或排队，不同时 spawn。
+- [ ] AC-004：同一功能页在一次请求未完成前重复提交只有一个命令在飞。
 
-### 结果摘要
+### 可测试性声明
 
-- 命令按类型分通道：每个一次性消费者独立 bridge，流独立；写入由 coordinator 租约互斥。慢 analyze 不再阻塞其它页面。遗留：两个 minor 覆盖 nit 已撤回。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-004：注入可控阻塞的假 process / streaming 与 coordinator spy 自动断言并发与互斥。
+
+## 上下文区
+
+- 来源：`p006`（用户实测反馈 2026-10-16；核实问题仍存在）
+- 相关：`p007`（概览估算需独立只读通道）、`p008`（busy 语义）
+
+### 有意不测
+
+- 真机多进程资源占用（内存/CPU）：不进自动测试，仅记录观察。
+- 具体通道数量上限：由实现决定，不作为行为 AC。
+
+### 测试策略
+
+- 用可阻塞的假 `MoleProcessControlling`/`MoleStreaming`，让一个命令挂起，断言另一个只读命令能发起、写入命令互斥。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：拆多通道后并发进程数上升，个别命令（清除类）误并发。
+- 回退：写入仍由 `OperationCoordinator` 单一租约封住；保留“单通道”配置开关以便回退。
+
+### 依赖与约束
+
+- 无前置 task；`p007`、`p008` 的 task 依赖本 task（复用通道模型与 busy 语义）。
+- macOS 13+；`OperationCoordinator` 租约语义不变。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：命令并发通道分类（只读并发/写入串行/流独立）。

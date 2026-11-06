@@ -1,68 +1,113 @@
----
-tid: "t036"
-slug: "ui_overview_align"
-title: "概览页重排与存储估算修复"
-status: "done"
-branch: "t036_ui_overview_align"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "72fbd36a15c3f7491806384dbdf84f2410a66abd"
-depends_on: ""
-conflicts_with: ""
-note: "用户 2026-10-17 批准（原 t036；合并 t034 的估算修复，系统段只计只读系统卷）。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+UI 对齐修复。2026-10-17 用户批准：概览页按 demo 重排，并裁定删除快捷卡（demo `renderOverview` 无此区块，其 `quickCard` 函数为未调用死代码；`ui_contract.md` 的「快捷卡片」条目为冲突项，已批准一并更新）。
 
-## 实施笔记
+同时概览「存储估算」五段常只显示「应用程序」一个值，其余为「—」，环形图退化为灰色占位。实测持久缓存只含 `applications`。根因分析与证据见 p012：一是 t026 的 `computeEstimate` 在扫描被取消后仍把不完整 `sums` 落盘并由 `primeEstimate` 当权威立即渲染；二是 `mole analyze /System` 递归包含 `/System/Volumes`（整个数据卷 + 快照），实测 128.9s 超过 120s 超时，且口径错误（真实只读系统卷约 12 GiB）。用户 2026-10-17 确认：系统段只计只读系统卷（排除 `/System/Volumes`）。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+**参考 demo 在哪里：**
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 视觉权威：`docs/design/mole_desktop_demo_cn_final.html` 的 `renderOverview`（第 839 行）及其下半区辅助函数 `activityRow`（第 931 行）；相关 CSS：`.overview-hero`、`.health-card`/`.health-ring`（第 132 行附近）、`.overview-storage*`、`.disk-capacity-bar`、`.storage-legend`、`.overview-status-grid`、`.stat-strip`。
+- 对照方法：浏览器直接打开 HTML，或 headless Chrome `--blink-settings=preferredColorScheme=1|2` 强制浅深色截图；app 侧用 `Zmole --demo --demo-page overview --demo-state populated --demo-language zh-Hans --demo-appearance dark|light --demo-data-root <dir>`（见 `docs/design/demo_launch.md`）。
+- 语义基线：`docs/design/ui_contract.md`「概览」行。用户已裁定「快捷卡片」「趋势条」两个条目按 demo 对齐删除/替换，本 task 负责同步更新该文档。
+- 设计 token 已对齐（`src/zmole/App/MoleTheme.swift`），无需改 token。
 
-- 概览重排：页头（eyebrow/问候语/副标题）右侧动作＝刷新（`statusViewModel.retry()` 触发重采样）与清理入口（`navigation.select(.clean)`，容量取 `CleanViewModel.lastReclaimBytes`，无数据显示纯入口文案）；健康卡改为 demo 结构（圆环健康分+状态文案+三指标 tile：可用磁盘/可回收/CPU，缺失占位）；存储卡改为大数字已用+五段分段条+图例（自由空间段单独配色）；下半区＝最近活动（icon+命令+时间+容量+项数，查看历史入口）与系统状态四宫格（CPU/内存/温度/网络，缺失占位）；快捷卡与趋势条移除（连同 `OverviewQuickAction`/`OverviewTrend`/环形图/柱条视图）。纯映射抽为 `OverviewHealthCard`/`OverviewStatusGrid`/`OverviewActivity`/`OverviewStorageCard` 供单测。
-- 估算修复（p012）：`StorageEstimateLoader` 改为 throwing：取消（`CancellationError`/bridge cancelled）与失败区分；系统段按 `/System` 顶层子项逐项 `analyze`，跳过 `/System/Volumes`（数据卷 1.4TB 不再进入扫描，秒级），值＝analyze /System 顶层排除 Volumes 之和；`computeEstimate` 仅在四路径齐全时落盘并接替展示，取消或不完整不写缓存不替换（历史部分缓存仍先渲染、随后完整扫描覆盖）。
-- demo fixture：`/System/*` 子项与 `/System/Volumes` 补充分析夹具，避免 demo 系统段被默认夹具放大。
-- 测试：`OverviewCacheTests` 更新（不完整扫描不落盘不渲染、取消不落盘、部分缓存先渲染后被完整覆盖、不探测 Volumes、失效守卫），`OverviewTests` 删除趋势/快捷卡用例（类型移除）并迁移 loader 用例，新增 `OverviewLayoutTests`（健康卡/状态四宫格/活动行/存储卡映射与占位、无快捷卡趋势的源码断言）；268 例通过。
-- 黑盒：demo 概览浅色 zh 与深色 en 截图核对（页头动作、健康环、存储分段条与图例、最近活动、系统状态四宫格；无快捷卡/趋势条）。
+现状（`src/zmole/Features/Overview/OverviewView.swift`）：页头无动作按钮；健康卡为大数字 92+三指标（无圆环、无文案）；存储卡为环形图+图例列表；下半区为最近操作（纯文本行）+趋势柱条；另有 3 张快捷卡（demo 无）。
 
-## Review 处置
+## 契约区
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 范围
 
-### Round 1 (2026-10-17T04:45:00+08:00)
+- 页头右侧增加动作区：「刷新」（触发状态重采样）与清理入口按钮（跳转清理页；空间数值来自现有可回收数据源，无数据时显示纯入口文案）。
+- 健康卡改为 demo 结构：圆环显示健康分 + 状态文案 + 三个指标 tile；tile 数值使用真实数据源（可用空间、CPU 或内存等现有采样），无法提供的指标显示占位，不伪造。
+- 存储卡改为 demo 结构：大数字（当前已用）+ 五段分段条 + 图例（名称+数值），数据沿用现有存储估算。
+- 下半区改为：最近活动（demo `activityRow` 结构：图标+标题+时间+数值+注记）与系统状态四宫格（CPU/内存/温度/网络，真实采样，缺失显示占位）。
+- 删除快捷卡区块与趋势条区块。
+- 扫描被取消或未完成时，不把不完整结果持久化为可用缓存，不据此渲染为权威估算。
+- 「系统」段改为只计只读系统卷：`analyze /System` 结果排除 `/System/Volumes` 后的和；该口径下扫描时长降到秒级，不再触及 120s 超时。
+- 不完整缓存（含历史遗留的部分缓存）在下次进入概览时触发重算并最终被完整值覆盖。
+- 修正后五段（系统/应用程序/用户数据/开发者/其他）在正常环境下均能给出数值或明确的不可用原因。
+- 同步更新 `docs/design/ui_contract.md`「概览」行：移除「快捷卡片」「趋势条」，改记「页头动作、健康环、存储分段条、最近活动、系统状态四宫格」。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t036_gen_f001|important|已修|系统段任一目录子项探测失败即整段不可用（不落盘、不替换、下次重试）；`systemChildren` 只列目录；新增「一子项失败、另一子项成功→segment nil」用例|src/zmole/Features/Overview/StorageEstimate.swift|
-|t036_gen_f002|minor|已修|新增 `StatusViewModel.resample()`（pause+start 强制重订阅取新采样），概览刷新按钮改用它并补单测|src/zmole/Features/Status/StatusViewModel.swift|
-|t036_gen_f003|minor|已修|活动行 id 改为稳定序号（activity-N），纳入行索引避免重复 id|src/zmole/Features/Overview/OverviewViewModel.swift|
-|t036_gen_f004|minor|已修|删除未用 `import SwiftUI` 与 `overview.memory` 键；`memoryText` 由四宫格复用（消除重复格式化）|src/zmole/Features/Overview/OverviewViewModel.swift|
-|t036_gen_f005|minor|已修|architecture.md 改为「三次固定 analyze + 系统段按目录子项逐项 analyze（跳过 /System/Volumes，任一失败段不可用）」|docs/blueprint/architecture.md|
+### 非范围
 
-### Round 2 (2026-10-17T04:55:00+08:00)
+- 不改五段划分本身与颜色/文案。
+- 不引入新缓存机制或后台定时任务。
+- 不改 `mole` 二进制。
+- 不改状态页图表（属 t035）。
+- 不改其它页面。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t036_gen_f006|minor|已修|architecture.md「最近操作」段删除已移除的概览趋势条描述，改指状态页负载图的等待语义|docs/blueprint/architecture.md|
+### 验收标准
 
-## 收尾报告
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收与验证
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足（12/12 AC；视觉类 AC 以 demo 截图对照 + 视图层断言验证）
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'` 270 通过；`pytest .repo_template/tests -q -m contract` 147 通过；三组 shell 集成通过
-- 黑盒：demo 概览浅色 zh 与深色 en 截图核对：页头动作（刷新/清理）、健康环与三 tile、存储大数字+分段条+图例、最近活动行、系统状态四宫格；页面已无快捷卡与趋势条
-- review：single Round 3 PASS（`review_general.md`）；`reviewed_scope a8575a3f3074ffd8`；无未解决 finding
-- AC 证据：见 `handoff.json`
+<!-- /规范 -->
 
-### 结果摘要
+- [ ] AC-001：概览页头右侧显示「刷新」与清理入口按钮；点击刷新触发状态重采样，点击清理进入清理页。
+- [ ] AC-002：健康卡显示健康分圆环与状态文案；健康分不可用时显示占位而非 0。
+- [ ] AC-003：健康卡三个指标 tile 的数值来自真实采样；对应数据缺失时显示占位。
+- [ ] AC-004：存储卡显示已用容量大数字、五段分段条与带数值图例；估算不完整时如实显示不完整状态。
+- [ ] AC-005：下半区左侧为最近活动（图标+标题+时间+数值）；无记录显示空状态。
+- [ ] AC-006：下半区右侧为系统状态四宫格（CPU/内存/温度/网络）；字段缺失显示占位，不伪造趋势与数值。
+- [ ] AC-007：页面不再出现快捷卡区块与趋势条区块。
+- [ ] AC-008：浅色/深色、简中/繁中/英文、1200×780 与 1100×700 下页面无裁切，主要动作可见。
+- [ ] AC-009：扫描在完成前被取消（视图消失）时，不写出可被后续启动当作有效缓存的估算结果。
+- [ ] AC-010：`系统` 段值等于 `analyze /System` 顶层项目排除 `/System/Volumes` 后的和（不再包含数据卷与快照）。
+- [ ] AC-011：存在历史遗留的部分缓存时，进入概览先按缓存显示，随后自动重算并覆盖为完整结果。
+- [ ] AC-012：正常环境完成一次估算后，`系统`、`应用程序`、`用户数据`、`开发者` 均有数值；`其他` = 全盘已用 − 四段之和，为负时按 0 处理。
 
-- 概览按 demo 重排：页头动作（刷新=强制重订阅取新采样、清理入口跳转且带可回收容量）、健康卡（圆环+状态文案+可用磁盘/可回收/CPU）、存储卡（已用大数字+五段分段条+图例+不完整提示）、最近活动与系统状态四宫格；快捷卡与趋势条移除。
-- 估算修复：系统段只计只读系统卷（按 /System 顶层目录子项逐项 analyze、跳过 /System/Volumes，任一子项失败整段不可用）；取消或不完整的扫描不落盘、不替换权威展示；历史部分缓存先显示、随后完整扫描覆盖。
-- 遗留：无；另：评审发现 `.repo_template/scripts/repo_task/review.py` 的 `reported_findings()` 与模板标题格式不匹配（`missing_disposition` 检查失效），属模板工具链缺陷，已按约定上报用户处理，未自行修改。
+### 可测试性声明
+
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001～AC-008：视觉布局以截图对照验证，不可单测断言。替代验证：`--demo` 模式深浅色截图与 demo HTML 同视口渲染对照；数据缺失占位与不伪造行为可用 demo 的 `--demo-state stale/empty/partial` 状态截图覆盖，其中占位逻辑若涉及 ViewModel 计算可加组件级单测。
+- AC-009～AC-012：全部 AC 可自动测试：以注入式假 loader（按路径返回大小/超时/取消）覆盖 AC-009/011；以固定 analyze 输出覆盖 AC-010/012。
+
+## 上下文区
+
+- 来源：2026-10-17 用户批准「UI 级别 2 修复」（评估报告 b 项）；快捷卡删除与页头动作位置为同日用户裁定。p012（2026-10-17 核实：缓存实况 `{"sums":{"applications":32514187794}}`；`analyze /System` 128.9s，`/System/Volumes`=1.47TB；真实只读卷 12GiB）。
+
+### 有意不测
+
+- 圆环/分段条的像素级弧度与比例：设计近似，不设精确断言。
+- 真实 1.49TB 数据卷的端到端扫描时长：环境相关，用固定输出替代。
+
+### 测试策略
+
+- 复用 `--demo-state` 的 populated/empty/partial/stale 驱动页面截图；涉及数值格式的函数（如容量、百分比）保持或补充现有单测。
+- 假 loader 覆盖取消/部分/超时三态：断言不落盘、不据不完整值声明完成、重算后覆盖。
+- 系统段口径：喂入含 `/System/Volumes` 的固定 analyze 输出，断言被排除。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。
+
+### 风险与回退
+
+- 风险：健康卡与四宫格的部分指标（如运行时间）在现有数据源中不存在，需以占位呈现，不能引入假数据；demo 数值不可当作需求。
+- 风险：遗留的部分缓存已存在于用户机器，需确认新逻辑能识别并覆盖，而非继续沿用。
+- 回退：单 commit 还原。还原 t026 缓存逻辑并保留旧口径；删除缓存文件即可回到无缓存行为。
+
+### 依赖与约束
+
+- t035 不改概览页头，与本 task 不冲突；无前置 task。
+- 保留 `ui_contract.md` 其它概览语义（真实采样、不伪造趋势）。
+
+### Finalization 时更新的 blueprint
+
+- `docs/design/ui_contract.md`：「概览」行（本 task 范围内直接更新）。
+- `docs/blueprint/domain.md`：五段估算口径（系统=只读系统卷）与缓存有效性定义。
+- `docs/blueprint/architecture.md`：概览估算扫描的取消与持久化约束。

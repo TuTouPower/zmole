@@ -1,63 +1,90 @@
----
-tid: "t046"
-slug: "settings_toggle_status_feature"
-title: "设置中支持停用状态界面与监控功能"
-status: "done"
-branch: "t046_settings_toggle_status_feature"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "ef087c3f87c740b1cdd748062adf376f9d68e780"
-depends_on: ""
-conflicts_with: "t045,t047,t048,t049,t051,t052,t056,t057,t058"
-note: "用户 2026-10-17 批准；同日架构审阅授权修订：来源 p018；服务级禁用全部采样入口，概览显示已停用，磁盘容量使用独立轻量查询。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+状态开关是已批准的新功能。当前概览与状态页共享 StatusViewModel，窗口壳按目的地启动采样，概览刷新直接调用 resample；只隐藏导航或在切页时 stop 无法保证停用后不再启动。
 
-## 实施笔记
+本文件描述本 task 完成后的目标，当前状态仍为 backlog。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-### 需求修订（2026-10-17T23:15:20+08:00）
+- 设置提供默认开启、持久化的状态功能开关，标签及停用影响说明覆盖三语。
+- 由 App 生命周期持有唯一启用策略；导航可达性、所有 start/retry/resample 入口及订阅恢复都读取该策略。停用优先于页面采样需求，不能只在 View 层挡入口。
+- 停用后隐藏侧边栏及命令面板的状态入口，拒绝程序化跳转；当前状态页转到概览。取消在途启动与恢复任务，等待已有采样进程及其子进程退出。
+- 概览 CPU、内存、温度、网络和健康分等采样指标显示明确“已停用”，旧快照与趋势不作为实时数据展示。刷新不能绕过策略。
+- 概览磁盘容量使用独立的轻量卷容量查询，在概览进入或用户刷新时读取；失败显示未知，不启动 status-go。五段目录估算继续按自身新鲜度运行。
+- 重新开启时按当前可见页需求恢复；概览或状态页可见时仅启动一次，其余页不启动。
 
-- 授权：用户要求按架构质量、设计完整性和技术债修复全部待办 task；本次仅修订目标文档，尚未实施。
-- 决策与追溯：保留 p018 产品意图；明确停用采样及概览展示，容量与重型采样解耦；t045 从假硬依赖改为文件冲突，review 升为 full。
-- AC 变更：保留 AC-001～AC-005 的行为归属；新增 AC-006～AC-009，覆盖概览、在途取消与恢复。
+### 非范围
 
-### 实施记录（2026-10-17T23:50:00+08:00）
+- 更改状态采样协议与算法。
+- 新增长驻容量轮询、另建一套 status 进程或用隐藏状态页采样维持概览。
 
-- 策略管理：实现 `StatusFeaturePolicy`，以 `UserDefaults` 持久化，提供默认启用。
-- 导航隔离：`NavigationModel` 过滤 `visibleDestinations` 与 `paletteItems`，并在停用时将活动状态页自动转回概览，拒绝程序化跳转至状态页。
-- 服务与生命周期：`StatusViewModel` 在 `start()`、`retry()`、`resample()` 严格拦截，`applyPolicyChange` 终止底层 `status-go` watch 进程并清除数据。
-- 独立卷容量：实现 `VolumeCapacityProviding` 与 `LiveVolumeCapacityProvider`，使概览磁盘容量不依赖 `status-go`。
-- 概览降级：停用时健康分与状态指标显式显示「已停用」，不使用旧数据。
-- 测试：新建 `StatusFeatureToggleTests.swift`，全量 309 个单测、147 个模板契约测试、3 个集成测试全部通过。
+### 验收标准
 
-## Review 处置
+<!-- 规范（门禁必留，不得删除） -->
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 1 (2026-10-17T23:50:00+08:00)
+<!-- /规范 -->
 
-Round 1 零 finding。
+- [ ] AC-001：状态功能开关默认开启，关闭后重启仍关闭；三语文案说明影响概览实时指标。
+- [ ] AC-002：关闭后侧边栏与命令面板均无状态入口，程序化跳转也不能打开状态页。
+- [ ] AC-003：状态页可见时关闭功能，当前页面转到概览。
+- [ ] AC-004：关闭完成后没有活跃 status-go 采样进程；全部启动、重试、刷新与订阅恢复入口均不再发起采样。
+- [ ] AC-005：重新开启后入口恢复，进入状态页可恢复正常实时监控。
+- [ ] AC-006：有旧快照时关闭功能，概览采样指标显示已停用，不继续显示旧值为实时值；无旧快照时结果相同。
+- [ ] AC-007：暂停一个在途启动后关闭功能，再放行启动及迟到事件，采样不会复活，关闭后数据不被迟到快照覆盖。
+- [ ] AC-008：停用期间概览进入与刷新可更新磁盘容量和目录估算；容量查询失败显示未知，status-go 启动次数始终为 0。
+- [ ] AC-009：概览可见时重新开启只启动一次采样；历史或设置可见时重新开启不启动，之后进入概览才启动。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`（309 passed）+ `pytest .repo_template/tests -q -m contract`（147 passed）+ 3 条集成测试脚本通过
-- 黑盒：`xcodebuild test -scheme Zmole -destination 'platform=macOS' -only-testing:ZmoleTests/StatusStreamTests`（通过）
-- review：`docs/tasks/t046_settings_toggle_status_feature/review_code.md` 与 `review_test.md`（PASS，round 1，coverage 100%）
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 实现了设置中的状态功能开关控制、服务级采样拦截、轻量卷容量解耦和概览降级展示。无遗留问题。
+- 全部 AC 可自动测试。用可阻塞采样服务、导航模型、独立容量查询替身和临时偏好存储，覆盖真实启用策略调用链。
+
+## 上下文区
+
+- 来源：p018；2026-10-17 核对 AppShellView.updateStatusWatch、OverviewView.head 和 StatusViewModel.start/stop/resample。
+
+### 有意不测
+
+- 系统全局快捷键与 TCC 弹窗不在本 task；应用内所有采样入口与取消竞态必须测试。
+
+### 测试策略
+
+- NavigationTests 覆盖隐藏、拒绝跳转和重定向；SettingsHistoryTests 使用独立 UserDefaults 验证默认值与重启。
+- StatusStreamTests 挡住 subscribe/start，停用后再放行；分别调用 start、retry、resample，断言底层启动为 0 且已启动子进程全部退出。
+- Overview 测试同时断言停用展示、容量来源与五段估算不依赖状态快照。恢复时验证单次启动。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。
+
+### 风险与回退
+
+- 风险：多个 View 分别维护开关和采样状态会出现迟到启动或恢复两次。策略与采样所有者保持唯一。
+- 回退：撤回开关与启用策略变更，恢复现有按页采样；不改已有语言、外观偏好。
+
+### 依赖与约束
+
+- 无硬依赖；t045 的视觉调整不是启用策略前置条件。共享设置、导航和概览文件的任务通过 conflicts_with 串行化。
+- macOS 13+；并发生命周期变更采用 full review。
+
+### Finalization 时更新的 blueprint
+
+- `docs/specs/settings.md`、`docs/specs/status.md`、`docs/specs/overview.md`：持久化开关、服务级停用、概览降级与独立容量查询。
+- `docs/blueprint/architecture.md`：唯一采样启用策略及所有入口的生命周期。

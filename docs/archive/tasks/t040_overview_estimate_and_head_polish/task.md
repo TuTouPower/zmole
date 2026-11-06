@@ -1,75 +1,105 @@
----
-tid: "t040"
-slug: "overview_estimate_and_head_polish"
-title: "概览存储估算修复与页头卡片清理"
-status: "done"
-branch: "t040_overview_estimate_and_head_polish"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "c4a338897084ae66378113b0e88061f9c4f3e397"
-depends_on: ""
-conflicts_with: ""
-note: "用户 2026-10-17 批准（来源 p013；含去页头 eyebrow 小字与概览四卡等高）"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+概览「存储估算」长期无结果（p013，2026-10-17 核实）。实测机制：
 
-## 实施笔记
+1. 估算刷新只在概览出现后约 12 秒内拿到 status 的已用空间才发起一次，错过即本会话不再重试；启动期预跑扫描压低 status 采样，三次全新启动 45–140 秒内应用从未 spawn `analyze --json`。
+2. 即便发起，`analyze --json /Users` 实测 >135 秒（另一次 >900 秒）远超估算通道 120s 超时；配合「四路径全齐才展示、才落盘」策略（t036 评审 f001 严格化），概览永远只有占位，缓存停在旧 schema。
+3. 估算扫描挂在视图 `.task` 上，切页即被取消，长扫描难以完成。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+复现与证据：`.scratch/bug_storage_estimate/repro_notes.md`。
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+同时用户 2026-10-17 要求两处界面清理：去掉页头 eyebrow 小字（「系统概览」「应用管理」「存储分析」「实时监控」「操作记录」「偏好设置」「整体状态」等）；概览顶部四张卡片统一尺寸。
 
-- 估算重构：`OverviewViewModel` 以 VM 持有任务解耦视图生命周期；`startEstimate` 不等 status 采样；`runEstimate(fillMissingOnly:isFollowUp:)` 区分全量/补缺；失效或 TTL 过期一律全量；完成（含部分）即展示并落盘；不完整时安排一次补扫（只探缺失段，`incompleteRetryDelay` 可注入）；fill-only 沿用旧 `capturedAt` 防 TTL 续命；扫描期间落下的失效使补扫升级为全量。`StorageEstimateLoader.loadSums(filling:)` 支持只探缺失段；估算通道超时 120→600（`AppDependencies`）。
-- 页头清理：`MolePageHead` 移除 `eyebrow` 参数（9 个调用点同步）；健康卡去掉「整体状态」小字；catalog 删除 11 个 eyebrow 键。
-- 概览四卡统一固定高度（`OverviewCardLayout.cardHeight = 264`），1200×780 与 1100×700 截图核对无裁切。
-- 文档同步：`architecture.md`/`domain.md`/`ui_contract.md` 与 `docs/specs/overview.md`、`app_shell.md`。
-- p013 已由本 task 闭环归档（`pending.py archive --fix-ref t040`）；review 发现「扫描在飞期间失效且完整结束」的窄窗口补偿缺口，登记 p014。
-- 验证：`xcodebuild build` 0 error；全量 `xcodebuild test` 279 例全绿（含新增 6 条估算用例）；黑盒 demo 启动截图核对（无 eyebrow、四卡等高、暗色/最小窗口）。
-- 无用户批准的新轮次上限（3 轮 review 在 review_limit 内）。
+## 契约区
 
-## Review 处置
+### 范围
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+- 估算扫描与 status 采样解耦：进入概览即开始目录扫描，「其他」段按实时已用空间派生；已用空间迟到不影响扫描完成与已有分段展示。
+- 触发：概览出现、写操作失效信号、已用空间由无到有；不完整时安排一次延迟自动重试（重试只探测缺失段）。
+- 部分结果：扫描完成（未取消）即展示并落盘，允许部分段；缺失段显示占位，保留「估算不完整」标记。
+- 估算目录扫描不随视图消失取消（由 ViewModel 持有任务）。
+- 估算通道命令超时提高到 600 秒。
+- 保留既有严格口径：扫描被取消不落盘；系统段任一目录子项失败时该段为不可用（不展示部分和）。
+- 移除所有页头 eyebrow 小字（含健康卡「整体状态」）并删除对应文案键。
+- 概览四张卡片（健康、存储、最近活动、系统状态）统一为同一固定高度。
 
-### Round 1 (2026-10-17T13:40:00+08:00)
+### 非范围
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t040_gen_f001|important|已修|失效/TTL 触发改为全量重扫（第二轮补全 TTL/capturedAt 链路，见 Round 2）|OverviewViewModel.swift startEstimate/runEstimate|
-|t040_gen_f002|minor|已修|`.task` 先 prime/start 再 await refreshHistory|OverviewView.swift:45-52|
-|t040_gen_f003|minor|已修|补扫统一在完成点调度，先判 incomplete，`isEstimating` 防重入|OverviewViewModel.swift scheduleIncompleteRetry|
-|t040_gen_f004|minor|已修|新增 600s 源码断言用例|tests/unit/OverviewCacheTests.swift testEstimateLaneTimeoutIsTenMinutes|
-|t040_gen_f005|minor|已修|caller 挂起期间取消 + ScanGate 超时 XCTFail|tests/unit/OverviewCacheTests.swift|
+- 不改五段划分、公式与颜色；不改「其他」= 已用 − 四段（≥0）的口径。
+- 不改缓存文件位置与 schema 版本（沿用 v2）；不引入新缓存机制。
+- 不改磁盘页扫描、状态页、历史页与其它页面布局。
+- 不引入第三方依赖。
 
-### Round 2 (2026-10-17T14:20:00+08:00)
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t040_gen_f006|minor|遗留|补扫升级已修；「在飞扫描期间失效且完整结束」的补偿缺口窄窗口、最终一致（下次概览触发全量），登记跟进|p014|
+<!-- 规范（门禁必留，不得删除） -->
 
-Round 2 复核记录（非新 finding）：f001 修复不彻底（TTL/capturedAt 链路未闭合），已在 Round 3 前补修并由 Round 3 复核消除；f002–f005 未回退。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 3 (2026-10-17T14:45:00+08:00)
+<!-- /规范 -->
 
-Round 3 零 finding（f001 已消除、f002–f005 未回退；f006 残余维持 minor 遗留 p014）。
+- [ ] AC-001：进入概览即发起目录扫描；尚未拿到已用空间时扫描照常进行并展示已完成分段（缺失段为占位）。
+- [ ] AC-002：已用空间到达后，「其他」段随之更新；到达前「其他」显示占位。
+- [ ] AC-003：某段探测失败或超时时，该段显示占位、其余段照常展示，并可见「估算不完整」标记。
+- [ ] AC-004：完成的（含部分）目录和写入缓存；重启后立即显示缓存内容，并仅对缺失段继续扫描补齐。
+- [ ] AC-005：扫描进行中离开概览再返回，不取消扫描；完成后的展示与缓存一致。
+- [ ] AC-006：取消（应用退出）不写出缓存；系统段任一目录子项失败时该段为占位、不显示部分和。
+- [ ] AC-007：估算通道单条命令超时为 600 秒；超时后该段为占位并在下一次触发重试。
+- [ ] AC-008：界面不再出现任何 eyebrow 小字（系统概览/应用管理/存储分析/实时监控/操作记录/偏好设置/整体状态等），简中、繁中、英文均同。
+- [ ] AC-009：概览四张卡片同一高度，1200×780 与 1100×700 下内容不裁切、不互相遮挡。
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足（AC-001–AC-009；AC-009 以源码断言 + 1200×780/1100×700 demo 截图核对）
-- 测试：`xcodebuild build` 0 error；全量 `xcodebuild test` 279 例 0 失败（含新增用例）；`git diff --check` 干净
-- 黑盒：demo（不启动真实 mole）逐页启动 + 概览截图核对：无 eyebrow 小字、四卡等高、浅色/深色/最小窗口无裁切；TCC 首启提示为系统行为，已逐个处置
-- review：`review_general.md` Round 3 verdict PASS（coverage 8/9，AC-009 trust_prior + 实施侧截图）
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 估算触发/持久化语义按 t040 spec 落地：进入概览即扫描、部分即展示并落盘、只补缺失段一次、失效/TTL 全量、取消不落盘、通道超时 600s；页头 eyebrow 全量移除、概览四卡等高。
-- 遗留：p014（在飞失效 + 完整结束的窄窗口补偿）；无其它遗留。
+- AC-001–AC-007：全部可自动测试（注入 loader、可控时钟与可控取消）。
+- AC-008：可自动测试（源码断言 + 文案键不存在）。
+- AC-009：固定高度常量的计算/存在性可自动测试；真实渲染以 demo 截图对照替代验证。
+
+## 上下文区
+
+- 来源：p013（2026-10-17 核实：触发窗口错过 + /Users 超时 + 视图取消）；用户 2026-10-17 批准修复方案并追加 eyebrow 移除与卡片等高要求。
+
+### 有意不测
+
+- 真实 `/Users` 全量耗时：环境相关，不进自动测试（用固定输出与注入延迟替代）。
+- 真实磁盘百分比精度：不进自动测试。
+
+### 测试策略
+
+- 注入可控 loader：分段返回成功/nil/延迟/取消；断言扫描不依赖已用空间、部分展示与落盘、只补缺失段、延迟重试、视图消失不取消、取消不落盘、系统子项失败整段 nil。
+- 缓存断言：写入内容与读回即时展示；缺失段重扫后覆盖为完整。
+- 文案与源码断言：eyebrow 键在 catalog 与页面源码中不存在；卡片高度常量被四处使用。
+- demo 截图对照：四卡等高与页头无小字（浅深色）。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。
+
+### 风险与回退
+
+- 风险：部分落盘后用户看到不完整估算（以「估算不完整」标记明示，且持续补齐）。
+- 风险：延迟自动重试造成重复 I/O（重试只探测缺失段，且每次扫描只安排一次后续重试）。
+- 回退：revert 本 task 执行 commit；旧缓存 schema 不变，行为回到当前实现。
+
+### 依赖与约束
+
+- 无前置 task。运行于 macOS；估算扫描只读；不写 `~/.config/mole/`。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：估算触发与持久化语义（完成即落盘、只补缺失段、任务不随视图取消）。
+- `docs/blueprint/domain.md`：五段估算与「估算不完整」可见性口径。
+- `docs/design/ui_contract.md`：概览行与页头（无 eyebrow）描述。

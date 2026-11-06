@@ -1,54 +1,89 @@
----
-tid: "t032"
-slug: "analyze_list_layout_percent"
-title: "Analyze 页列表布局、双击下钻与占父目录百分比列"
-status: "dropped"
-branch: ""
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: ""
-depends_on: ""
-conflicts_with: "t028"
-note: "用户 2026-10-17 批准（来源 p010 核实）；与 t028 同改 Analyze 视图文件。; dropped: 合并进 t028（磁盘页扫描与交互同一交付面）"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+Analyze（磁盘）页当前交互与 WizTree 式浏览差距明显：进入目录只能靠列表行右侧的独立按钮；容量方块点击只更新选中高亮，不能下钻；左右两栏宽度固定（`AnalyzeView.swift` 约 line 52 `directoryPane.frame(minWidth: 340)`）；列表只有文件名与大小两列，无法直观看出各项占父目录的比例。用户 2026-10-17 提出改造，并给出 WizTree 截图作为百分比列与柱形条参考。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 左右两栏分隔可拖动，用户可调整列表与方块图宽度比例。
+- 删除列表行靠右的「进入目录」独立按钮。
+- 目录进入统一为双击：列表行双击、容量方块双击都下钻进入该目录。
+- 列表把文件大小显示在文件名右侧，并新增一列「占父目录大小百分比」。
+- 百分比按 WizTree `% of Parent` 口径（占其父目录总量），单元格内附按比例的水平柱形条。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 Finder 打开入口（`analyze.reveal`）。
+- 不改变扫描/analyze 调用方式与性能模型（属 t028）。
+- 不改变选中高亮语义（单击仍只选中）。
+- 百分比只用于展示，不改变排序或分析逻辑。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round N (YYYY-MM-DDThh:mm:ss+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修/遗留/撤回|一句话|文件:行 / pNNN / tid|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-无 finding 时写“Round N 零 finding”。
+<!-- /规范 -->
 
-## 收尾报告
+- [ ] AC-001：Analyze 页左列表与右方块图之间的分隔可被拖动，拖动后两侧宽度随之变化。
+- [ ] AC-002：列表行不再显示「进入目录」按钮；双击目录行进入该目录（等同原按钮行为），双击文件行不进入。
+- [ ] AC-003：双击右侧容量方块中的目录块进入该目录；双击文件块不进入。
+- [ ] AC-004：列表每行文件大小紧跟文件名显示，并新增「占父目录大小百分比」列，其值 = 该项大小 ÷ 同次快照中其父目录总量。
+- [ ] AC-005：百分比单元格内水平柱形条长度与该百分比成比例（0% 无条，100% 满格）。
 
-### 验收与验证
+### 可测试性声明
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：待执行时填写
-- 黑盒：待执行时填写
-- review：待执行时填写
-- AC 证据：见 `handoff.json`
+<!-- 规范（门禁必留，不得删除） -->
 
-### 结果摘要
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- 待执行时填写；遗留只写引用，不复制正文
+<!-- /规范 -->
+
+- AC-001：拖动分隔线属真实鼠标手势，GUI 黑盒在本环境受限；以视图层断言（分隔可调整、宽度随之变化的状态/参数）替代。
+- AC-002：进入动作可测（下钻状态与 pathStack）；双击手势的绑定以视图层断言替代。
+- AC-003：同上，下钻结果可测，双击绑定以视图层断言替代。
+- AC-004：可测（百分比计算为纯函数）。
+- AC-005：柱形条长度可测（比例映射为纯函数）。
+
+## 上下文区
+
+- 来源：p010（2026-10-17 核实：`mapTile` 方块当前仅更新 `selectedPath`；`analyze.open_directory` 按钮存在于行内与 inspector；列表无百分比列）
+
+### 有意不测
+
+- 拖动分隔线的真实拖拽轨迹：环境无法注入鼠标手势，测其宽度状态变化即可。
+
+### 测试策略
+
+- 百分比计算与柱形条比例抽成纯函数做单元测试（含边界：父目录为 0、文件大小 0、超过 100% 的容错）。
+- 下钻行为复用 `AnalyzeViewModel.openDirectory` 断言 pathStack/当前根。
+- 视图层以最小 SwiftUI 断言或状态断言覆盖双击/分隔绑定。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：与 t028 同改 `AnalyzeView.swift` / `AnalyzeViewModel.swift`，需串行或独立 worktree；「父目录总量」在当前快照数据模型中的取法需实现时确认。
+- 回退：撤销本 task 提交即可恢复原列表与固定宽度布局。
+
+### 依赖与约束
+
+- 与 t028（disk_incremental_scan）冲突：两者修改同一批 Analyze 源文件，不得并行。
+- 平台：macOS SwiftUI；不得引入新第三方依赖。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：补充「占父目录百分比」口径定义。
+- `docs/design/ui_contract.md`：列表列结构与双击进入行为。

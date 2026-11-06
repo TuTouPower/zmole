@@ -1,63 +1,83 @@
----
-tid: "t022"
-slug: "installer_interface"
-title: "安装包非交互接口"
-status: "done"
-branch: "t022_installer_interface"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "770ea9aa58d07d4dbc1930669bdf7cdf520c0544"
-depends_on: ""
-conflicts_with: ""
-note: "捆绑 installer 列出 JSON 并按预览路径移入废纸篓。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+`mo installer` 只有全屏选择菜单，没有 JSON，删除默认永久。已批准改为非交互列出，并按本次预览的路径移入废纸篓。扫描规则仍用现有目录、深度和 ZIP 判断。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 捆绑 installer 增加非交互列出：输出每个候选项的绝对路径、字节大小、来源和身份。
+- 增加非交互删除：只接受本次列出的绝对路径，并核对列出时的身份与大小。不一致则跳过该项并记为失败。
+- 删除移入废纸篓。移动失败时文件留在原处，不永久删除。
+- 不进入全屏菜单，不读取方向键。
+- 在捆绑树标明这是本地补丁，便于以后重放。
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+### 非范围
 
-- 在 `bin/installer.sh` 增加本地补丁（标注 `zmole local patch (t022)`）：`--list-json` 输出候选 `{path,size_bytes,source,identity}`；`--remove <path> --size <n> --identity <id>` 只接受本次扫描中的绝对路径并强制核对大小与身份，删除显式 `MOLE_DELETE_MODE=trash`，失败保留原文件、无永久回退；非交互模式在进入 alt screen/读键前返回。
-- 增加 `MOLE_INSTALLER_SCAN_ROOT` 测试钩子（仅收窄扫描根）；空数组按 bash 3.2 安全处理。
-- 新增 `tests/integration/installer_interface_test.sh`（真实脚本子进程 + 临时扫描根/废纸篓），覆盖 dmg/普通 zip/payload zip、JSON 字段与无 TUI、按路径入篓、未列出/缺 size/改大小/身份不符四种拒绝、入篓失败保留、空扫描 `[]`。
-- `docs/blueprint/testing.md` 加入该测试；`decisions.md` 追加 008；`architecture.md`/`domain.md` 更新安装包范围。
-- 黑盒：该集成测试即可执行黑盒；未接 GUI（t023）。
+- 不在 Swift 里重写扫描目录或 ZIP 判断。
+- 不做界面，那是 t023。界面视觉只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderInstallers`，本 task 不得另做页面。
+- 不代按键，不挂 PTY。
 
-## Review 处置
+### 验收标准
 
-review_level=full：`review_code.md` / `review_test.md`。
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t022_code_f001|important|已修|空扫描在 bash 3.2 下崩溃/假成功，加空数组保护并 `[]`|installer.sh|
-|t022_code_f002|important|已修|省略 size/identity 退化为空校验，改为强制要求|installer.sh|
-|t022_code_f003|minor|已修|尾 `shift` 在 set -e 下退出 + 死变量，改 \`shift||
-|t022_code_f004|minor|撤回|扫描路径改可变以支持测试收窄，生产默认不变|installer.sh|
-|t022_test_f001|important|已修|补真实“列出后改大小”拒绝用例|installer_interface_test.sh|
-|t022_test_f002|minor|已修|plain zip 改非空内容触达内容过滤|installer_interface_test.sh|
-|t022_test_f003|minor|已修|no-TUI 断言加 ESC 序列检查|installer_interface_test.sh|
-|t022_test_f004|minor|已修|未列出改用扫描根内真实非候选文件|installer_interface_test.sh|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-## 收尾报告
+<!-- /规范 -->
 
-### 验收与验证
+- [ ] AC-001：对含 dmg 与普通 zip 的夹具目录列出时，dmg 出现在结果中，不含安装包内容的 zip 不出现。
+- [ ] AC-002：列出结果含绝对路径、字节大小、来源和身份，且进程不进入全屏选择界面。
+- [ ] AC-003：按列出的路径删除后，文件不在原路径，且出现在测试废纸篓。
+- [ ] AC-004：路径不在本次列出结果中，或大小、身份与列出时不同，则不删除该文件。
+- [ ] AC-005：废纸篓移动失败时原文件仍在，且没有永久删除。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`bash tests/integration/installer_interface_test.sh`：13 cases 全过；`bash tests/integration/clean_trash_test.sh`：通过；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：集成测试即黑盒（真实 installer 子进程 + 临时扫描根/废纸篓）
-- review：`review_code.md`（rounds 1-2）、`review_test.md`（rounds 1-2）最终均 PASS
-- AC 证据：见 `handoff.json`
+### 可测试性声明
 
-### 结果摘要
+<!-- 规范（门禁必留，不得删除） -->
 
-- 捆绑 installer 增加非交互列出与按路径删除：列出含 path/size/source/identity；删除只接受本次列出路径并核对大小与身份，移入废纸篓，失败保留原文件，不入 TUI。界面在 t023 消费该接口。遗留：无。
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-005：临时扫描目录与测试废纸篓中自动运行捆绑 installer。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q11、Q30、Q31。用户 2026-10-16 批准。现有选择器在 `bin/installer.sh` 的 `select_installers`，删除走 `mole_delete` 且默认永久。
+
+### 有意不测
+
+- Homebrew 缓存与 iCloud 下载目录的真实机器扫描：不进自动测试。规则仍由原扫描函数覆盖夹具。
+
+### 测试策略
+
+- 夹具包含一个 dmg、一个含 pkg 的 zip、一个普通 zip、一个列出后被改写大小的文件。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。扫描目录与 ZIP 规则已在捆绑 `installer.sh` 核对。
+
+### 风险与回退
+
+- 风险：新接口仍误入 TUI，或对未列出的路径执行删除。
+- 回退：非交互参数缺失时保持旧菜单不变；删除入口默认拒绝空列表。
+
+### 依赖与约束
+
+- 无前置 task。
+- 不把命令装进 PATH。升级上游 mole tag 时必须重放此补丁。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：安装包的非交互列出与按路径删除。
+- `docs/blueprint/decisions.md`：追加安装包机器接口决策，不改写 001–006 原文。
+- `docs/blueprint/domain.md`：安装包从非目标改为范围内。

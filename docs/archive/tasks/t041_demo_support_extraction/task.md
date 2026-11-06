@@ -1,65 +1,82 @@
----
-tid: "t041"
-slug: "demo_support_extraction"
-title: "demo 假件与装配拆分（review A57）"
-status: "done"
-branch: "t041_demo_support_extraction"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "965d2b20c345bb1dd809fdc3d8e556cd42bf9527"
-depends_on: ""
-conflicts_with: ""
-note: "review_20261017_054534 A57（用户 2026-10-17 批准执行）；纯搬迁零行为变化，来源 adoption_decision.md"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+`src/zmole/App/AppDependencies.swift` 727 行中约 500 行是 demo 假件与 fixture（`DemoMoleProcess`、`DemoMoleStreaming`、`DemoUninstallListStream`、`DemoDiskScanner`、`DemoConfiguration`、`DemoFixtures` 及分析/历史/安装包/卸载样本）。真实装配 `AppDependencies.init` 与这些假件同文件，假件随生产装配改动被动变更，review（`docs/reviews/review_20261017_054534` 的 A57，v5_architecture）判定拆分。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 把 demo 假件与所有 demo fixture 移入独立文件（建议 `src/zmole/App/DemoSupport.swift`；如有必要可再分 `DemoFixtures.swift`），`AppDependencies.swift` 只保留真实装配（`AppDependencies` 本体与 `MoleProcessBox` 等装配辅助，若其不属于 demo）。
+- 行为零变化：`--demo` 系列参数（`--demo`、`--demo-page`、`--demo-state`、`--demo-language`、`--demo-appearance`、`--demo-data-root`）的语义与 demo 装配结果逐项保持现状（含 A45/A46 的门禁与临时目录限定）。
+- demo 相关类型保持原可见性语义（文件内私有/模块内可见关系不被破坏）；如有 `private` 跨文件移动需求，改为文件级 `fileprivate`→模块内可见的等价调整并说明。
+- 同步 `Zmole.xcodeproj`（xcodegen generate 后提交工程文件变化）。
 
-- 拆分：demo 假件与 fixtures（`DemoFixtures`、`DemoMoleProcess`、`DemoMoleStreaming`、`DemoUninstallListStream`、`DemoConfiguration`、`DemoState`、`DemoAppearance`、`DemoDiskScanner`）从 `AppDependencies.swift`（796 行）移入新文件 `App/DemoSupport.swift`（501 行）；`AppDependencies.swift` 保留生产装配、unavailable 通道与 `MoleProcessBox`（300 行）。
-- 可见性调整说明（spec 要求）：三个原 `private` demo 类型（`DemoMoleProcess`、`DemoMoleStreaming`、`DemoUninstallListStream`）跨文件后改为模块内可见（去掉 `private`）；其余 demo 类型原为模块内可见，不变；无对外 API 变化。
-- 行为零变化：纯搬迁；新增 `AppAssemblyTests` 结构守卫（AppDependencies 无 demo 类型声明与 fixture 字面量、DemoSupport 含全部 demo 类型）。
-- 验证：`xcodegen generate` 后 `xcodebuild build` 0 error；全量 `xcodebuild test` 281 例 0 失败；三条集成脚本通过；demo 冒烟截图（disk/overview，zh-Hans 浅色）与拆分前一致。
-- 文档：`architecture.md`「Demo 装配边界」节注明文件结构；`spec.md` AC-003 移除不存在的 CommandConcurrencyTests demo 路径引用。
-- 无用户批准的新轮次上限（2 轮 review 在 review_limit 内）。
+### 非范围
 
-## Review 处置
+- 不改变任何 demo 行为、参数语义、fixture 内容（除行布局迁移外零 diff）。
+- 不重命名对外可见类型与测试引用的类型名；不顺带重构生产装配逻辑。
+- 不做 A56 之外的进一步去重（fixture 去重已在 A56 落地；本 task 只做文件搬迁与组织）。
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1 (2026-10-17T14:12:00+08:00)
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t041_code_f001|minor|已修|实施笔记补充可见性调整说明（spec 要求的「并说明」）|task.md 实施笔记第 2 条|
-|t041_test_f001|minor|已修|守卫改为正则 `\b(class\|struct\|enum) Demo[A-Z]`，覆盖任意 demo 类型声明；残留盲区（`extension Demo*`、`actor Demo*`）经第 2 轮变异确认为防御性增强，当前无违规，不阻断|tests/unit/AppAssemblyTests.swift|
-|t041_test_f002|minor|已修|AC-003 措辞移除不存在的 CommandConcurrencyTests demo 路径|docs/tasks/t041_demo_support_extraction/spec.md AC-003|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2 (2026-10-17T14:20:00+08:00)
+<!-- /规范 -->
 
-Round 2 复核记录（非新 finding）：code 轴 f001 已消除、test 轴 f001（核心场景已由正则覆盖）与 f002 已消除；两轴复核均零新 finding，`check_review_status.py` 复跑 `overall=PASS`（review_scope=ok）。
+- [ ] AC-001：`src/zmole/App/AppDependencies.swift` 不再包含任何 `Demo*` 类型、demo fixture 字面量与 demo 专用扩展；demo 内容全部位于独立文件。
+- [ ] AC-002：`xcodegen generate` 后 `xcodebuild build -scheme Zmole` 退出码 0。
+- [ ] AC-003：全量 `xcodebuild test`（含全部 demo 用例：`ZmoleTests` 的 demo 配置/卸载预览/状态流、`PrewarmTests.testDemoConfigurationDisablesPrewarm`）通过。
+- [ ] AC-004：三个集成脚本（clean_trash / installer_interface / uninstall_stream）通过。
+- [ ] AC-005：工作副本中 `AppDependencies.swift` 行数少于拆分前的一半，且其内容只含装配与装配辅助。
 
-无 finding 时写“Round N 零 finding”。
+### 可测试性声明
 
-## 收尾报告
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收与验证
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 测试：待执行时填写
-- 黑盒：待执行时填写
-- review：待执行时填写
-- AC 证据：见 `handoff.json`
+<!-- /规范 -->
 
-### 结果摘要
+- AC-001、AC-005：源码结构断言（grep 无 `Demo` 类型定义/字符串检查）可自动。
+- AC-002–AC-004：全部可自动测试。
 
-- 待执行时填写；遗留只写引用，不复制正文
+## 上下文区
+
+- 来源：review_20261017_054534 A57（核实日期 2026-10-17；决策见 `docs/reviews/review_20261017_054534/adoption_decision.md`）
+
+### 有意不测
+
+- demo UI 逐页视觉（由 `docs/guides/visual_acceptance/` 截图流程覆盖，属 A83 范围）。
+
+### 测试策略
+
+- 迁移后跑全量单测与集成脚本；demo 用例不改断言（行为零变化是硬约束）。
+- 新增一条源码结构测试：`AppDependencies.swift` 不含 `private final class Demo`/`struct Demo`/`enum DemoFixtures` 定义。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：大块搬迁导致可见性编译错误或漏移片段。
+- 回退：单 commit 纯搬迁，编译失败时按编译器错误逐项修复；回退即 revert 该 commit（无数据面影响）。
+
+### 依赖与约束
+
+- 前置：无（基于当前 main `dd76bb0`）。
+- 约束：demo 行为零变化；不得引入 UI/行为重构。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：如 Demo 装配边界一节需按新文件结构微调引用。

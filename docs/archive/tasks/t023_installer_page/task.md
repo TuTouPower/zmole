@@ -1,63 +1,84 @@
----
-tid: "t023"
-slug: "installer_page"
-title: "安装包页预览后移除"
-status: "done"
-branch: "t023_installer_page"
-worktree: ""
-review_level: "full"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "8c35388de81115ebafabe95b9a5520bab481e3e1"
-depends_on: "t015,t022"
-conflicts_with: ""
-note: "安装包页走预览确认，不进 TUI。"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+安装包页使用 t022 的非交互接口。用户勾选的是本次列出的文件，确认后才移入废纸篓。
 
-## 实施笔记
+视觉权威只认 `docs/design/mole_desktop_demo_cn_final.html` 的 `renderInstallers`。不要用 `docs/design/demo_reference.html`。统计条、文件列表、勾选和底部移除条的位置照该函数。数据必须来自 t022 的列出结果。
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+## 契约区
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+### 范围
 
-来源：docs/design/refactor_grilling.md。用户于 2026-10-16 批准后创建。
+- 页面列出本次扫描的安装包：名称、来源、类型和字节大小。可搜索范围以外的文件不出现。
+- 支持多选、全选和清空。主按钮只移除当前选中且仍属于本次列出的路径。
+- 先扫描列出，再确认。确认框写明选中数量和将移入废纸篓。取消确认不删除。
+- 扫描或删除进行中不可重复提交。失败与部分完成留在页面，列出被拒绝的路径及原因。
+- 文案写明移入废纸篓。不调用全屏 installer 菜单。
 
-- 新增 `InstallerInterface.swift`（t022 接口的 Swift 包装：`installer --list-json` 解码 + `installer --remove <path> --size ... --identity ...`）与 `InstallersViewModel`（扫描列出、多选/全选/清空、按本次列出快照确认、逐项移除并保留失败原因）。
-- 重写 `InstallersView`：统计条、搜索、列表（类型/名称/来源/大小）、勾选与底部移除条、失败卡；确认框写明选中数量与“移入废纸篓”。
-- `OperationCoordinator` 增 `.installer` 写操作；`AppDependencies`/`AppShellView` 装配；demo 夹具提供安装包列表。
-- 测试 `tests/unit/InstallersPageTests.swift`：只调非交互列出、确认前 0 删除、确认 argv 只含选中且已列出路径、新扫描使旧确认失效、取消后须重新确认、失败路径保留原因、确认数量、文案。
-- 黑盒：GUI 受限（同前），以假接口自动断言替代。
+### 非范围
 
-## Review 处置
+- 不改扫描规则。
+- 不永久删除。
+- 不从面板或概览快捷卡片直接删除。
 
-review_level=full：`review_code.md` / `review_test.md`。
+### 验收标准
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t023_code_f001|important|已修|确认框未写选中数量，给确认视图加 detail 并显示 count·size|DestructiveConfirmation.swift / InstallersViewModel.swift|
-|t023_code_f002|minor|已修|扫描中仍可确认，canConfirm 加 !isListing/!isRemoving|InstallersViewModel.swift|
-|t023_code_f003|minor|已修|租约冲突显示原始键，改 String(localized:)|InstallersViewModel.swift|
-|t023_code_f004|minor|撤回|遗留死文案键，属资源清理 nit|Localizable.xcstrings|
-|t023_test_f001|minor|已修|补 AC-004 取消后须重新确认断言|InstallersPageTests.swift|
-|t023_test_f002|minor|已修|未确认时 confirmRemoval 早退断言|InstallersPageTests.swift|
-|t023_test_f003|minor|撤回|AC-006 由键断言 + 生产引用检视确认|InstallersView.swift|
-|t023_test_f004|minor|撤回|count 断言偏弱但已足够定位多选计数|InstallersPageTests.swift|
+<!-- 规范（门禁必留，不得删除） -->
 
-## 收尾报告
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### 验收与验证
+<!-- /规范 -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`xcodebuild test -scheme Zmole -destination 'platform=macOS'`：170 tests / 0 failures；`pytest .repo_template/tests -q -m contract`：147 passed
-- 黑盒：GUI 受限（同前）；列出/选择/确认/移除/失败由假接口自动覆盖
-- review：`review_code.md`（rounds 1-2）、`review_test.md`（rounds 1-2）最终均 PASS
-- AC 证据：见 `handoff.json`
+- [ ] AC-001：打开页面或刷新时只调用非交互列出，不调用全屏 installer。
+- [ ] AC-002：未列出或未确认时，删除调用次数为 0。
+- [ ] AC-003：确认后删除参数只含当时选中且存在于本次列出结果的路径。
+- [ ] AC-004：取消确认后不删除，再次删除必须重新确认同一次列出结果。
+- [ ] AC-005：部分路径被接口拒绝时，页面保留这些路径和失败原因。
+- [ ] AC-006：界面写明移入废纸篓。
 
-### 结果摘要
+### 可测试性声明
 
-- 安装包页消费 t022 非交互接口：扫描列出本次候选，多选/全选/清空，确认框写明数量并移入废纸篓，仅移除选中且仍在本次列出中的路径；新扫描使旧确认失效；被接口拒绝的路径保留原因。遗留：无（minor nit 已撤回）。
+<!-- 规范（门禁必留，不得删除） -->
+
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
+
+<!-- /规范 -->
+
+- AC-001–AC-006：假 installer 接口自动断言。
+
+## 上下文区
+
+- 来源：`docs/design/refactor_grilling.md` Q8、Q9、Q30、Q31。用户 2026-10-16 批准。
+
+### 有意不测
+
+- 真实下载目录里的安装包：不进自动测试。
+
+### 测试策略
+
+- 列出结果用夹具 JSON。断言选中集合、确认世代和失败行。
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无。接口契约由 t022 的验收标准定义。
+
+### 风险与回退
+
+- 风险：列表刷新后仍用旧路径删除。
+- 回退：每次新列出都使旧确认失效。
+
+### 依赖与约束
+
+- 依赖 t015 的安装包目的地和 t022 的接口。
+- 与其他写入操作共用单一写入租约。
+
+### Finalization 时更新的 blueprint
+
+- `docs/design/ui_contract.md`：安装包页的选择、确认和失败展示。

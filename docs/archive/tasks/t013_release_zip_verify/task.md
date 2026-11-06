@@ -1,59 +1,79 @@
----
-tid: "t013"
-slug: "release_zip_verify"
-title: "Release zip 与解压后只读验收"
-status: "done"
-branch: "t013_release_zip_verify"
-worktree: ""
-review_level: "single"
-review_limit: "5"
-verify_limit: "5"
-diff_anchor: "8f12cf619ce86e7dd458013a3f27f05220bc6daf"
-depends_on: "t002,t003,t004,t005,t006,t007,t008,t009,t010,t011,t012"
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-front matter 只经 `task.py` 修改；reviewer 只写对应 `review_*.md`。
+t012 只交图标与 README。空壳 App 不能当发布。本 task 在功能齐后打 zip，验收解压后的真实产品。
 
-## 实施笔记
+## 契约区
 
-执行期记录关键步骤、决策、验证、阻塞和用户批准的新轮次上限。
+### 范围
 
-创建期不预测实施步骤。只记有追溯价值的内容；无事项时写“无”。
+- 可重复脚本：Release 配置构建、ad-hoc 签名、打出含 `Zmole.app` 的 zip
+- zip 内完整捆绑 mole 树；`lipo -archs` 主程序与 `analyze-go`/`status-go` 均为 x86_64+arm64
+- 关于页 / README 的 Releases 链接为 `https://github.com/TuTouPower/zmole/releases`
+- `[deploy]`：解压 zip，从 Finder 打开（本机可先 `xattr -cr`），跑通 status 刷新、history 打开、analyze overview
 
-- 新增可重复 `scripts/build_release_zip.sh`：XcodeGen + Release 构建、ad-hoc codesign 校验、输出 `artifacts/releases/Zmole-1.0.zip`。
-- 解压 zip 检查主程序与 mole 树入口、三项 Universal 架构、ad-hoc 签名、Releases URL 与占位符；CUA 从 Finder 选中并启动解压 App，验证 status 刷新、history、analyze overview。
-- `docs/blueprint/testing.md` 登记 Release zip 门禁；未执行破坏性命令。
+### 非范围
 
-## Review 处置
+- Developer ID / 公证 / dmg / Sparkle
+- 真机破坏性删除
 
-每个结构化 finding 一行。`已修` 表示本 task 已修复；`遗留` 必须指向 `pNNN` 或 follow-up tid；`撤回` 必须写清理由。critical/important 未解决时不得 PASS。
+### 验收标准
 
-### Round 1
+<!-- 规范（门禁必留，不得删除） -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t013_gen_f001|minor|已修|相对输出目录先按调用方当前目录解析为绝对路径，支持仓外调用|`scripts/build_release_zip.sh`|
-|t013_gen_f002|minor|已修|校验 `codesign -dv` 输出含 ad-hoc 签名标志，防止签名配置漂移|`scripts/build_release_zip.sh`|
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-### Round 2
+<!-- /规范 -->
 
-Round 2 零 finding。
+- [ ] AC-001：发布脚本产出 zip，列出内容含 `Zmole.app/Contents/MacOS/` 与 `Contents/Resources/mole/` 入口
+- [ ] AC-002：对该 `.app` 主可执行文件、`Resources/mole/bin/analyze-go`、`status-go` 执行 `lipo -archs`，均含 `x86_64` 与 `arm64`
+- [ ] AC-003：`codesign -dv` 显示 ad-hoc 或等价本地签名（不要求 Developer ID）
+- [ ] AC-004：二进制或资源中的 Releases URL 为 `https://github.com/TuTouPower/zmole/releases`，无 `example.com` / `TODO` 占位
+- [ ] [deploy] AC-005：解压后从 Finder 启动，status 能刷新出健康分，history 页可打开，analyze overview 有条目
 
-## 收尾报告
+### 可测试性声明
 
-### 验收与验证
+<!-- 规范（门禁必留，不得删除） -->
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 测试：`scripts/build_release_zip.sh`；zip 解压/内容；主程序、analyze-go、status-go 均 `x86_64 arm64`；ad-hoc `codesign -dv`；Releases URL/占位符扫描；XCTest 63/63；模板 pytest 480 passed；格式、JSON、diff 检查通过。
-- 黑盒：Finder 选中并启动解压后的 `Zmole.app`；CUA 验证 Status 刷新健康分 100、History 列表、Analyze overview 条目；真破坏性命令不执行。
-- review：single Round 2 PASS。
-- AC 证据：见 `handoff.json`
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 完成 Release zip 生成与解压后只读验收；无遗留。
+- AC-001–AC-004：脚本
+- AC-005：手工 Finder
+
+## 上下文区
+
+- 来源：审阅 P2 发布验收；ADR-003、ADR-005
+
+### 有意不测
+
+- 每台陌生 Mac 的 Gatekeeper 点法：README 已覆盖，本 task 只在开发机解压启动
+
+### 测试策略
+
+- 构建脚本 + lipo/codesign；手工只读三页
+
+### 未知契约清单
+
+<!-- 规范（门禁必留，不得删除） -->
+
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：zip 进了 DerivedData 半成品、漏 helper
+- 回退：脚本只打包 Release 配置 + AC-001/002
+
+### 依赖与约束
+
+- 依赖 t002–t012（功能与图标齐）
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/testing.md`：若有发布脚本，写入 blackbox 或单独章节说明
